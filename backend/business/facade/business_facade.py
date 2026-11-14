@@ -264,8 +264,8 @@ class BusinessFacade(IBusinessFacade):
     def describe_raster(self, path: str) -> RasterInfoDTO:
         return self._map_service.describe(path)
 
-    def raster_view_presets(self, info: RasterInfoDTO) -> list[ViewPresetDTO]:
-        return self._map_service.view_presets(info)
+    def raster_view_presets(self, info: RasterInfoDTO, analysis_colours: bool = True) -> list[ViewPresetDTO]:
+        return self._map_service.view_presets(info, analysis_colours)
 
     def render_raster(self, info: RasterInfoDTO, preset: ViewPresetDTO, max_size: int = 1600) -> RasterViewDTO:
         return self._map_service.render(info, preset, max_size)

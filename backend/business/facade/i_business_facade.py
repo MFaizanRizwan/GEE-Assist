@@ -221,7 +221,8 @@ class IBusinessFacade(ABC):
     def describe_raster(self, path: str) -> RasterInfoDTO: ...
 
     @abstractmethod
-    def raster_view_presets(self, info: RasterInfoDTO) -> list[ViewPresetDTO]: ...
+    def raster_view_presets(self, info: RasterInfoDTO, analysis_colours: bool = True) -> list[ViewPresetDTO]:
+        """The ways to show the file. ``analysis_colours``: an analysis result's layers as on the Analysis page."""
 
     @abstractmethod
     def render_raster(self, info: RasterInfoDTO, preset: ViewPresetDTO, max_size: int = 1600) -> RasterViewDTO: ...

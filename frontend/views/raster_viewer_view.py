@@ -36,6 +36,7 @@ from frontend.download_format import format_size
 from frontend.widgets.form_parts import StatusBanner
 from frontend.widgets.raster_canvas import RasterCanvas, rgba_to_image
 from frontend.widgets.raster_legend import RasterLegend, format_value
+from frontend.widgets.toggle_switch import ToggleSwitch
 from frontend.workers.task_worker import run_task
 
 PANEL_WIDTH = 320
@@ -115,6 +116,11 @@ class RasterViewerView(QWidget):
         # ---- panel: view, legend, values, details
         self.preset_box = QComboBox()
         self.preset_box.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.colour_toggle = ToggleSwitch("Analysis colours")
+        self.colour_toggle.setChecked(True)
+        self.colour_toggle.setToolTip("On: each layer in the same colours and range as on the Analysis page.\n"
+                                      "Off: each band on the general colour scale, stretched to its own values.")
+        self.colour_toggle.hide()  # only for analysis results
         self.preset_note = QLabel(objectName="Muted")
         self.preset_note.setWordWrap(True)
         self.preset_note.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
@@ -157,6 +163,7 @@ class RasterViewerView(QWidget):
         column.setSpacing(10)
         column.addWidget(_section("View"))
         column.addWidget(self.preset_box)
+        column.addWidget(self.colour_toggle)
         column.addWidget(self.preset_note)
         column.addSpacing(6)
         column.addWidget(self.legend)
@@ -199,6 +206,7 @@ class RasterViewerView(QWidget):
         self._hover_timer.timeout.connect(self._read_values)
 
         self.preset_box.currentIndexChanged.connect(self._on_preset_chosen)
+        self.colour_toggle.toggled.connect(self._on_colours_toggled)
         self.canvas.hovered.connect(self._on_hovered)
         self.canvas.left_image.connect(self._on_left_image)
         self.fit_button.clicked.connect(self.canvas.fit)
@@ -222,14 +230,29 @@ class RasterViewerView(QWidget):
         self.subtitle.setText(_summary(info))
         self._fill_details(info)
         self._fill_value_rows(info)
-        self._presets = self._facade.raster_view_presets(info)
+        self.colour_toggle.setVisible(bool(info.result_layers))
+        self._load_presets()
+        self._set_ready(True)
+        self.show_preset(self._presets[0])
+
+    def _load_presets(self) -> None:
+        analysis_colours = self.colour_toggle.isChecked()
+        self._presets = self._facade.raster_view_presets(self.info, analysis_colours)
         self.preset_box.blockSignals(True)
         self.preset_box.clear()
         for preset in self._presets:
             self.preset_box.addItem(preset.label, preset.key)
         self.preset_box.blockSignals(False)
-        self._set_ready(True)
-        self.show_preset(self._presets[0])
+
+    def _on_colours_toggled(self, _on: bool) -> None:
+        """Redraw the same layer in the other colours."""
+        if self.info is None or not self._presets:
+            return
+        current = self._presets[self.preset_box.currentIndex()] if self.preset_box.currentIndex() >= 0 else None
+        self._load_presets()
+        same = next((p for p in self._presets if current is not None and p.bands == current.bands
+                     and p.kind in ("band", "layer") and current.kind in ("band", "layer")), None)
+        self.show_preset(same or (current if current in self._presets else self._presets[0]))
 
     def show_preset(self, preset: ViewPresetDTO) -> None:
         if self.info is None:

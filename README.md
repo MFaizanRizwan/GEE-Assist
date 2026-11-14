@@ -131,7 +131,11 @@ As in other desktop apps, you work inside a project. A project is a folder:
 - Results are **not saved** unless you ask: they are shown (each layer with its legend, and the
   numbers) from a temporary file. **Save result** saves the GeoTIFF (one band per layer) in the open
   project's `analysis` folder, without asking, and writes its numbers and settings next to it as
-  `.json`; an earlier result with the same name is kept (the new one gets `_2`, `_3`, ...). An unsaved result is deleted when the next
+  `.json`; an earlier result with the same name is kept (the new one gets `_2`, `_3`, ...).
+  The file is named `<dataset>_<analysis>_<processes>_<date-time>.tif`, e.g.
+  `Sentinel-2_73.0708_31.4357_2026-08-14_2026-11-14_Vegetation_NDVI_EVI_2026-11-14_23-02-58.tif`. With
+  many processes the name keeps the first few and says how many more (`..._GCI_and_26_more_...`);
+  the `.json` lists them all. An unsaved result is deleted when the next
   one replaces it or the app closes. A result can also be opened in the viewer or laid over the map.
 - Raw download values are scaled to reflectance / kelvin per satellite before any index is computed.
 - **GPU**: the app lists the computer's graphics cards. With a dedicated NVIDIA GPU and CuPy installed
@@ -220,6 +224,10 @@ viewer:
   most 1600 px across (the banner says by how much).
 - **Show on map** lays the current view over the Query Input map, with an opacity slider and a
   "Remove from map" button on the map.
+- **Analysis results** (a saved result's `.tif`) get an **Analysis colours** switch under the view.
+  On (the default): each layer in exactly the colours and range of the Analysis page (e.g. NDVI from
+  red to green over -0.2 to 0.8), read from the `.json` saved next to the result. Off: each band on
+  the general colour scale, stretched to its own values (useful to see small differences).
 
 ### Where the code is
 
