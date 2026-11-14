@@ -61,7 +61,7 @@ def test_what_is_typed_shows_in_the_form(setup):
     assert view.dataset_combo.currentData() == "landsat8_l2"
     assert view.bands_combo.checked() == ["SR_B4", "SR_B5"]
     assert view.start_date_edit.date().toPyDate() == date(2024, 6, 1)
-    assert view.aoi_draw_toggle.isChecked() and view.analysis_combo.currentData() == "Vegetation"
+    assert view.aoi_draw_toggle.isChecked() and view.collect_form().analysis_type == "Vegetation"
 
 
 def test_what_is_entered_in_the_form_shows_in_form_show(setup):

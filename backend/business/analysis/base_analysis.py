@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import time
 import uuid
+from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -67,6 +68,28 @@ def _is_out_of_memory(exc: BaseException) -> bool:
     return "OutOfMemory" in type(exc).__name__ or "out of memory" in str(exc).lower()
 
 
+# The processes in a result's file name: all of them while they fit, else the first few and "and_N_more"
+# (the full list is in the .json next to the GeoTIFF). Keeps whole paths under Windows' 260 characters.
+PROCESSES_IN_NAME = 50
+
+
+def _safe(text: str) -> str:
+    return "".join(c if c.isalnum() else "-" for c in text).strip("-")
+
+
+def processes_part(processes: list[str] | tuple[str, ...]) -> str:
+    names = [_safe(key) for key in processes if _safe(key)]
+    joined = "_".join(names)
+    if len(joined) <= PROCESSES_IN_NAME:
+        return joined
+    shown: list[str] = []
+    for index, key in enumerate(names):
+        rest = len(names) - index
+        if len("_".join(shown + [key])) + len(f"_and_{rest - 1}_more") > PROCESSES_IN_NAME:
+            break
+        shown.append(key)
+    return "_".join(shown + [f"and_{len(names) - len(shown)}_more"])
+
 class BaseAnalysis(IAnalysis):
     CATEGORY = ""
 
@@ -120,7 +143,7 @@ class BaseAnalysis(IAnalysis):
                 if other_reason:
                     raise AnalysisError(f"{key}: {Path(other.dataset.path).stem}: {other_reason}")
         user_params = {k: v for k, v in params.items() if not k.startswith("_")}
-        output = params.get("_output_path") or str(self.default_output(dataset))
+        output = params.get("_output_path") or str(self.default_output(dataset, processes))
         notes: list[str] = []
         started = time.perf_counter()
         try:
@@ -227,11 +250,13 @@ class BaseAnalysis(IAnalysis):
         return band if band in period.band_names else None
 
     # ------------------------------------------------------------- output
-    def default_output(self, dataset: DatasetDTO) -> Path:
+    def default_output(self, dataset: DatasetDTO, processes: list[str] | tuple[str, ...] = ()) -> Path:
+        """``<dataset>_<analysis>_<processes>_<date-time>.tif``, e.g.
+        ``Sentinel-2_73.0708_31.4357_2026-08-14_2026-11-14_Vegetation_NDVI_EVI_2026-11-14_23-02-58.tif``."""
         name = dataset.name or Path(dataset.path).stem
         stamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        safe_category = "".join(c if c.isalnum() else "-" for c in self.CATEGORY).strip("-")
-        return DEFAULT_ANALYSIS_DIR / f"{name}_{safe_category}_{stamp}.tif"
+        parts = [name, _safe(self.CATEGORY), processes_part(processes), stamp]
+        return DEFAULT_ANALYSIS_DIR / ("_".join(part for part in parts if part) + ".tif")
 
     @staticmethod
     def _write_summary(result: ResultDTO, params: dict, compare: list[DatasetDTO]) -> None:
@@ -243,6 +268,8 @@ class BaseAnalysis(IAnalysis):
             "compared_with": [other.path for other in compare],
             "params": {k: v for k, v in params.items() if isinstance(v, (int, float, str, bool))},
             "metrics": result.metrics, "layers": [layer.key for layer in result.layers], "notes": result.notes,
+            # how each band is coloured on the Analysis page, so the viewer can show it the same way
+            "styles": [asdict(layer) for layer in result.layers],
         }
         try:
             Path(result.output_path).with_suffix(".json").write_text(json.dumps(summary, indent=2), encoding="utf-8")

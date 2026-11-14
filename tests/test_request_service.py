@@ -94,6 +94,33 @@ class FakeDataFacade(IDataFacade):
     def delete_profile_photo(self, *args, **kwargs):  # not used here
         raise NotImplementedError
 
+    def save_project(self, *args, **kwargs):  # not used here
+        raise NotImplementedError
+
+    def find_project_by_id(self, *args, **kwargs):  # not used here
+        raise NotImplementedError
+
+    def find_projects_by_user(self, *args, **kwargs):  # not used here
+        raise NotImplementedError
+
+    def find_all_projects(self, *args, **kwargs):  # not used here
+        raise NotImplementedError
+
+    def delete_project(self, *args, **kwargs):  # not used here
+        raise NotImplementedError
+
+    def load_project_folder(self, *args, **kwargs):  # not used here
+        raise NotImplementedError
+
+    def move_project(self, *args, **kwargs):  # not used here
+        raise NotImplementedError
+
+    def save_analysis_record(self, *args, **kwargs):  # not used here
+        raise NotImplementedError
+
+    def find_analysis_records(self, *args, **kwargs):  # not used here
+        raise NotImplementedError
+
 
 # ------------------------------------------------------------------ submit_query
 RULES_ONLY = QueryEntityExtractor(use_spacy=False, today=TODAY)  # deterministic, no spaCy model needed

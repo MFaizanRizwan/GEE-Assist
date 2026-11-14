@@ -8,7 +8,9 @@ from backend.dto.map_dto import RasterInfoDTO, ViewPresetDTO
 CLASS_BAND = "label"  # Dynamic World's land-cover class band
 
 
-def presets_for(info: RasterInfoDTO) -> list[ViewPresetDTO]:
+def presets_for(info: RasterInfoDTO, analysis_colours: bool = True) -> list[ViewPresetDTO]:
+    """``analysis_colours``: an analysis result's layers in the Analysis page's colours and ranges;
+    otherwise every band on the general colour scale, stretched to its own values."""
     roles = band_roles(info.satellite, info.band_names)
     presets: list[ViewPresetDTO] = []
     if CLASS_BAND in info.band_names and info.satellite in ("Dynamic-World", ""):
@@ -28,7 +30,17 @@ def presets_for(info: RasterInfoDTO) -> list[ViewPresetDTO]:
     if {"green", "nir"} <= roles.keys():
         presets.append(ViewPresetDTO("ndwi", "NDWI (water)", "index", (roles["green"], roles["nir"]),
                                      "(Green - NIR) / (Green + NIR): above 0 is usually open water."))
+    styled = {layer.key: layer for layer in info.result_layers} if analysis_colours else {}
     for band in info.band_names:
-        presets.append(ViewPresetDTO(f"band:{band}", f"Band {band}", "band", (band,),
-                                     "One band on its own, on a colour scale."))
+        layer = styled.get(band)
+        if layer is None:
+            presets.append(ViewPresetDTO(f"band:{band}", f"Band {band}", "band", (band,),
+                                         "One band on its own, on a colour scale."))
+            continue
+        presets.append(ViewPresetDTO(
+            f"layer:{band}", layer.label, "layer", (band,),
+            "In the colours and range of the Analysis page." if layer.low is not None
+            else "In the colours of the Analysis page, stretched to this result's values.",
+            style=layer.style, low=layer.low, high=layer.high, classes=layer.classes, unit=layer.unit,
+        ))
     return presets

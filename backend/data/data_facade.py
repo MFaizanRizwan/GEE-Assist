@@ -3,16 +3,20 @@ from __future__ import annotations
 from typing import Optional
 
 from backend.auth_exceptions import AuthError
+from backend.config.settings import PROJECT_HISTORY_FILE
 from backend.data.clients.i_gee_client import IGEEClient, ProgressCallback, StopCheck
 from backend.data.clients.i_gemini_client import IGeminiClient
 from backend.data.clients.i_geocoding_client import IGeocodingClient
 from backend.data.dao.formula_dao import FormulaDAO
+from backend.data.dao.project_dao import ProjectDAO
 from backend.data.dao.i_formula_dao import IFormulaDAO
+from backend.data.dao.i_project_dao import IProjectDAO
 from backend.data.dao.i_user_dao import IUserDAO
 from backend.data.i_data_facade import IDataFacade
 from backend.dto import CheckDTO, ChunkDTO, FormDTO, PlaceDTO
 from backend.dto.analysis_dto import FormulaDTO
 from backend.dto.check_dto import CHECK_FAIL
+from backend.dto.project_dto import AnalysisRecordDTO, ProjectDTO
 from backend.dto.user_dto import NewUserDTO, UserDTO, UserPageDTO
 from backend.exceptions import GEEError, PlaceSearchError
 
@@ -32,14 +36,14 @@ class DataFacade(IDataFacade):
         gemini_client: IGeminiClient,
         gee_client: Optional[IGEEClient] = None,
         user_dao: Optional[IUserDAO] = None,
-        project_dao=None,
+        project_dao: Optional[IProjectDAO] = None,
         formula_dao: Optional[IFormulaDAO] = None,
         geocoding_client: Optional[IGeocodingClient] = None,
     ):
         self._gemini_client = gemini_client
         self._gee_client = gee_client
         self._user_dao = user_dao
-        self._project_dao = project_dao
+        self._project_dao = project_dao or ProjectDAO(PROJECT_HISTORY_FILE)  # folders on this computer
         self._formula_dao = formula_dao or FormulaDAO()  # built into the app
         self._geocoding_client = geocoding_client
 
@@ -120,6 +124,34 @@ class DataFacade(IDataFacade):
 
     def delete_profile_photo(self, user_id: str) -> bool:
         return self._users().delete_photo(user_id)
+
+    # ------------------------------------------------------------- projects
+    def save_project(self, project: ProjectDTO) -> bool:
+        return self._project_dao.save(project)
+
+    def find_project_by_id(self, project_id: str) -> ProjectDTO | None:
+        return self._project_dao.find_by_id(project_id)
+
+    def find_projects_by_user(self, user_id: str) -> list[ProjectDTO]:
+        return self._project_dao.find_by_user_id(user_id)
+
+    def find_all_projects(self) -> list[ProjectDTO]:
+        return self._project_dao.find_all()
+
+    def delete_project(self, project_id: str) -> bool:
+        return self._project_dao.delete(project_id)
+
+    def load_project_folder(self, folder: str) -> ProjectDTO | None:
+        return self._project_dao.load_folder(folder)
+
+    def move_project(self, project: ProjectDTO, new_folder: str) -> ProjectDTO:
+        return self._project_dao.move(project, new_folder)
+
+    def save_analysis_record(self, project: ProjectDTO, record: AnalysisRecordDTO) -> bool:
+        return self._project_dao.save_analysis_result(project, record)
+
+    def find_analysis_records(self, project: ProjectDTO) -> list[AnalysisRecordDTO]:
+        return self._project_dao.find_analysis_results(project)
 
     def _users(self) -> IUserDAO:
         if self._user_dao is None:

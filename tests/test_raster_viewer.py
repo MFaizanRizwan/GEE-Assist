@@ -152,3 +152,41 @@ def test_pictures_for_the_map_are_kept_small(viewer, sentinel):
     viewer.open(str(sentinel))
     image = QImage.fromData(viewer.map_png(max_size=40), "PNG")
     assert (image.width(), image.height()) == (40, 30)
+
+
+# ------------------------------------------------------------------ analysis colours switch
+def test_the_switch_shows_a_result_in_the_analysis_colours_or_not(viewer, tmp_path):
+    from tests.test_map_service import _result_tif
+
+    viewer.open(str(_result_tif(tmp_path)))
+    assert viewer.colour_toggle.isVisibleTo(viewer) and viewer.colour_toggle.isChecked()
+    assert viewer.view.preset.kind == "layer" and viewer.preset_box.currentText() == "NDVI"
+    assert (viewer.view.legend.low, viewer.view.legend.high) == (-0.2, 0.8)  # as on the Analysis page
+
+    viewer.colour_toggle.click()  # off
+    assert viewer.view.preset.kind == "band" and viewer.preset_box.currentText() == "Band NDVI"
+    assert 0.1 <= viewer.view.legend.low < viewer.view.legend.high <= 0.6  # stretched to this file
+
+    viewer.preset_box.setCurrentIndex(1)  # LST
+    viewer.colour_toggle.click()  # on again: still the LST layer
+    assert viewer.view.preset.kind == "layer" and viewer.view.preset.bands == ("LST",)
+    assert viewer.view.legend.title == "LST (°C)"
+
+
+def test_the_switch_is_only_there_for_analysis_results(viewer, sentinel):
+    viewer.open(str(sentinel))
+    assert not viewer.colour_toggle.isVisibleTo(viewer)
+
+
+def test_the_switch_widget(app):
+    from frontend.widgets.toggle_switch import ToggleSwitch
+
+    switch = ToggleSwitch("Analysis colours")
+    flips = []
+    switch.toggled.connect(flips.append)
+    switch.click()
+    switch.click()
+    assert flips == [True, False] and switch.sizeHint().width() > 40
+    switch.resize(switch.sizeHint())
+    assert not switch.grab().isNull()  # it paints
+    switch.deleteLater()

@@ -3,12 +3,14 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 
 from backend.dto import FormDTO, PlaceDTO, ValidationDTO
+from backend.dto.project_dto import AnalysisRecordDTO, ProjectDTO
 
 
 class IRequestService(ABC):
-    """Class diagram: IRequestService.
+    """Class diagram: IRequestService (submitQuery, validateForm, importAOI, saveProject, listProjects).
 
-    saveProject / listProjects come later together with persistence.
+    It also keeps the open project: downloads and analysis results go into its folder.
+    Project problems raise ``backend.exceptions.ProjectError``.
     """
 
     @abstractmethod
@@ -33,4 +35,48 @@ class IRequestService(ABC):
 
     @abstractmethod
     def get_kept_requests(self) -> list[FormDTO]:
-        """Requests kept so far this session (in memory until saveProject exists)."""
+        """Requests kept so far this session."""
+
+    # ------------------------------------------------------------- projects
+    @abstractmethod
+    def save_project(self, project: ProjectDTO) -> bool:
+        """Write the project's folder and remember where it is."""
+
+    @abstractmethod
+    def list_projects(self, user_id: str) -> list[ProjectDTO]:
+        """The user's projects whose folders still exist, most recently opened first."""
+
+    @abstractmethod
+    def suggest_project_name(self, location: str) -> str:
+        """The name a project in ``location`` gets when none is given: Project 1, Project 2, ..."""
+
+    @abstractmethod
+    def create_project(self, name: str, location: str, owner_id: str = "") -> ProjectDTO:
+        """Make ``<location>/<name>`` with its downloads and analysis folders, and open it.
+        An empty ``name`` means the suggested one (Project 1, Project 2, ...)."""
+
+    @abstractmethod
+    def open_project(self, folder: str, owner_id: str = "") -> ProjectDTO:
+        """Open the project in ``folder`` (a folder made by create_project)."""
+
+    @abstractmethod
+    def rename_project(self, new_name: str) -> ProjectDTO:
+        """Rename the open project; its folder is renamed too."""
+
+    @abstractmethod
+    def move_project(self, new_location: str) -> ProjectDTO:
+        """Move the open project's folder into ``new_location``."""
+
+    @abstractmethod
+    def close_project(self) -> None: ...
+
+    @abstractmethod
+    def get_current_project(self) -> ProjectDTO | None: ...
+
+    @abstractmethod
+    def record_analysis_result(self, result) -> AnalysisRecordDTO:
+        """Keep an analysis result (a ResultDTO) in the open project's analysis_results.json."""
+
+    @abstractmethod
+    def get_analysis_results(self, project: ProjectDTO) -> list[AnalysisRecordDTO]:
+        """The project's analysis results, newest first."""

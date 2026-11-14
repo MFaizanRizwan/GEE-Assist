@@ -44,7 +44,9 @@ Run the tests with `python -m pytest`.
   form (with the "Chat with Gemini" assistant); the back arrow (**←**) at the top of the side bar
   returns to it. On the dashboard itself there is no back arrow and the logo is at the top.
 - A menu bar runs along the top of every page, as in Word or Excel:
-  - **File**: New request (Ctrl+N), Open GeoTIFF… (Ctrl+O), Sign out, Exit (Ctrl+Q)
+  - **File**: New project… (Ctrl+Shift+N), Open project… (Ctrl+Shift+O), Recent projects, Rename
+    project…, Move project…, Close project, New request (Ctrl+N), Open GeoTIFF… (Ctrl+O), Sign out,
+    Exit (Ctrl+Q)
   - **Edit**: Undo, Redo, Cut, Copy, Paste, Select all, acting on the text field with the cursor
   - **View**: Dashboard, Query Input, Downloads, Account, Analysis (Ctrl+1 to Ctrl+5), Show analysis
     table (Ctrl+6), Side bar (Ctrl+B), Terminal (Ctrl+`), Full screen (F11), Theme
@@ -75,6 +77,41 @@ Run the tests with `python -m pytest`.
   (a new address must be verified again), change roles, reset passwords, enable / disable and
   **delete** accounts. Your own account is changed from the account page instead.
 
+## Projects
+
+As in other desktop apps, you work inside a project. A project is a folder:
+
+```
+<location>/<project name>/
+    project.json                 the project's id, name and creation time
+    downloads/                   every dataset downloaded while the project is open
+    analysis/                    analysis results you save
+        analysis_results.json    every analysis run in the project: settings, numbers, saved file
+```
+
+- **Create** one from the dashboard (**New project**) or **File → New project…**: give it a name and
+  the folder to create it in (by default next to your last project, else
+  `Documents/GEE-Assist Projects`). The dialog shows the folder that will be made. Leave the name
+  empty to get **Project 1**, then **Project 2**, **Project 3**, ... (the first number not already a
+  folder in that location).
+- **Open** one with **Open project…** (choose its folder), a card under **Recent projects** on the
+  dashboard, or **File → Recent projects**.
+- **Rename** or **Move** the open project from the dashboard card or the File menu: its folder is
+  renamed or moved, with everything in it. Saved downloads, even paused ones, follow it; this is
+  refused while one of its downloads is running (pause it first).
+- **Close** the open project from the dashboard card or the File menu; signing out closes it too.
+- A **download needs an open project**: the form's "Save to folder" always shows the project's
+  `downloads` folder (use **Save to…** on the Downloads page to copy a dataset elsewhere). The
+  parameter form only says what to download; analyses are chosen and run on the Analysis page. Starting a download without a project asks you to create or open one first.
+- **Analyses run inside the open project**: each run is recorded in `analysis_results.json` (what
+  ran, when, its numbers, and the GeoTIFF if you saved it; paths inside the project are stored
+  relative to it, so moving the project keeps them valid). **Save result** puts the GeoTIFF in the
+  project's `analysis` folder.
+- The **dashboard** shows the open project, the **last 3 projects** (name and the folder they are
+  in; click one to open it) and the **latest analysis results of those 3 projects**.
+- Where your projects are is remembered on this computer in `workspace/projects.json` (per user).
+  Forgetting a project there never deletes its folder.
+
 ## Analysis
 
 - **Analysis** (side bar, the dashboard's Analysis card, or View → Analysis): choose a dataset (a
@@ -93,8 +130,13 @@ Run the tests with `python -m pytest`.
 - Before / after processes (dNBR, RdNBR, RBR, land-cover change, LST change) need a dataset of the
   same place from another date, ticked under **Compare with**.
 - Results are **not saved** unless you ask: they are shown (each layer with its legend, and the
-  numbers) from a temporary file. **Save result…** asks where to keep the GeoTIFF (one band per layer)
-  and writes its numbers and settings next to it as `.json`. An unsaved result is deleted when the next
+  numbers) from a temporary file. **Save result** saves the GeoTIFF (one band per layer) in the open
+  project's `analysis` folder, without asking, and writes its numbers and settings next to it as
+  `.json`; an earlier result with the same name is kept (the new one gets `_2`, `_3`, ...).
+  The file is named `<dataset>_<analysis>_<processes>_<date-time>.tif`, e.g.
+  `Sentinel-2_73.0708_31.4357_2026-08-14_2026-11-14_Vegetation_NDVI_EVI_2026-11-14_23-02-58.tif`. With
+  many processes the name keeps the first few and says how many more (`..._GCI_and_26_more_...`);
+  the `.json` lists them all. An unsaved result is deleted when the next
   one replaces it or the app closes. A result can also be opened in the viewer or laid over the map.
 - Raw download values are scaled to reflectance / kelvin per satellite before any index is computed.
 - **GPU**: the app lists the computer's graphics cards. With a dedicated NVIDIA GPU and CuPy installed
@@ -138,8 +180,9 @@ One-time setup:
 3. Sign in once on this computer: type `gee login` in gkonsol, or run `earthengine authenticate`
    in a command prompt (with the venv active). `gee verify` checks the whole set-up.
 
-Then fill the parameter form (or let Gemini fill it), press **Submit Parameters**, and press
-**Start Download** under Kept Requests. The **Downloads** page (dashboard card or side bar)
+Then create or open a project, fill the parameter form (or let Gemini fill it), press **Submit
+Parameters**, and press **Start Download** under Kept Requests. The dataset is saved in the project's
+`downloads` folder. The **Downloads** page (dashboard card or side bar)
 shows progress, speed and ETA, with Start / Pause / Cancel for every download.
 
 How it works:
@@ -156,10 +199,13 @@ How it works:
   that size. If even small requests fail, the download stops with a message: shorten the date
   range or use the mosaic composite, then press **Retry**.
 - Chunks are merged as soon as two exist: 1 + 2 -> 1 GB, + 3 -> 1.5 GB, + 4 -> the full file.
-- The result is `<output folder>/<name>/<name>.tif`, where `<name>` is
+- The result is `<project>/downloads/<name>/<name>.tif`, where `<name>` is
   `<satellite>_<lon>_<lat>_<start date>_<end date>`: the centre of the AOI and the request's dates, e.g.
   `Sentinel-2_73.8231_33.2334_2023-01-01_2023-12-31/Sentinel-2_73.8231_33.2334_2023-01-01_2023-12-31.tif`.
   The same request downloaded again gets `_2`, `_3`, ... at the end.
+- **Save to…** on a finished download copies its GeoTIFF into any folder you choose (a USB drive, a
+  shared folder, ...). The project keeps its own copy, so the Analysis page still finds it; an
+  existing file there is never overwritten (the copy gets `_2`, `_3`, ...).
 - Pause keeps finished parts; Start continues where it stopped, even after closing the app.
   Cancel deletes the files. Failed chunks are retried 3 times, then **Retry** re-runs only them.
 
@@ -182,6 +228,10 @@ viewer:
   most 1600 px across (the banner says by how much).
 - **Show on map** lays the current view over the Query Input map, with an opacity slider and a
   "Remove from map" button on the map.
+- **Analysis results** (a saved result's `.tif`) get an **Analysis colours** switch under the view.
+  On (the default): each layer in exactly the colours and range of the Analysis page (e.g. NDVI from
+  red to green over -0.2 to 0.8), read from the `.json` saved next to the result. Off: each band on
+  the general colour scale, stretched to its own values (useful to see small differences).
 
 ### Where the code is
 
@@ -193,6 +243,9 @@ viewer:
 | Accounts (server) and profile photos (local) | `backend/data/dao/user_dao.py`, reached through `backend/data/data_facade.py` |
 | Business logic (tokens, refresh, flows, managing accounts) | `backend/business/user/user_service.py` |
 | Account page and its dialogs | `frontend/views/account_view.py`, `frontend/views/account_dialogs.py` |
+| Projects: folders, history and analysis results (JSON) | `backend/data/dao/project_dao.py`, `backend/dto/project_dto.py` |
+| Projects: create, open, rename, move | `backend/business/request/request_service.py`, `backend/business/request/project_rules.py` |
+| Project dialogs and dashboard | `frontend/views/project_dialogs.py`, `frontend/views/dashboard_view.py` |
 | Sign-up rules checked in the app | `backend/business/user/signup_validation.py` |
 | UI entry point (`IBusinessFacade`) | `backend/business/facade/` |
 | Intro video | `frontend/views/splash_view.py`, `frontend/views/startup_window.py` |

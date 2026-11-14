@@ -18,7 +18,7 @@ class IMapService(ABC):
         """
 
     @abstractmethod
-    def view_presets(self, info: RasterInfoDTO) -> list[ViewPresetDTO]:
+    def view_presets(self, info: RasterInfoDTO, analysis_colours: bool = True) -> list[ViewPresetDTO]:
         """The ways the file can be shown (true colour, NDVI, ...), the default first."""
 
     @abstractmethod

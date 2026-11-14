@@ -32,10 +32,13 @@ from PyQt6.QtWidgets import (
 )
 
 from backend.business.facade import IBusinessFacade
-from backend.config import DEFAULT_DOWNLOAD_DIR
+from backend.dto.project_dto import ProjectDTO
 from backend.dto.user_dto import UserDTO
+from backend.exceptions import GeeAssistError
 from frontend import appearance, theme
+from frontend.project_paths import current_project, downloads_folder
 from frontend.views.account_view import AccountView, Avatar, SignupDetailsDialog
+from frontend.views.project_dialogs import ProjectActions
 from frontend.views.analysis_table_view import AnalysisTableView
 from frontend.views.analysis_view import AnalysisView
 from frontend.restart import restart_app
@@ -267,6 +270,16 @@ class HomeWindow(QMainWindow):
         self.account.user_changed.connect(self.set_user)  # e.g. a new name or photo shows in the side bar
         self.signup_details_action.triggered.connect(self.show_signup_details)
         self.dashboard.open_query_input.connect(self.show_query_input)
+        self.projects = ProjectActions(facade, self)
+        self.projects.project_changed.connect(lambda _project: self.refresh_projects())
+        dashboard = self.dashboard
+        dashboard.new_project.connect(self.projects.new_project)
+        dashboard.open_project.connect(self.projects.open_project)
+        dashboard.open_recent.connect(self.projects.open_folder)
+        dashboard.rename_project.connect(self.projects.rename_project)
+        dashboard.move_project.connect(self.projects.move_project)
+        dashboard.show_project_folder.connect(self.projects.show_project_folder)
+        dashboard.close_project.connect(self.projects.close_project)
         self.dashboard.open_downloads.connect(self.show_downloads)
         self.dashboard.open_analysis.connect(self.show_analysis)
         self.query_input_button.clicked.connect(self.show_query_input)
@@ -286,10 +299,54 @@ class HomeWindow(QMainWindow):
         self._admin_dialog: UserAdminDialog | None = None
         self._was_maximized = False  # before going full screen
         self.set_user(user)
+        self._project_shown: str | None = "none yet"
+        self.refresh_projects()
         self.show_dashboard()
+
+    # ------------------------------------------------------------- projects
+    def refresh_projects(self) -> None:
+        """Show the open project, the recent ones and their latest analysis results everywhere they appear."""
+        project = current_project(self._facade)
+        try:
+            recent = [p for p in self._facade.list_projects() if isinstance(p, ProjectDTO)]
+            results = [(p, list(self._facade.get_analysis_results(p))) for p in recent[:3]]
+        except GeeAssistError:
+            recent, results = [], []
+        self.dashboard.set_projects(project, recent, results)
+        self.menu_bar.set_projects(project, recent)
+        self.setWindowTitle(f"GEE-Assist — {project.name}" if project is not None else "GEE-Assist")
+        form_view = getattr(self.query_input, "form_view", None)
+        if form_view is not None and hasattr(form_view, "set_project"):
+            form_view.set_project(project)
+        if self._project_shown != (project.id if project is not None else None):
+            self._project_shown = project.id if project is not None else None
+            self.analysis.project_changed()  # only that project's datasets
+
+    def ensure_project(self) -> bool:
+        """True once a project is open; asks the user to create or open one when none is."""
+        if current_project(self._facade) is not None:
+            return True
+        choice = self.ask_for_project()
+        if choice == "new":
+            return self.projects.new_project() is not None
+        if choice == "open":
+            return self.projects.open_project() is not None
+        return False
+
+    def ask_for_project(self) -> str | None:
+        """"new", "open" or None (cancelled): what to do when a download needs a project and none is open."""
+        box = QMessageBox(QMessageBox.Icon.Information, "A project is needed",
+                          "Datasets are downloaded into a project's downloads folder. "
+                          "Create a project, or open an existing one, first.", parent=self)
+        create = box.addButton("New project…", QMessageBox.ButtonRole.AcceptRole)
+        existing = box.addButton("Open project…", QMessageBox.ButtonRole.ActionRole)
+        box.addButton(QMessageBox.StandardButton.Cancel)
+        box.exec()
+        return {create: "new", existing: "open"}.get(box.clickedButton())
 
     # ------------------------------------------------------------- navigation
     def show_dashboard(self) -> None:
+        self.refresh_projects()  # e.g. results of analyses run since
         self._show_page(self.dashboard)
 
     def show_query_input(self) -> None:
@@ -308,7 +365,9 @@ class HomeWindow(QMainWindow):
         self._show_page(self.analysis_table)
 
     def start_download(self, form) -> None:
-        """Send a kept request to GEE and show its progress on the Downloads page."""
+        """Send a kept request to GEE (into the open project) and show its progress on the Downloads page."""
+        if not self.ensure_project():
+            return
         self.downloads.start(form)
         self.show_downloads()
 
@@ -317,7 +376,7 @@ class HomeWindow(QMainWindow):
 
     def open_geotiff(self) -> None:
         """Choose any GeoTIFF on the computer (starting in the downloads folder) and show it."""
-        path, _ = QFileDialog.getOpenFileName(self, "Open GeoTIFF", str(DEFAULT_DOWNLOAD_DIR),
+        path, _ = QFileDialog.getOpenFileName(self, "Open GeoTIFF", downloads_folder(self._facade),
                                               "GeoTIFF (*.tif *.tiff);;All files (*)")
         if path:
             self.show_viewer(path)
@@ -431,6 +490,12 @@ class HomeWindow(QMainWindow):
 
     def _connect_menu_bar(self) -> None:
         bar = self.menu_bar
+        bar.new_project.triggered.connect(self.projects.new_project)
+        bar.open_project.triggered.connect(self.projects.open_project)
+        bar.recent_project_chosen.connect(self.projects.open_folder)
+        bar.rename_project.triggered.connect(self.projects.rename_project)
+        bar.move_project.triggered.connect(self.projects.move_project)
+        bar.close_project.triggered.connect(self.projects.close_project)
         bar.new_request.triggered.connect(self.show_query_input)
         bar.open_geotiff.triggered.connect(self.open_geotiff)
         bar.sign_out.triggered.connect(self.sign_out)
