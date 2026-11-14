@@ -10,7 +10,7 @@ the GPU when the computer has a dedicated NVIDIA card with CuPy, else the CPU.
 
 The right panel shows the result: each layer drawn with its legend, the numbers
 (means, areas, transitions), and buttons to save it, open it in the viewer or show it
-on the map. A result is temporary until the user saves it (“Save result…”, to a file
+on the map. A result is temporary until the user saves it (“Save result”, into the project's analysis folder
 they choose); an unsaved one is deleted when the next one replaces it or the app
 closes. Analyses run in the background with a progress bar.
 """
@@ -51,7 +51,7 @@ from backend.dto.map_dto import MapLayerDTO
 from backend.dto.result_dto import ResultDTO
 from backend.exceptions import GeeAssistError
 from frontend import theme
-from frontend.project_paths import analysis_folder, downloads_folder
+from frontend.project_paths import analysis_folder, current_project, downloads_folder
 from frontend.download_format import format_size
 from frontend.widgets.form_parts import StatusBanner
 from frontend.widgets.process_picker import STYLESHEET as PICKER_STYLESHEET
@@ -279,8 +279,9 @@ class AnalysisView(QWidget):
         self.metrics_table.setMaximumHeight(200)
         self.save_state = QLabel(objectName="SaveState")
         self.save_state.setWordWrap(True)
-        self.save_button = QPushButton("Save result…", objectName="PrimaryButton")
-        self.save_button.setToolTip("Keep this result: choose where to save its GeoTIFF (and its numbers as .json)")
+        self.save_button = QPushButton("Save result", objectName="PrimaryButton")
+        self.save_button.setToolTip("Keep this result: its GeoTIFF (and its numbers as .json) are saved in the "
+                                    "project's analysis folder")
         self.viewer_button = QPushButton("Open in viewer", objectName="SecondaryButton")
         self.map_button = QPushButton("Show on map", objectName="SecondaryButton")
         self.folder_button = QPushButton("Open folder", objectName="SecondaryButton")
@@ -687,17 +688,24 @@ class AnalysisView(QWidget):
 
     # ------------------------------------------------------------- saving
     def suggested_save_path(self) -> str:
-        folder = Path(analysis_folder(self._facade))  # the open project's analysis folder
-        return str(folder / Path(self.result.output_path).name) if self.result else ""
+        """Where "Save result" puts the result: the open project's analysis folder, under a name not taken yet."""
+        if self.result is None:
+            return ""
+        target = Path(analysis_folder(self._facade)) / Path(self.result.output_path).name
+        number = 2
+        while target.exists():  # never overwrite an earlier result
+            target = target.with_name(f"{Path(self.result.output_path).stem}_{number}{target.suffix}")
+            number += 1
+        return str(target)
 
     def save_result(self) -> None:
-        """Ask where to keep the result, then save it there (nothing is kept unless the user does this)."""
+        """Save the result in the open project's analysis folder (nothing is kept unless the user does this)."""
         if self.result is None:
             return
-        path, _ = QFileDialog.getSaveFileName(self, "Save analysis result", self.suggested_save_path(),
-                                              "GeoTIFF (*.tif)")
-        if path:
-            self.save_to(path)
+        if current_project(self._facade) is None:
+            self.banner.show_error("Open a project to save the result: it is saved in the project's analysis folder.")
+            return
+        self.save_to(self.suggested_save_path())
 
     def save_to(self, path: str) -> None:
         if self.result is None:
