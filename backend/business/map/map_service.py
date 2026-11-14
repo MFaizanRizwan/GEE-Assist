@@ -7,6 +7,7 @@ from pathlib import Path
 from backend.business.download.naming import parse_dataset_name
 from backend.business.map import layer_styles, raster_renderer
 from backend.business.map.i_map_service import IMapService
+from backend.business.map.result_styles import read_result_layers
 from backend.business.map.view_presets import presets_for
 from backend.dto.map_dto import MapLayerDTO, RasterInfoDTO, RasterViewDTO, ViewPresetDTO
 from backend.dto.result_dto import ResultDTO
@@ -31,12 +32,13 @@ class MapService(IMapService):
                     crs=src.crs.to_string() if src.crs else "", bounds=tuple(float(v) for v in bounds),
                     nodata=src.nodata, dtype=src.dtypes[0], size_bytes=file.stat().st_size,
                     satellite=satellite, start_date=start, end_date=end,
+                    result_layers=read_result_layers(file, names),
                 )
         except rasterio.errors.RasterioIOError as exc:
             raise MapError(f"Cannot open {file.name}: it is missing or not a GeoTIFF.") from exc
 
-    def view_presets(self, info: RasterInfoDTO) -> list[ViewPresetDTO]:
-        return presets_for(info)
+    def view_presets(self, info: RasterInfoDTO, analysis_colours: bool = True) -> list[ViewPresetDTO]:
+        return presets_for(info, analysis_colours)
 
     def render(self, info: RasterInfoDTO, preset: ViewPresetDTO, max_size: int = 1600) -> RasterViewDTO:
         return raster_renderer.render(info, preset, max_size)
