@@ -136,11 +136,8 @@ class FormulaDetail(QFrame):
         column = QVBoxLayout(content)
         column.setContentsMargins(18, 16, 18, 16)
         column.setSpacing(8)
-        top = QHBoxLayout()
-        top.addWidget(self.key)
-        top.addStretch(1)
-        top.addWidget(self.badge, 0, Qt.AlignmentFlag.AlignVCenter)
-        column.addLayout(top)
+        column.addWidget(self.key)
+        column.addWidget(self.badge, 0, Qt.AlignmentFlag.AlignLeft)  # "Vegetation › Burn & fire", below the key
         column.addWidget(self.name)
         self._sections: dict[str, list[QWidget]] = {}
         for title, widget in (("Formula", self.formula), ("Bands", self.bands), ("Range", self.range),
@@ -238,11 +235,13 @@ class AnalysisTableView(QWidget):
         self.table.setShowGrid(False)
         self.table.setAlternatingRowColors(False)
         header = self.table.horizontalHeader()
-        for column, mode in enumerate((QHeaderView.ResizeMode.ResizeToContents, QHeaderView.ResizeMode.Interactive,
+        # Fixed widths where content would mislead: the group rows' long titles span every column.
+        for column, mode in enumerate((QHeaderView.ResizeMode.Interactive, QHeaderView.ResizeMode.Interactive,
                                        QHeaderView.ResizeMode.Stretch, QHeaderView.ResizeMode.Interactive,
                                        QHeaderView.ResizeMode.Interactive, QHeaderView.ResizeMode.Stretch,
                                        QHeaderView.ResizeMode.ResizeToContents)):
             header.setSectionResizeMode(column, mode)
+        self.table.setColumnWidth(0, 120)
         self.table.setColumnWidth(1, 200)
         self.table.setColumnWidth(3, 120)
         self.table.setColumnWidth(4, 110)
