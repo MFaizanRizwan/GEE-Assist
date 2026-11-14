@@ -9,7 +9,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 # Where downloads go unless the user picks another folder.
 DEFAULT_DOWNLOAD_DIR = PROJECT_ROOT / "workspace" / "downloads"
 
-# Where analysis results (GeoTIFF + metrics JSON) are written.
+# Suggested folder when the user saves an analysis result (GeoTIFF + metrics JSON); unsaved
+# results stay in a temporary folder that is deleted when the app exits.
 DEFAULT_ANALYSIS_DIR = PROJECT_ROOT / "workspace" / "analyses"
 
 # Output projections offered in the form. AUTO_UTM is replaced by the UTM zone
