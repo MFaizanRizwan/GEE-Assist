@@ -2,7 +2,15 @@
 
 from __future__ import annotations
 
-from backend.data.dao.formula_catalogue import CATEGORY_DESCRIPTIONS, CATEGORY_ORDER, FORMULAS
+from backend.data.dao.formula_catalogue import (
+    ANALYSIS_DESCRIPTIONS,
+    ANALYSIS_LABELS,
+    ANALYSIS_ORDER,
+    CATEGORY_DESCRIPTIONS,
+    CATEGORY_ORDER,
+    FORMULAS,
+    SUBTYPES,
+)
 from backend.data.dao.i_formula_dao import IFormulaDAO
 from backend.dto.analysis_dto import FormulaDTO
 
@@ -30,3 +38,8 @@ class FormulaDAO(IFormulaDAO):
         present = {formula.category for formula in self._formulas}
         return [(category, CATEGORY_DESCRIPTIONS.get(category, "")) for category in CATEGORY_ORDER
                 if category in present]
+
+    def analyses(self) -> list[tuple[str, str, str, tuple[str, ...]]]:
+        present = {formula.category for formula in self._formulas}
+        return [(major, ANALYSIS_LABELS[major], ANALYSIS_DESCRIPTIONS[major],
+                 tuple(sub for sub in SUBTYPES[major] if sub in present)) for major in ANALYSIS_ORDER]

@@ -21,4 +21,8 @@ class IFormulaDAO(ABC):
 
     @abstractmethod
     def categories(self) -> list[tuple[str, str]]:
-        """(category, what it is for), in display order."""
+        """(sub-type, what it is for), in display order."""
+
+    @abstractmethod
+    def analyses(self) -> list[tuple[str, str, str, tuple[str, ...]]]:
+        """(analysis, label, what it is for, its sub-types) for the four analyses, in display order."""
