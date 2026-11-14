@@ -63,3 +63,18 @@ class RasterViewDTO:
     height: int
     scale: float                                # GeoTIFF pixels per preview pixel (>= 1)
     notes: list[str] = field(default_factory=list)
+
+
+@dataclass
+class MapLayerDTO:
+    """Class diagram: MapLayerDTO. One analysis result layer drawn and ready to show."""
+
+    id: str                                     # the result band, e.g. "NDVI"
+    name: str                                   # shown to the user
+    style: str                                  # colour style it was drawn with
+    data: object                                # numpy uint8 array (height, width, 4); no-data is transparent
+    legend: LegendDTO
+    width: int
+    height: int
+    bounds: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0)  # west, south, east, north (EPSG:4326)
+    scale: float = 1.0                          # GeoTIFF pixels per preview pixel
