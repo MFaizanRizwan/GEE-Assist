@@ -132,13 +132,8 @@ def test_profile_menu_offers_the_account_options(home, monkeypatch):
 
     assert len(shown) == 1
     names = [action.text() for action in home.account_menu.actions() if not action.isSeparator()]
-    assert names == ["Manage account", "View account", "Sign-up details", "Sign out"]
+    assert names == ["Manage account", "Sign-up details", "Sign out"]
     assert home.manage_account_action.isEnabled()
-
-
-def test_manage_account_opens_the_account_page(home):
-    home.manage_account_action.trigger()
-    assert home.current_page() is home._account_page
 
 
 def test_a_changed_account_shows_in_the_side_bar(home):
@@ -155,10 +150,10 @@ def test_sign_out_is_in_the_account_menu(home):
     assert not [b for b in home.side_bar.findChildren(QPushButton) if b.text() in ("Sign out", "S")]
 
 
-def test_view_account_opens_the_account_page(home):
-    home.view_account_action.trigger()
+def test_manage_account_opens_the_account_page(home):
+    home.manage_account_action.trigger()
 
-    assert home.current_page() is not home.dashboard
+    assert home.current_page() is home._account_page
     assert not home.back_button.isHidden()
 
 

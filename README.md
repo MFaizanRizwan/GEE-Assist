@@ -60,8 +60,8 @@ Run the tests with `python -m pytest`.
   lens; a prompt typing). It starts collapsed (icons only); clicking the logo slides it
   open (icons and names) or closed again. **Terminal** opens gkonsol (see below) and stays
   highlighted while it is open.
-- Clicking your name or avatar in the side bar opens the account menu: **Manage account**,
-  **View account**, **Sign-up details** and **Sign out**.
+- Clicking your name or avatar in the side bar opens the account menu: **Manage account**
+  (the account page), **Sign-up details** and **Sign out**.
 - The **account page** shows your details on the left and your photo on the right. Click your
   name (or username, phone) to change it; once something really changed, **Discard** and **Save
   changes** appear at the bottom right (Esc gives up a change). Click the photo to **change** or

@@ -191,10 +191,9 @@ class HomeWindow(QMainWindow):
         self.account_menu.setStyleSheet(theme.MENU_STYLE)
         self.manage_account_action = QAction("Manage account", self)
         self.manage_account_action.setToolTip("Edit your details, change your password or profile photo")
-        self.view_account_action = QAction("View account", self)
         self.signup_details_action = QAction("Sign-up details", self)
         self.sign_out_action = QAction("Sign out", self)
-        for action in (self.manage_account_action, self.view_account_action, self.signup_details_action):
+        for action in (self.manage_account_action, self.signup_details_action):
             self.account_menu.addAction(action)
         self.account_menu.addSeparator()
         self.account_menu.addAction(self.sign_out_action)
@@ -264,7 +263,6 @@ class HomeWindow(QMainWindow):
         self.manage_users.clicked.connect(self.open_user_admin)
         self.back_button.clicked.connect(self.show_dashboard)
         self.profile.clicked.connect(self.show_account_menu)
-        self.view_account_action.triggered.connect(self.show_account)
         self.manage_account_action.triggered.connect(self.manage_account)
         self.account.user_changed.connect(self.set_user)  # e.g. a new name or photo shows in the side bar
         self.signup_details_action.triggered.connect(self.show_signup_details)
