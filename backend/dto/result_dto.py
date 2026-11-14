@@ -35,3 +35,4 @@ class ResultDTO:
     device: str = ""                            # where it ran, e.g. "GPU: NVIDIA GeForce RTX 3060" or "CPU"
     seconds: float = 0.0                        # how long it took
     notes: list[str] = field(default_factory=list)
+    saved: bool = False                         # False: a temporary file, deleted unless the user saves it
