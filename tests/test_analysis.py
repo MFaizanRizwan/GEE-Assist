@@ -25,7 +25,7 @@ from backend.business.analysis.index_math import INDEX_FUNCTIONS  # noqa: E402
 from backend.business.analysis.sensors import NODATA, resolve_satellite, scaling  # noqa: E402
 from backend.business.facade import BusinessFacade  # noqa: E402
 from backend.business.map import MapService  # noqa: E402
-from backend.data.dao.formula_catalogue import CATEGORY_ORDER, FORMULAS  # noqa: E402
+from backend.data.dao.formula_catalogue import ANALYSIS_ORDER, CATEGORY_ORDER, FORMULAS, SUBTYPES  # noqa: E402
 from backend.data.dao.formula_dao import FormulaDAO  # noqa: E402
 from backend.data.data_facade import DataFacade  # noqa: E402
 from backend.dto.analysis_dto import GPU_DEDICATED, GPU_INTEGRATED, GPU_VIRTUAL, AnalysisRequestDTO, GpuDTO  # noqa: E402
@@ -74,6 +74,17 @@ def test_formula_keys_are_unique_and_every_category_is_known():
     assert len(keys) == len(set(keys))
     assert {formula.category for formula in FORMULAS} == set(CATEGORY_ORDER)
     assert all(formula.formula and formula.use_cases for formula in FORMULAS)
+
+
+def test_formulas_are_sub_types_of_the_four_analyses():
+    assert ANALYSIS_ORDER == ("Water", "Vegetation", "LST", "LULC")
+    for formula in FORMULAS:
+        assert formula.category in SUBTYPES[formula.analysis], formula.key
+    groups = FormulaDAO().analyses()
+    assert [group[0] for group in groups] == list(ANALYSIS_ORDER)
+    assert groups[1][3] == ("Vegetation indices", "Moisture & drought", "Burn & fire")
+    assert FormulaDAO().find_by_key("dNBR").analysis == "Vegetation"
+    assert FormulaDAO().find_by_key("PCA").analysis == "LULC"
 
 
 def test_every_computable_formula_has_arithmetic():
@@ -247,15 +258,20 @@ def test_gpu_out_of_memory_reruns_on_the_cpu(tmp_path, monkeypatch):
 
 # ------------------------------------------------------------------ availability
 def test_sentinel_2_offers_optical_analyses_only(service, tmp_path):
-    options = {o.category: o for o in service.get_available_analyses(service.describe_dataset(s2_file(tmp_path)))}
-    assert options["Vegetation"].available and options["Water"].available
-    assert not options["Thermal"].available and not options["SAR (radar)"].available
-    lst = next(p for p in options["Thermal"].processes if p.key == "LSTMapping")
-    assert "thermal" in lst.reason
-    spi = next(p for p in options["Moisture & drought"].processes if p.key == "SPI")
-    assert not spi.available and "rainfall" in spi.reason
-    dnbr = next(p for p in options["Burn"].processes if p.key == "dNBR")
-    assert dnbr.available and dnbr.periods == 2
+    options = service.get_available_analyses(service.describe_dataset(s2_file(tmp_path)))
+    assert [o.category for o in options] == ["Water", "Vegetation", "LST", "LULC"]
+    options = {o.category: o for o in options}
+    assert options["Vegetation"].available and options["Water"].available and options["LULC"].available
+    assert not options["LST"].available  # Sentinel-2 has no thermal band
+    assert options["LST"].label == "Land Surface Temperature"
+    lst = next(p for p in options["LST"].processes if p.key == "LSTMapping")
+    assert "thermal" in lst.reason and lst.group == "Surface temperature"
+    spi = next(p for p in options["Vegetation"].processes if p.key == "SPI")
+    assert not spi.available and "rainfall" in spi.reason and spi.group == "Moisture & drought"
+    dnbr = next(p for p in options["Vegetation"].processes if p.key == "dNBR")
+    assert dnbr.available and dnbr.periods == 2 and dnbr.group == "Burn & fire"
+    radar = [p for p in options["LULC"].processes if p.group == "Radar (SAR)"]
+    assert radar and not any(p.available for p in radar)
 
 
 def test_missing_bands_are_named(service, tmp_path):
@@ -288,7 +304,7 @@ def test_block_size_does_not_change_the_result(tmp_path):
     for rows in (7, 1000):
         service = AnalysisService(DataFacade(gemini_client=None), find_gpus=lambda: NO_GPU, block_rows=rows)
         results.append(service.run_analysis(service.describe_dataset(path),
-                                            AnalysisRequestDTO("Moisture & drought", ["VCI"],
+                                            AnalysisRequestDTO("Vegetation", ["VCI"],
                                                                output_dir=str(tmp_path / str(rows)))))
     np.testing.assert_allclose(read(results[0].output_path, "VCI"), read(results[1].output_path, "VCI"))
 
@@ -310,10 +326,10 @@ def test_water_mask_and_area(service, tmp_path):
 def test_burn_severity_needs_an_earlier_dataset(service, tmp_path):
     after = service.describe_dataset(s2_file(tmp_path, seed=1))
     with pytest.raises(AnalysisError, match="earlier dataset"):
-        service.run_analysis(after, AnalysisRequestDTO("Burn", ["dNBR"]))
+        service.run_analysis(after, AnalysisRequestDTO("Vegetation", ["dNBR"]))
     before = service.describe_dataset(s2_file(tmp_path, "Sentinel-2_73.0150_31.4900_2023-06-01_2023-06-30.tif"))
     # Chosen the other way round: dates decide which is before.
-    result = service.run_analysis(before, AnalysisRequestDTO("Burn", ["dNBR"], compare_with=[after],
+    result = service.run_analysis(before, AnalysisRequestDTO("Vegetation", ["dNBR"], compare_with=[after],
                                                              output_dir=str(tmp_path / "out")))
     with rasterio.open(before.path) as a, rasterio.open(after.path) as b:
         nbr = lambda src: (src.read(6) - src.read(8)) / (src.read(6) + src.read(8))  # noqa: E731
@@ -326,7 +342,7 @@ def test_lulc_transitions(service, tmp_path):
     after = np.array([[6, 1, 6, 6], [0, 0, 6, 4]], dtype=float)    # trees -> built, crops -> built
     a = service.describe_dataset(write_tif(tmp_path / "Dynamic-World_1_2_2020-01-01_2020-12-31.tif", {"label": before}))
     b = service.describe_dataset(write_tif(tmp_path / "Dynamic-World_1_2_2024-01-01_2024-12-31.tif", {"label": after}))
-    result = service.run_analysis(b, AnalysisRequestDTO("Land cover", ["LULCChangeDetection", "LULCTransition"],
+    result = service.run_analysis(b, AnalysisRequestDTO("LULC", ["LULCChangeDetection", "LULCTransition"],
                                                         compare_with=[a], output_dir=str(tmp_path / "out")))
     codes = read(result.output_path, "LULC_change")
     assert codes[0, 0] == 106 and codes[1, 2] == 406 and codes[0, 1] == 101
@@ -346,9 +362,9 @@ def test_landsat_lst_map_and_trend(service, tmp_path):
         bands["ST_B10"] = np.full((6, 6), raw)
         path = write_tif(tmp_path / f"Landsat-8_73.1_31.2_{year}-07-01_{year}-07-31.tif", bands)
         datasets.append(service.describe_dataset(path))
-    lst = service.run_analysis(datasets[0], AnalysisRequestDTO("Thermal", ["LSTMapping"], output_dir=str(tmp_path)))
+    lst = service.run_analysis(datasets[0], AnalysisRequestDTO("LST", ["LSTMapping"], output_dir=str(tmp_path)))
     assert read(lst.output_path, "LST") == pytest.approx(np.full((6, 6), 300.0 - 273.15), abs=1e-3)
-    trend = service.run_analysis(datasets[2], AnalysisRequestDTO("Thermal", ["LSTTemporalAnalysis"],
+    trend = service.run_analysis(datasets[2], AnalysisRequestDTO("LST", ["LSTTemporalAnalysis"],
                                                                  compare_with=datasets[:2], output_dir=str(tmp_path)))
     assert read(trend.output_path, "LST_change") == pytest.approx(np.full((6, 6), 4.0), abs=1e-3)
     assert read(trend.output_path, "LST_trend") == pytest.approx(np.full((6, 6), 1.0), abs=1e-2)  # °C per year
@@ -359,7 +375,7 @@ def test_pca_and_tasseled_cap(service, tmp_path):
     rng = np.random.default_rng(3)
     bands = {b: rng.uniform(8000, 20000, (12, 12)) for b in ("SR_B2", "SR_B3", "SR_B4", "SR_B5", "SR_B6", "SR_B7")}
     dataset = service.describe_dataset(write_tif(tmp_path / "Landsat-8_1_2_2024-01-01_2024-01-31.tif", bands))
-    result = service.run_analysis(dataset, AnalysisRequestDTO("Transformations", ["TasseledCap", "PCA"],
+    result = service.run_analysis(dataset, AnalysisRequestDTO("LULC", ["TasseledCap", "PCA"],
                                                               output_dir=str(tmp_path)))
     assert [layer.key for layer in result.layers] == ["TC_brightness", "TC_greenness", "TC_wetness", "PC1", "PC2",
                                                       "PC3"]
