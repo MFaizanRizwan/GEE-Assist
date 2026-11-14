@@ -4,7 +4,10 @@ from abc import ABC, abstractmethod
 from typing import Callable, Optional
 
 from backend.dto import CheckDTO, DownloadJobDTO, FormDTO, PlaceDTO, ValidationDTO
-from backend.dto.map_dto import RasterInfoDTO, RasterViewDTO, ViewPresetDTO
+from backend.dto.analysis_dto import AnalysisOptionDTO, AnalysisRequestDTO, ComputeDeviceDTO, FormulaDTO
+from backend.dto.download_dto import DatasetDTO
+from backend.dto.map_dto import MapLayerDTO, RasterInfoDTO, RasterViewDTO, ViewPresetDTO
+from backend.dto.result_dto import ResultDTO
 from backend.dto.user_dto import (
     GoogleSignInDTO,
     SessionInfoDTO,
@@ -156,3 +159,35 @@ class IBusinessFacade(ABC):
 
     @abstractmethod
     def raster_values_at(self, info: RasterInfoDTO, lon: float, lat: float) -> dict[str, float | None]: ...
+
+    # ------------------------------------------------------------- analysis (UC-06) and its formula table
+    @abstractmethod
+    def list_formulas(self) -> list[FormulaDTO]:
+        """Every spectral index and method, with its formula and use cases (the analysis table)."""
+
+    @abstractmethod
+    def formula_categories(self) -> list[tuple[str, str]]:
+        """(category, what it is for), in display order."""
+
+    @abstractmethod
+    def list_analysis_datasets(self) -> list[DatasetDTO]:
+        """Finished downloads whose GeoTIFF is still on disk, newest first."""
+
+    @abstractmethod
+    def describe_dataset(self, path: str) -> DatasetDTO:
+        """Any GeoTIFF on the computer as a dataset to analyse."""
+
+    @abstractmethod
+    def get_available_analyses(self, dataset: DatasetDTO) -> list[AnalysisOptionDTO]: ...
+
+    @abstractmethod
+    def run_analysis(self, dataset: DatasetDTO, request: AnalysisRequestDTO,
+                     on_progress: Optional[Callable[[float], None]] = None) -> ResultDTO: ...
+
+    @abstractmethod
+    def get_map_layers(self, result: ResultDTO, max_size: int = 1600) -> list[MapLayerDTO]:
+        """Each layer of an analysis result drawn and ready to show."""
+
+    @abstractmethod
+    def get_compute_device(self, use_gpu: bool = True) -> ComputeDeviceDTO:
+        """Where analyses run (GPU or CPU), the graphics cards found, and why."""
