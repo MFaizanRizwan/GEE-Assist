@@ -24,6 +24,7 @@ from PyQt6.QtWidgets import (
     QMainWindow,
     QMenu,
     QMessageBox,
+    QScrollArea,
     QSizePolicy,
     QStackedWidget,
     QVBoxLayout,
@@ -31,10 +32,13 @@ from PyQt6.QtWidgets import (
 )
 
 from backend.business.facade import IBusinessFacade
-from backend.config import DEFAULT_DOWNLOAD_DIR
+from backend.dto.project_dto import ProjectDTO
 from backend.dto.user_dto import UserDTO
+from backend.exceptions import GeeAssistError
 from frontend import appearance, theme
+from frontend.project_paths import current_project, downloads_folder
 from frontend.views.account_view import AccountView, Avatar, SignupDetailsDialog
+from frontend.views.project_dialogs import ProjectActions
 from frontend.views.analysis_table_view import AnalysisTableView
 from frontend.views.analysis_view import AnalysisView
 from frontend.restart import restart_app
@@ -91,8 +95,8 @@ class ProfileButton(QFrame):
         self._row.addWidget(self.avatar)
         self._row.addWidget(self.details, 1)
 
-    def set_user(self, user: UserDTO) -> None:
-        self.avatar.set_user(user)
+    def set_user(self, user: UserDTO, photo: bytes | None = None) -> None:
+        self.avatar.set_user(user, photo)
         self.name.setText(user.full_name)
         self.role.setText("Administrator" if user.is_admin else "User")
 
@@ -188,12 +192,11 @@ class HomeWindow(QMainWindow):
         # ---- account menu
         self.account_menu = QMenu(self)
         self.account_menu.setStyleSheet(theme.MENU_STYLE)
-        self.manage_account_action = QAction("Manage account  (coming soon)", self)
-        self.manage_account_action.setEnabled(False)
-        self.view_account_action = QAction("View account", self)
+        self.manage_account_action = QAction("Manage account", self)
+        self.manage_account_action.setToolTip("Edit your details, change your password or profile photo")
         self.signup_details_action = QAction("Sign-up details", self)
         self.sign_out_action = QAction("Sign out", self)
-        for action in (self.manage_account_action, self.view_account_action, self.signup_details_action):
+        for action in (self.manage_account_action, self.signup_details_action):
             self.account_menu.addAction(action)
         self.account_menu.addSeparator()
         self.account_menu.addAction(self.sign_out_action)
@@ -211,16 +214,22 @@ class HomeWindow(QMainWindow):
         self.analysis_table = AnalysisTableView(facade)
 
         self.account = AccountView(facade)
-        account_page = QFrame(objectName="HomeContent")
-        account_page.setStyleSheet(f"#HomeContent {{ background: {PAGE_BACKGROUND}; }}")
-        centre = QVBoxLayout(account_page)
-        centre.addStretch(1)
+        # The account card uses the page's width (up to its maximum) and scrolls in a short window.
+        account_content = QFrame(objectName="HomeContent")
+        account_content.setStyleSheet(f"#HomeContent {{ background: {PAGE_BACKGROUND}; }}")
+        page_layout = QVBoxLayout(account_content)
+        page_layout.setContentsMargins(36, 32, 36, 32)
         row = QHBoxLayout()
         row.addStretch(1)
-        row.addWidget(self.account)
+        row.addWidget(self.account, 100)
         row.addStretch(1)
-        centre.addLayout(row)
-        centre.addStretch(1)
+        page_layout.addLayout(row)
+        page_layout.addStretch(1)
+        account_page = QScrollArea(objectName="AccountPage")
+        account_page.setWidgetResizable(True)
+        account_page.setFrameShape(QFrame.Shape.NoFrame)
+        account_page.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        account_page.setWidget(account_content)
 
         self.pages = QStackedWidget(objectName="HomePages")
         self.pages.setStyleSheet(f"#HomePages, #DashboardPage {{ background: {PAGE_BACKGROUND}; }}")
@@ -257,9 +266,20 @@ class HomeWindow(QMainWindow):
         self.manage_users.clicked.connect(self.open_user_admin)
         self.back_button.clicked.connect(self.show_dashboard)
         self.profile.clicked.connect(self.show_account_menu)
-        self.view_account_action.triggered.connect(self.show_account)
+        self.manage_account_action.triggered.connect(self.manage_account)
+        self.account.user_changed.connect(self.set_user)  # e.g. a new name or photo shows in the side bar
         self.signup_details_action.triggered.connect(self.show_signup_details)
         self.dashboard.open_query_input.connect(self.show_query_input)
+        self.projects = ProjectActions(facade, self)
+        self.projects.project_changed.connect(lambda _project: self.refresh_projects())
+        dashboard = self.dashboard
+        dashboard.new_project.connect(self.projects.new_project)
+        dashboard.open_project.connect(self.projects.open_project)
+        dashboard.open_recent.connect(self.projects.open_folder)
+        dashboard.rename_project.connect(self.projects.rename_project)
+        dashboard.move_project.connect(self.projects.move_project)
+        dashboard.show_project_folder.connect(self.projects.show_project_folder)
+        dashboard.close_project.connect(self.projects.close_project)
         self.dashboard.open_downloads.connect(self.show_downloads)
         self.dashboard.open_analysis.connect(self.show_analysis)
         self.query_input_button.clicked.connect(self.show_query_input)
@@ -279,10 +299,54 @@ class HomeWindow(QMainWindow):
         self._admin_dialog: UserAdminDialog | None = None
         self._was_maximized = False  # before going full screen
         self.set_user(user)
+        self._project_shown: str | None = "none yet"
+        self.refresh_projects()
         self.show_dashboard()
+
+    # ------------------------------------------------------------- projects
+    def refresh_projects(self) -> None:
+        """Show the open project, the recent ones and their latest analysis results everywhere they appear."""
+        project = current_project(self._facade)
+        try:
+            recent = [p for p in self._facade.list_projects() if isinstance(p, ProjectDTO)]
+            results = [(p, list(self._facade.get_analysis_results(p))) for p in recent[:3]]
+        except GeeAssistError:
+            recent, results = [], []
+        self.dashboard.set_projects(project, recent, results)
+        self.menu_bar.set_projects(project, recent)
+        self.setWindowTitle(f"GEE-Assist — {project.name}" if project is not None else "GEE-Assist")
+        form_view = getattr(self.query_input, "form_view", None)
+        if form_view is not None and hasattr(form_view, "set_project"):
+            form_view.set_project(project)
+        if self._project_shown != (project.id if project is not None else None):
+            self._project_shown = project.id if project is not None else None
+            self.analysis.project_changed()  # only that project's datasets
+
+    def ensure_project(self) -> bool:
+        """True once a project is open; asks the user to create or open one when none is."""
+        if current_project(self._facade) is not None:
+            return True
+        choice = self.ask_for_project()
+        if choice == "new":
+            return self.projects.new_project() is not None
+        if choice == "open":
+            return self.projects.open_project() is not None
+        return False
+
+    def ask_for_project(self) -> str | None:
+        """"new", "open" or None (cancelled): what to do when a download needs a project and none is open."""
+        box = QMessageBox(QMessageBox.Icon.Information, "A project is needed",
+                          "Datasets are downloaded into a project's downloads folder. "
+                          "Create a project, or open an existing one, first.", parent=self)
+        create = box.addButton("New project…", QMessageBox.ButtonRole.AcceptRole)
+        existing = box.addButton("Open project…", QMessageBox.ButtonRole.ActionRole)
+        box.addButton(QMessageBox.StandardButton.Cancel)
+        box.exec()
+        return {create: "new", existing: "open"}.get(box.clickedButton())
 
     # ------------------------------------------------------------- navigation
     def show_dashboard(self) -> None:
+        self.refresh_projects()  # e.g. results of analyses run since
         self._show_page(self.dashboard)
 
     def show_query_input(self) -> None:
@@ -301,7 +365,9 @@ class HomeWindow(QMainWindow):
         self._show_page(self.analysis_table)
 
     def start_download(self, form) -> None:
-        """Send a kept request to GEE and show its progress on the Downloads page."""
+        """Send a kept request to GEE (into the open project) and show its progress on the Downloads page."""
+        if not self.ensure_project():
+            return
         self.downloads.start(form)
         self.show_downloads()
 
@@ -310,7 +376,7 @@ class HomeWindow(QMainWindow):
 
     def open_geotiff(self) -> None:
         """Choose any GeoTIFF on the computer (starting in the downloads folder) and show it."""
-        path, _ = QFileDialog.getOpenFileName(self, "Open GeoTIFF", str(DEFAULT_DOWNLOAD_DIR),
+        path, _ = QFileDialog.getOpenFileName(self, "Open GeoTIFF", downloads_folder(self._facade),
                                               "GeoTIFF (*.tif *.tiff);;All files (*)")
         if path:
             self.show_viewer(path)
@@ -424,6 +490,12 @@ class HomeWindow(QMainWindow):
 
     def _connect_menu_bar(self) -> None:
         bar = self.menu_bar
+        bar.new_project.triggered.connect(self.projects.new_project)
+        bar.open_project.triggered.connect(self.projects.open_project)
+        bar.recent_project_chosen.connect(self.projects.open_folder)
+        bar.rename_project.triggered.connect(self.projects.rename_project)
+        bar.move_project.triggered.connect(self.projects.move_project)
+        bar.close_project.triggered.connect(self.projects.close_project)
         bar.new_request.triggered.connect(self.show_query_input)
         bar.open_geotiff.triggered.connect(self.open_geotiff)
         bar.sign_out.triggered.connect(self.sign_out)
@@ -463,9 +535,13 @@ class HomeWindow(QMainWindow):
         self._admin_dialog.raise_()
         self._admin_dialog.activateWindow()
 
+    def manage_account(self) -> None:
+        """The account page: click a detail to change it, the photo to change or remove it."""
+        self.show_account()
+
     def set_user(self, user: UserDTO) -> None:
         self._user = user
-        self.profile.set_user(user)
+        self.profile.set_user(user, self._facade.get_profile_photo(user.id))
         self.manage_users.setVisible(user.is_admin)
         self.menu_bar.manage_users.setVisible(user.is_admin)
         self.account.set_user(user)

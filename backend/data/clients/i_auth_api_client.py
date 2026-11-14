@@ -50,7 +50,30 @@ class IAuthApiClient(ABC):
     def google_poll(self, session_id: str) -> dict[str, Any] | None:
         """POST /auth/google/poll - the login response, or None while the user has not finished (202)."""
 
+    # ----------------------------------------------------------------- account
+    @abstractmethod
+    def update_user(self, access_token: str, user_id: str, fields: dict[str, Any]) -> dict[str, Any]:
+        """PATCH /users/{user_id} - your own details, or anyone's for an admin. Unchanged fields are ignored."""
+
+    @abstractmethod
+    def change_password(
+        self, access_token: str, user_id: str, new_password: str, current_password: str | None = None
+    ) -> dict[str, Any]:
+        """PUT /users/{user_id}/password - ``current_password`` is required for your own account."""
+
     # ------------------------------------------------------------------- admin
+    @abstractmethod
+    def create_user(self, access_token: str, payload: dict[str, Any]) -> dict[str, Any]:
+        """POST /admin/users"""
+
+    @abstractmethod
+    def find_user_by_email(self, access_token: str, email: str) -> dict[str, Any]:
+        """GET /admin/users/by-email"""
+
+    @abstractmethod
+    def delete_user(self, access_token: str, user_id: str) -> None:
+        """DELETE /admin/users/{user_id}"""
+
     @abstractmethod
     def list_users(self, access_token: str, skip: int = 0, limit: int = 50) -> dict[str, Any]:
         """GET /admin/users"""

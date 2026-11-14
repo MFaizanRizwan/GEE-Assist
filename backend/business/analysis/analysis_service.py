@@ -11,6 +11,8 @@ Results are written to a temporary folder and kept only when the user saves them
 
 from __future__ import annotations
 
+import logging
+
 import atexit
 import shutil
 import tempfile
@@ -41,6 +43,8 @@ from backend.dto.download_dto import DatasetDTO
 from backend.dto.result_dto import ResultDTO
 from backend.exceptions import AnalysisError
 
+
+logger = logging.getLogger(__name__)
 
 def default_analyses() -> list[IAnalysis]:
     return [WaterAnalysis(), VegetationAnalysis(), LSTAnalysis(), LULCAnalysis()]
@@ -87,7 +91,8 @@ class AnalysisService(IAnalysisService):
         params: dict[str, Any] = dict(request.params)
         params.update(_compare_with=list(request.compare_with), _backend=backend, _on_progress=on_progress)
         folder = Path(request.output_dir) if request.output_dir else self._scratch_folder()
-        name = analysis.default_output(dataset).name if hasattr(analysis, "default_output") else "result.tif"
+        name = (analysis.default_output(dataset, request.processes).name if hasattr(analysis, "default_output")
+                else "result.tif")
         params["_output_path"] = str(folder / name)
         result = analysis.run(list(request.processes), dataset, params)
         result.saved = bool(request.output_dir)  # an explicit folder is the user's choice
@@ -120,7 +125,12 @@ class AnalysisService(IAnalysisService):
         if self._scratch not in path.parents:
             return
         for file in (path, path.with_suffix(".json")):
-            file.unlink(missing_ok=True)
+            try:
+                file.unlink(missing_ok=True)
+            except OSError:
+                # Still open (e.g. the map layers are being drawn from it, or a virus scanner reads it):
+                # leave it; the whole temporary folder is deleted when the app closes.
+                logger.info("Could not delete the temporary result %s yet; it goes when the app closes", file)
 
     def cleanup(self) -> None:
         """Delete every unsaved result (called when the app exits)."""

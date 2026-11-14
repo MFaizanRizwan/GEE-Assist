@@ -18,6 +18,12 @@ logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 ASSETS_DIR = PROJECT_ROOT / "assets"
+# Profile photos stay on this computer (never sent to the server), one file per user id.
+PROFILE_PHOTO_DIR = PROJECT_ROOT / "workspace" / "profile_photos"
+# Where the user's projects are on this computer (the recent ones shown on the dashboard).
+PROJECT_HISTORY_FILE = PROJECT_ROOT / "workspace" / "projects.json"
+# Suggested parent folder for a new project.
+DEFAULT_PROJECTS_DIR = Path.home() / "Documents" / "GEE-Assist Projects"
 
 
 @dataclass(frozen=True)

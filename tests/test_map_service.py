@@ -267,3 +267,64 @@ def test_the_facade_passes_viewing_calls_to_the_map_service(scene):
 
     assert presets[0].key == "true_colour" and view.width == 40
     assert facade.raster_values_at(info, west + 0.0105, north - 0.0305)["B8"] == 3500.0
+
+
+# ------------------------------------------------------------------ analysis results in their own colours
+def _result_tif(tmp_path, styles=True):
+    import json
+
+    rng = np.random.default_rng(0)
+    path = write_tif(tmp_path / "Sentinel-2_73.0_31.0_2024-06-01_2024-06-30_Vegetation_NDVI_LST_2026.tif",
+                     {"NDVI": rng.uniform(0.1, 0.6, (30, 40)), "LST": rng.uniform(20, 45, (30, 40))})
+    summary = {"category": "Vegetation", "processes": ["NDVI", "LSTMapping"], "layers": ["NDVI", "LST"]}
+    if styles:
+        summary["styles"] = [
+            {"key": "NDVI", "label": "NDVI", "style": "vegetation", "unit": "", "low": -0.2, "high": 0.8, "classes": ""},
+            {"key": "LST", "label": "LST", "style": "thermal", "unit": "°C", "low": None, "high": None, "classes": ""},
+        ]
+    path.with_suffix(".json").write_text(json.dumps(summary))
+    return path
+
+
+def test_a_result_is_shown_in_the_analysis_colours_when_asked(tmp_path):
+    service = MapService()
+    info = service.describe(str(_result_tif(tmp_path)))
+    assert [layer.key for layer in info.result_layers] == ["NDVI", "LST"]
+
+    on = {p.bands[0]: p for p in service.view_presets(info, analysis_colours=True)}
+    assert (on["NDVI"].kind, on["NDVI"].style, on["NDVI"].low, on["NDVI"].high) == ("layer", "vegetation", -0.2, 0.8)
+    view = service.render(info, on["NDVI"])
+    assert (view.legend.low, view.legend.high) == (-0.2, 0.8)  # the Analysis page's range, not the data's
+    assert service.render(info, on["LST"]).legend.title == "LST (°C)"
+
+    off = {p.bands[0]: p for p in service.view_presets(info, analysis_colours=False)}
+    assert off["NDVI"].kind == "band" and off["NDVI"].label == "Band NDVI"
+    stretched = service.render(info, off["NDVI"]).legend
+    assert 0.1 <= stretched.low < stretched.high <= 0.6  # the general scale, stretched to this file
+
+
+def test_the_same_colours_as_the_analysis_page(tmp_path):
+    from backend.dto.result_dto import ResultDTO, ResultLayerDTO
+
+    service = MapService()
+    path = _result_tif(tmp_path)
+    info = service.describe(str(path))
+    preset = next(p for p in service.view_presets(info) if p.bands == ("NDVI",))
+    viewer = service.render(info, preset, max_size=1600)
+    result = ResultDTO(id="r", category="Vegetation", output_path=str(path),
+                       layers=[ResultLayerDTO("NDVI", "NDVI", "vegetation", "", -0.2, 0.8)])
+    [page] = service.build_layers(result, max_size=1600)
+    assert np.array_equal(viewer.rgba, page.data)  # pixel for pixel what the Analysis page shows
+
+
+def test_older_results_take_their_colours_from_the_index_table(tmp_path):
+    info = MapService().describe(str(_result_tif(tmp_path, styles=False)))
+    ndvi, lst = info.result_layers
+    assert (ndvi.style, ndvi.low, ndvi.high) == ("vegetation", -0.2, 0.8)
+    assert lst.low is None  # not an index: stretched to its values
+
+
+def test_plain_downloads_are_not_results(sentinel_tif):
+    info = MapService().describe(str(sentinel_tif))
+    assert info.result_layers == ()
+    assert all(p.kind != "layer" for p in MapService().view_presets(info))

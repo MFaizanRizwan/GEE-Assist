@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+from dataclasses import replace
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -14,10 +16,12 @@ from backend.dto import CheckDTO, DownloadJobDTO, FormDTO, PlaceDTO, ValidationD
 from backend.dto.analysis_dto import AnalysisOptionDTO, AnalysisRequestDTO, ComputeDeviceDTO, FormulaDTO
 from backend.dto.download_dto import JOB_COMPLETED, DatasetDTO
 from backend.dto.map_dto import MapLayerDTO, RasterInfoDTO, RasterViewDTO, ViewPresetDTO
+from backend.dto.project_dto import AnalysisRecordDTO, ProjectDTO
 from backend.dto.result_dto import ResultDTO
-from backend.exceptions import AnalysisError
+from backend.exceptions import AnalysisError, GeeAssistError, ProjectError
 from backend.dto.user_dto import (
     GoogleSignInDTO,
+    NewUserDTO,
     SessionInfoDTO,
     SignupDTO,
     SignupResultDTO,
@@ -26,6 +30,8 @@ from backend.dto.user_dto import (
     VerificationStatusDTO,
 )
 
+
+logger = logging.getLogger(__name__)
 
 class BusinessFacade(IBusinessFacade):
     """Class diagram: BusinessFacade. Delegates to the services.
@@ -69,6 +75,7 @@ class BusinessFacade(IBusinessFacade):
 
     def log_out(self) -> None:
         self._user_service.log_out()
+        self._request_service.close_project()  # the next user starts without one
 
     def sign_up(self, data: SignupDTO) -> SignupResultDTO:
         return self._user_service.sign_up(data)
@@ -98,6 +105,33 @@ class BusinessFacade(IBusinessFacade):
     def set_user_active(self, user_id: str, is_active: bool) -> UserDTO:
         return self._user_service.set_user_active(user_id, is_active)
 
+    def find_user_by_email(self, email: str) -> UserDTO | None:
+        return self._user_service.find_user_by_email(email)
+
+    def create_user(self, user: NewUserDTO) -> ValidationDTO:
+        return self._user_service.create_user(user)
+
+    def delete_user(self, user_id: str) -> bool:
+        return self._user_service.delete_user(user_id)
+
+    # ------------------------------------------------------------- manage account
+    def update_user(self, user: UserDTO) -> ValidationDTO:
+        return self._user_service.update_user(user)
+
+    def change_password(
+        self, user_id: str, new_password: str, confirm_password: str, current_password: str | None = None
+    ) -> ValidationDTO:
+        return self._user_service.change_password(user_id, new_password, confirm_password, current_password)
+
+    def set_profile_photo(self, file_path: str) -> ValidationDTO:
+        return self._user_service.set_profile_photo(file_path)
+
+    def get_profile_photo(self, user_id: str | None = None) -> bytes | None:
+        return self._user_service.get_profile_photo(user_id)
+
+    def remove_profile_photo(self) -> bool:
+        return self._user_service.remove_profile_photo()
+
     # ------------------------------------------------------------- query input
     def submit_query(self, text: str) -> FormDTO:
         return self._request_service.submit_query(text)
@@ -117,9 +151,72 @@ class BusinessFacade(IBusinessFacade):
     def get_kept_requests(self) -> list[FormDTO]:
         return self._request_service.get_kept_requests()
 
+    # ------------------------------------------------------------- projects
+    def save_project(self, project: ProjectDTO) -> bool:
+        return self._request_service.save_project(project)
+
+    def list_projects(self, user_id: str | None = None) -> list[ProjectDTO]:
+        user_id = user_id if user_id is not None else self._user_id()
+        return self._request_service.list_projects(user_id) if user_id else []
+
+    def suggest_project_name(self, location: str) -> str:
+        return self._request_service.suggest_project_name(location)
+
+    def create_project(self, name: str, location: str) -> ProjectDTO:
+        return self._request_service.create_project(name, location, self._user_id())
+
+    def open_project(self, folder: str) -> ProjectDTO:
+        return self._request_service.open_project(folder, self._user_id())
+
+    def rename_project(self, new_name: str) -> ProjectDTO:
+        return self._relocating(lambda: self._request_service.rename_project(new_name))
+
+    def move_project(self, new_location: str) -> ProjectDTO:
+        return self._relocating(lambda: self._request_service.move_project(new_location))
+
+    def close_project(self) -> None:
+        self._request_service.close_project()
+
+    def get_current_project(self) -> ProjectDTO | None:
+        return self._request_service.get_current_project()
+
+    def get_analysis_results(self, project: ProjectDTO) -> list[AnalysisRecordDTO]:
+        return self._request_service.get_analysis_results(project)
+
+    def _relocating(self, change: Callable[[], ProjectDTO]) -> ProjectDTO:
+        """Rename or move the open project; its saved downloads follow it."""
+        before = self._request_service.get_current_project()
+        if before is not None and self._download_service.is_busy_in(before.folder):
+            raise ProjectError("A download in this project is running. Pause it, or let it finish, "
+                               "before renaming or moving the project.")
+        after = change()
+        if before is not None and after.folder != before.folder:
+            self._download_service.relocate(before.folder, after.folder)
+        return after
+
+    def _user_id(self) -> str:
+        user = self._user_service.current_user
+        return user.id if user is not None else ""
+
+    def _require_project(self, why: str) -> ProjectDTO:
+        project = self._request_service.get_current_project()
+        if project is None:
+            raise ProjectError(f"Create or open a project first: {why}")
+        return project
+
+    def _record(self, result: ResultDTO) -> None:
+        """Keep the result in the open project's analysis_results.json; never lose the result over it."""
+        if self._request_service.get_current_project() is None:
+            return
+        try:
+            self._request_service.record_analysis_result(result)
+        except GeeAssistError:
+            logger.warning("Could not record the analysis result in the project", exc_info=True)
+
     # ------------------------------------------------------------- download (UC-05)
     def start_download(self, form: FormDTO) -> DownloadJobDTO:
-        return self._download_service.start_download(form)
+        project = self._require_project("datasets are downloaded into the project's downloads folder.")
+        return self._download_service.start_download(replace(form, output_dir=project.downloads_dir))
 
     def get_download_progress(self, job: DownloadJobDTO) -> DownloadJobDTO:
         return self._download_service.get_progress(job)
@@ -138,6 +235,9 @@ class BusinessFacade(IBusinessFacade):
 
     def list_downloads(self) -> list[DownloadJobDTO]:
         return self._download_service.list_jobs()
+
+    def save_download_copy(self, job: DownloadJobDTO, folder: str) -> str:
+        return self._download_service.save_copy(job, folder)
 
     def get_chunk_size_mb(self) -> int:
         return self._download_service.chunk_size_mb()
@@ -167,8 +267,8 @@ class BusinessFacade(IBusinessFacade):
     def describe_raster(self, path: str) -> RasterInfoDTO:
         return self._map_service.describe(path)
 
-    def raster_view_presets(self, info: RasterInfoDTO) -> list[ViewPresetDTO]:
-        return self._map_service.view_presets(info)
+    def raster_view_presets(self, info: RasterInfoDTO, analysis_colours: bool = True) -> list[ViewPresetDTO]:
+        return self._map_service.view_presets(info, analysis_colours)
 
     def render_raster(self, info: RasterInfoDTO, preset: ViewPresetDTO, max_size: int = 1600) -> RasterViewDTO:
         return self._map_service.render(info, preset, max_size)
@@ -187,11 +287,18 @@ class BusinessFacade(IBusinessFacade):
         return self._analysis().analysis_groups()
 
     def list_analysis_datasets(self) -> list[DatasetDTO]:
+        """The open project's finished downloads; none when no project is open."""
+        project = self._request_service.get_current_project()
+        if project is None:
+            return []
+        folder = Path(project.folder).resolve()
         datasets = []
         jobs = sorted(self._download_service.list_jobs(), key=lambda job: job.finished_at or "", reverse=True)
         for job in jobs:
             if job.status != JOB_COMPLETED or job.dataset is None or not Path(job.dataset.path).is_file():
                 continue
+            if folder not in Path(job.dataset.path).resolve().parents:
+                continue  # another project's download
             dataset = job.dataset
             satellite, start, end = parse_dataset_name(Path(dataset.path).stem)
             datasets.append(DatasetDTO(
@@ -210,10 +317,15 @@ class BusinessFacade(IBusinessFacade):
 
     def run_analysis(self, dataset: DatasetDTO, request: AnalysisRequestDTO,
                      on_progress: Optional[Callable[[float], None]] = None) -> ResultDTO:
-        return self._analysis().run_analysis(dataset, request, on_progress)
+        self._require_project("analysis results are kept in the project.")
+        result = self._analysis().run_analysis(dataset, request, on_progress)
+        self._record(result)
+        return result
 
     def save_analysis_result(self, result: ResultDTO, path: str) -> ResultDTO:
-        return self._analysis().save_result(result, path)
+        saved = self._analysis().save_result(result, path)
+        self._record(saved)  # now with the saved file
+        return saved
 
     def discard_analysis_result(self, result: ResultDTO) -> None:
         if self._analysis_service is not None:

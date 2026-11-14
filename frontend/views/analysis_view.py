@@ -10,7 +10,7 @@ the GPU when the computer has a dedicated NVIDIA card with CuPy, else the CPU.
 
 The right panel shows the result: each layer drawn with its legend, the numbers
 (means, areas, transitions), and buttons to save it, open it in the viewer or show it
-on the map. A result is temporary until the user saves it (“Save result…”, to a file
+on the map. A result is temporary until the user saves it (“Save result”, into the project's analysis folder
 they choose); an unsaved one is deleted when the next one replaces it or the app
 closes. Analyses run in the background with a progress bar.
 """
@@ -45,13 +45,13 @@ from PyQt6.QtWidgets import (
 )
 
 from backend.business.facade import IBusinessFacade
-from backend.config import DEFAULT_ANALYSIS_DIR, DEFAULT_DOWNLOAD_DIR
 from backend.dto.analysis_dto import AnalysisOptionDTO, AnalysisRequestDTO, ComputeDeviceDTO, ProcessOptionDTO
 from backend.dto.download_dto import DatasetDTO
 from backend.dto.map_dto import MapLayerDTO
 from backend.dto.result_dto import ResultDTO
 from backend.exceptions import GeeAssistError
 from frontend import theme
+from frontend.project_paths import analysis_folder, current_project, downloads_folder
 from frontend.download_format import format_size
 from frontend.widgets.form_parts import StatusBanner
 from frontend.widgets.process_picker import STYLESHEET as PICKER_STYLESHEET
@@ -132,6 +132,9 @@ def dataset_title(dataset: DatasetDTO) -> str:
 def device_text(device: ComputeDeviceDTO) -> str:
     return f"⚡ Runs on the GPU: {device.device_name}" if device.uses_gpu else "Runs on the CPU"
 
+
+NO_PROJECT = ("Create or open a project: the datasets downloaded into it are listed here, and its "
+              "analysis results are saved in it.")
 
 class AnalysisView(QWidget):
     open_in_viewer_requested = pyqtSignal(str)               # result GeoTIFF
@@ -279,8 +282,9 @@ class AnalysisView(QWidget):
         self.metrics_table.setMaximumHeight(200)
         self.save_state = QLabel(objectName="SaveState")
         self.save_state.setWordWrap(True)
-        self.save_button = QPushButton("Save result…", objectName="PrimaryButton")
-        self.save_button.setToolTip("Keep this result: choose where to save its GeoTIFF (and its numbers as .json)")
+        self.save_button = QPushButton("Save result", objectName="PrimaryButton")
+        self.save_button.setToolTip("Keep this result: its GeoTIFF (and its numbers as .json) are saved in the "
+                                    "project's analysis folder")
         self.viewer_button = QPushButton("Open in viewer", objectName="SecondaryButton")
         self.map_button = QPushButton("Show on map", objectName="SecondaryButton")
         self.folder_button = QPushButton("Open folder", objectName="SecondaryButton")
@@ -362,7 +366,15 @@ class AnalysisView(QWidget):
             self.find_device()
 
     def refresh_datasets(self) -> None:
-        """Finished downloads (newest first), then GeoTIFFs opened from disk."""
+        """The open project's finished downloads (newest first), then GeoTIFFs opened from disk."""
+        has_project = current_project(self._facade) is not None
+        for widget in (self.refresh_button, self.browse_button):
+            widget.setEnabled(has_project)
+        if not has_project:
+            self.opened = []
+            self.set_datasets([])
+            self.dataset_note.setText(NO_PROJECT)
+            return
         try:
             downloads = list(self._facade.list_analysis_datasets())
         except GeeAssistError as exc:
@@ -396,7 +408,7 @@ class AnalysisView(QWidget):
             self.choose_dataset(None)
 
     def browse(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(self, "Open GeoTIFF to analyse", str(DEFAULT_DOWNLOAD_DIR),
+        path, _ = QFileDialog.getOpenFileName(self, "Open GeoTIFF to analyse", downloads_folder(self._facade),
                                               "GeoTIFF (*.tif *.tiff);;All files (*)")
         if path:
             self.open_file(path)
@@ -586,8 +598,15 @@ class AnalysisView(QWidget):
         self.use_gpu.setEnabled(True)  # the GPU worked once: it can be switched back on
 
     # ------------------------------------------------------------- running
+    def project_changed(self) -> None:
+        """Another project was opened, or it was closed: show its datasets (files opened from disk are dropped)."""
+        self.opened = []
+        if self._loaded:
+            self.refresh_datasets()
+
     def _update_run_button(self) -> None:
-        ready = self.dataset is not None and bool(self.chosen_processes()) and not self.running
+        ready = (self.dataset is not None and bool(self.chosen_processes()) and not self.running
+                 and current_project(self._facade) is not None)
         self.run_button.setEnabled(ready)
         self.run_button.setText("Running…" if self.running else "Run analysis")
 
@@ -687,16 +706,24 @@ class AnalysisView(QWidget):
 
     # ------------------------------------------------------------- saving
     def suggested_save_path(self) -> str:
-        return str(DEFAULT_ANALYSIS_DIR / Path(self.result.output_path).name) if self.result else ""
+        """Where "Save result" puts the result: the open project's analysis folder, under a name not taken yet."""
+        if self.result is None:
+            return ""
+        target = Path(analysis_folder(self._facade)) / Path(self.result.output_path).name
+        number = 2
+        while target.exists():  # never overwrite an earlier result
+            target = target.with_name(f"{Path(self.result.output_path).stem}_{number}{target.suffix}")
+            number += 1
+        return str(target)
 
     def save_result(self) -> None:
-        """Ask where to keep the result, then save it there (nothing is kept unless the user does this)."""
+        """Save the result in the open project's analysis folder (nothing is kept unless the user does this)."""
         if self.result is None:
             return
-        path, _ = QFileDialog.getSaveFileName(self, "Save analysis result", self.suggested_save_path(),
-                                              "GeoTIFF (*.tif)")
-        if path:
-            self.save_to(path)
+        if current_project(self._facade) is None:
+            self.banner.show_error("Open a project to save the result: it is saved in the project's analysis folder.")
+            return
+        self.save_to(self.suggested_save_path())
 
     def save_to(self, path: str) -> None:
         if self.result is None:

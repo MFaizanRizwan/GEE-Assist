@@ -31,6 +31,7 @@ from backend.data.dao.formula_dao import FormulaDAO  # noqa: E402
 from backend.data.data_facade import DataFacade  # noqa: E402
 from backend.dto.analysis_dto import GPU_DEDICATED, GPU_INTEGRATED, GPU_VIRTUAL, AnalysisRequestDTO, GpuDTO  # noqa: E402
 from backend.dto.download_dto import JOB_COMPLETED, JOB_FAILED, DatasetDTO, DownloadJobDTO  # noqa: E402
+from backend.dto.project_dto import ProjectDTO  # noqa: E402
 from backend.exceptions import AnalysisError  # noqa: E402
 
 S2_BANDS = ("B2", "B3", "B4", "B5", "B6", "B8", "B11", "B12")
@@ -407,9 +408,28 @@ def test_facade_lists_finished_downloads_that_still_exist(tmp_path):
     failed = DownloadJobDTO("3", "y", str(tmp_path), JOB_FAILED)
     downloads = MagicMock()
     downloads.list_jobs.return_value = [gone, failed, done]
-    facade = BusinessFacade(MagicMock(), MagicMock(), downloads, MapService(), MagicMock())
+    requests = MagicMock()
+    requests.get_current_project.return_value = ProjectDTO(id="p1", name="P", folder=str(tmp_path))
+    facade = BusinessFacade(MagicMock(), requests, downloads, MapService(), MagicMock())
     [dataset] = facade.list_analysis_datasets()
     assert (dataset.path, dataset.satellite, dataset.start_date) == (path, "Sentinel-2", "2024-06-01")
+
+
+def test_facade_lists_only_the_open_projects_datasets(tmp_path):
+    for project in ("Mine", "Other"):
+        (tmp_path / project / "downloads").mkdir(parents=True)
+    mine = s2_file(tmp_path / "Mine" / "downloads")
+    theirs = s2_file(tmp_path / "Other" / "downloads")
+    jobs = [DownloadJobDTO(str(n), "Sentinel-2_73.0150_31.4900_2024-06-01_2024-06-30", str(Path(p).parent),
+                           JOB_COMPLETED, dataset=DatasetDTO(str(n), "", p)) for n, p in enumerate((mine, theirs))]
+    downloads = MagicMock()
+    downloads.list_jobs.return_value = jobs
+    requests = MagicMock()
+    facade = BusinessFacade(MagicMock(), requests, downloads, MapService(), MagicMock())
+    requests.get_current_project.return_value = ProjectDTO(id="p1", name="Mine", folder=str(tmp_path / "Mine"))
+    assert [d.path for d in facade.list_analysis_datasets()] == [mine]
+    requests.get_current_project.return_value = None
+    assert facade.list_analysis_datasets() == []  # no project: nothing to analyse
 
 
 def test_facade_without_analysis_service_says_so():
@@ -461,3 +481,56 @@ def test_an_explicit_folder_counts_as_saved(service, tmp_path):
     result = service.run_analysis(service.describe_dataset(s2_file(tmp_path)),
                                   AnalysisRequestDTO("Vegetation", ["NDVI"], output_dir=str(tmp_path / "out")))
     assert result.saved and Path(result.output_path).parent == tmp_path / "out"
+
+
+def test_saving_works_while_the_temporary_result_is_still_open(service, tmp_path):
+    """The map layers may still be reading the temporary file when Save is pressed (WinError 32 on Windows)."""
+    dataset = service.describe_dataset(s2_file(tmp_path))
+    result = service.run_analysis(dataset, AnalysisRequestDTO("Vegetation", ["NDVI", "EVI"]))
+    with rasterio.open(result.output_path):  # e.g. the map layers being drawn from it
+        saved = service.save_result(result, str(tmp_path / "project" / "analysis" / "result.tif"))
+    assert saved.saved and Path(saved.output_path).is_file()
+    folder = Path(result.output_path).parent
+    service.cleanup()  # whatever could not be deleted then goes when the app closes
+    assert not folder.exists()
+
+
+def test_datasets_lined_up_with_the_reference_are_closed_after_a_run(service, tmp_path):
+    import os
+
+    before = s2_file(tmp_path, "Sentinel-2_73.0150_31.4900_2023-06-01_2023-06-30.tif", seed=1, shape=(30, 50))
+    after = service.describe_dataset(s2_file(tmp_path))
+    service.run_analysis(after, AnalysisRequestDTO("Vegetation", ["dNBR"],
+                                                   compare_with=[service.describe_dataset(before)]))
+    os.rename(before, before + ".moved")  # fails on Windows while any handle on it is still open
+
+
+# ------------------------------------------------------------------ result file names
+def test_result_names_list_the_processes(service, tmp_path):
+    import re
+
+    dataset = service.describe_dataset(s2_file(tmp_path))
+    result = service.run_analysis(dataset, AnalysisRequestDTO("Vegetation", ["NDVI", "EVI"]))
+    name = Path(result.output_path).name
+    assert re.fullmatch(r"Sentinel-2_73\.0150_31\.4900_2024-06-01_2024-06-30_Vegetation_NDVI_EVI_"
+                        r"\d{4}-\d\d-\d\d_\d\d-\d\d-\d\d\.tif", name), name
+
+
+def test_many_processes_are_shortened_in_the_name():
+    from backend.business.analysis.base_analysis import PROCESSES_IN_NAME, processes_part
+
+    assert processes_part(["NDVI"]) == "NDVI"
+    many = ["NDVI", "EVI", "SAVI", "MSAVI", "GNDVI", "NDRE", "GCI", "CIre", "MTCI", "MCARI", "TCARI", "ARVI",
+            "VARI", "RVI", "DVI", "WDRVI", "PSRI", "LAI", "FAPAR", "FCover"]
+    part = processes_part(many)
+    assert len(part) <= PROCESSES_IN_NAME and part.startswith("NDVI_EVI_SAVI")
+    shown = part.split("_and_")[0].split("_")
+    assert part.endswith(f"_and_{len(many) - len(shown)}_more") and shown == many[:len(shown)]
+
+
+def test_the_summary_keeps_how_each_layer_is_coloured(service, tmp_path):
+    dataset = service.describe_dataset(s2_file(tmp_path))
+    result = service.run_analysis(dataset, AnalysisRequestDTO("Vegetation", ["NDVI"]))
+    summary = json.loads(Path(result.output_path).with_suffix(".json").read_text())
+    [ndvi] = summary["styles"]
+    assert (ndvi["key"], ndvi["style"], ndvi["low"], ndvi["high"]) == ("NDVI", "vegetation", -0.2, 0.8)

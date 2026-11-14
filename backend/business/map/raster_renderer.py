@@ -14,6 +14,7 @@ import math
 
 import numpy as np
 
+from backend.business.map import layer_styles
 from backend.business.map.colour_maps import DYNAMIC_WORLD_CLASSES, VEGETATION, VIRIDIS, WATER, ColourMap
 from backend.dto.map_dto import LegendDTO, RasterInfoDTO, RasterViewDTO, ViewPresetDTO
 from backend.exceptions import MapError
@@ -38,6 +39,10 @@ def render(info: RasterInfoDTO, preset: ViewPresetDTO, max_size: int = MAX_PREVI
         legend = LegendDTO("rgb", preset.label, labels=preset.bands)
     elif preset.kind == "classes":
         rgb, legend = _classes(bands[0], valid)
+    elif preset.kind == "layer":  # an analysis result's band, exactly as on the Analysis page
+        title = f"{preset.label} ({preset.unit})" if preset.unit else preset.label
+        rgb, legend = layer_styles.draw(bands[0], valid, preset.style, title, preset.low, preset.high,
+                                        preset.classes)
     else:
         values = _index(bands) if preset.kind == "index" else bands[0]
         if preset.kind == "index":
@@ -65,7 +70,8 @@ def _read(info: RasterInfoDTO, preset: ViewPresetDTO, width: int, height: int) -
     import rasterio
     from rasterio.enums import Resampling
 
-    resampling = Resampling.nearest if preset.kind == "classes" else Resampling.average
+    categorical = preset.kind == "classes" or preset.style in ("mask", "classes", "transition")
+    resampling = Resampling.nearest if categorical else Resampling.average
     indexes = [info.band_names.index(band) + 1 for band in preset.bands]
     try:
         with rasterio.open(info.path) as src:

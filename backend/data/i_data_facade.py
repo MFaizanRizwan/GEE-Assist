@@ -6,6 +6,8 @@ from typing import Optional
 from backend.data.clients.i_gee_client import ProgressCallback, StopCheck
 from backend.dto import CheckDTO, ChunkDTO, FormDTO, PlaceDTO
 from backend.dto.analysis_dto import FormulaDTO
+from backend.dto.project_dto import AnalysisRecordDTO, ProjectDTO
+from backend.dto.user_dto import NewUserDTO, UserDTO, UserPageDTO
 
 
 class IDataFacade(ABC):
@@ -74,3 +76,69 @@ class IDataFacade(ABC):
     @abstractmethod
     def analysis_groups(self) -> list[tuple[str, str, str, tuple[str, ...]]]:
         """(analysis, label, what it is for, its sub-types) of the four analyses (delegates to IFormulaDAO)."""
+
+    # ------------------------------------------------------------- user accounts (delegate to IUserDAO)
+    @abstractmethod
+    def save_user(self, user: UserDTO) -> UserDTO:
+        """Store the user's details; returns them as stored."""
+
+    @abstractmethod
+    def find_user_by_id(self, user_id: str) -> UserDTO | None: ...
+
+    @abstractmethod
+    def find_user_by_email(self, email: str) -> UserDTO | None: ...
+
+    @abstractmethod
+    def find_users(self, skip: int = 0, limit: int = 50) -> UserPageDTO: ...
+
+    @abstractmethod
+    def delete_user(self, user_id: str) -> bool: ...
+
+    @abstractmethod
+    def create_user(self, user: NewUserDTO) -> UserDTO: ...
+
+    @abstractmethod
+    def change_password(self, user_id: str, new_password: str, current_password: str | None = None) -> bool: ...
+
+    @abstractmethod
+    def save_profile_photo(self, user_id: str, image: bytes) -> bool:
+        """Kept on this computer only."""
+
+    @abstractmethod
+    def find_profile_photo(self, user_id: str) -> bytes | None: ...
+
+    @abstractmethod
+    def delete_profile_photo(self, user_id: str) -> bool: ...
+
+    # ------------------------------------------------------------- projects (delegate to IProjectDAO)
+    @abstractmethod
+    def save_project(self, project: ProjectDTO) -> bool:
+        """Write the project folder and remember where it is."""
+
+    @abstractmethod
+    def find_project_by_id(self, project_id: str) -> ProjectDTO | None: ...
+
+    @abstractmethod
+    def find_projects_by_user(self, user_id: str) -> list[ProjectDTO]:
+        """Most recently opened first."""
+
+    @abstractmethod
+    def find_all_projects(self) -> list[ProjectDTO]: ...
+
+    @abstractmethod
+    def delete_project(self, project_id: str) -> bool:
+        """Forget the project; its folder is kept."""
+
+    @abstractmethod
+    def load_project_folder(self, folder: str) -> ProjectDTO | None:
+        """The project in ``folder``, or None if the folder is not a project."""
+
+    @abstractmethod
+    def move_project(self, project: ProjectDTO, new_folder: str) -> ProjectDTO: ...
+
+    @abstractmethod
+    def save_analysis_record(self, project: ProjectDTO, record: AnalysisRecordDTO) -> bool: ...
+
+    @abstractmethod
+    def find_analysis_records(self, project: ProjectDTO) -> list[AnalysisRecordDTO]:
+        """Newest first."""
