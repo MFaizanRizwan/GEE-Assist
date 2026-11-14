@@ -1,4 +1,4 @@
-"""Tasseled Cap transformation and Principal Component Analysis.
+"""Tasseled Cap transformation and Principal Component Analysis (LULC analysis, "Transformations").
 
 Tasseled Cap uses published coefficients, so only Landsat 5/7 (Crist 1985) and Landsat
 8/9 (Baig et al. 2014) are supported. PCA works on any dataset with two or more
@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import numpy as np
 
-from backend.business.analysis.base_analysis import BaseAnalysis
 from backend.business.analysis.index_math import TASSELED_CAP, TASSELED_CAP_ROLES, TASSELED_CAP_SENSOR
 from backend.business.analysis.raster_engine import LayerSpec, Period, ScenePass
 from backend.exceptions import AnalysisError
@@ -56,51 +55,54 @@ class CovariancePass(ScenePass):
         return {"mean": mean, "vectors": vectors, "explained": values / total}
 
 
-class TransformationAnalysis(BaseAnalysis):
-    CATEGORY = "Transformations"
+KEYS = ("TasseledCap", "PCA")
 
-    def _special_check(self, formula, period: Period):
-        if formula.key == "TasseledCap":
-            if period.satellite not in TASSELED_CAP_SENSOR:
-                return "Tasseled Cap coefficients are only built in for Landsat 5, 7, 8 and 9."
-            missing = [role for role in TASSELED_CAP_ROLES if role not in period.roles]
-            return f"Needs the {', '.join(missing)} bands." if missing else None
-        if formula.key == "PCA":
-            return None if len(pca_bands(period)) >= 2 else "Needs at least two data bands."
-        return ""
 
-    def _special_layers(self, key, periods, params, notes):
-        period = periods[-1]
-        if key == "TasseledCap":
-            coefficients = TASSELED_CAP[TASSELED_CAP_SENSOR[period.satellite]]
+def special_check(formula, period: Period):
+    """None = available, a reason, or "" when ``formula`` is not a transformation."""
+    if formula.key == "TasseledCap":
+        if period.satellite not in TASSELED_CAP_SENSOR:
+            return "Tasseled Cap coefficients are only built in for Landsat 5, 7, 8 and 9."
+        missing = [role for role in TASSELED_CAP_ROLES if role not in period.roles]
+        return f"Needs the {', '.join(missing)} bands." if missing else None
+    if formula.key == "PCA":
+        return None if len(pca_bands(period)) >= 2 else "Needs at least two data bands."
+    return ""
 
-            def component(weights):
-                def compute(block):
-                    b = block.roles()
-                    return sum(block.xp.float32(w) * b[role] for w, role in zip(weights, TASSELED_CAP_ROLES))
-                return compute
 
-            styles = {"brightness": "grey", "greenness": "vegetation", "wetness": "water"}
-            layers = [LayerSpec(f"TC_{name}", f"TC {name}", component(weights), styles[name])
-                      for name, weights in coefficients.items()]
-            return layers, [], []
-        if key == "PCA":
-            bands = pca_bands(period)
-            count = min(MAX_COMPONENTS, len(bands))
-            layers = [LayerSpec(f"PC{i + 1}", f"PC{i + 1}", self._projection(bands, i), "viridis")
-                      for i in range(count)]
-            return layers, [CovariancePass(bands)], [_Explained(count)]
-        return None
+def special_layers(key, periods):
+    """(layers, scene passes, accumulators) of a transformation, or None for other processes."""
+    period = periods[-1]
+    if key == "TasseledCap":
+        coefficients = TASSELED_CAP[TASSELED_CAP_SENSOR[period.satellite]]
 
-    @staticmethod
-    def _projection(bands: list[str], component: int):
-        def compute(block):
-            xp = block.xp
-            pca = block.scene["PCA"]
-            weights = pca["vectors"][:, component]
-            return sum(xp.float32(w) * (block.band(band) - xp.float32(m))
-                       for w, m, band in zip(weights, pca["mean"], bands))
-        return compute
+        def component(weights):
+            def compute(block):
+                b = block.roles()
+                return sum(block.xp.float32(w) * b[role] for w, role in zip(weights, TASSELED_CAP_ROLES))
+            return compute
+
+        styles = {"brightness": "grey", "greenness": "vegetation", "wetness": "water"}
+        layers = [LayerSpec(f"TC_{name}", f"TC {name}", component(weights), styles[name])
+                  for name, weights in coefficients.items()]
+        return layers, [], []
+    if key == "PCA":
+        bands = pca_bands(period)
+        count = min(MAX_COMPONENTS, len(bands))
+        layers = [LayerSpec(f"PC{i + 1}", f"PC{i + 1}", _projection(bands, i), "viridis")
+                  for i in range(count)]
+        return layers, [CovariancePass(bands)], [_Explained(count)]
+    return None
+
+
+def _projection(bands: list[str], component: int):
+    def compute(block):
+        xp = block.xp
+        pca = block.scene["PCA"]
+        weights = pca["vectors"][:, component]
+        return sum(xp.float32(w) * (block.band(band) - xp.float32(m))
+                   for w, m, band in zip(weights, pca["mean"], bands))
+    return compute
 
 
 class _Explained:
