@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from backend.business.analysis import AnalysisService
 from backend.business.download import Chunker, ChunkMerger, DownloadService
 from backend.business.facade import BusinessFacade, IBusinessFacade
 from backend.business.map import MapService
@@ -49,4 +50,5 @@ def build_business_facade() -> IBusinessFacade:
         request_service=request_service,
         download_service=download_service,
         map_service=MapService(),
+        analysis_service=AnalysisService(data_facade=data_facade),
     )
