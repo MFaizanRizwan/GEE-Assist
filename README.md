@@ -62,9 +62,12 @@ Run the tests with `python -m pytest`.
   highlighted while it is open.
 - Clicking your name or avatar in the side bar opens the account menu: **Manage account**,
   **View account**, **Sign-up details** and **Sign out**.
-- The **account page** shows your details and lets you edit your full name, username and phone
-  number, change your password (not for Google accounts) and add, change or remove a profile photo.
-  Only an administrator can change your email address, role or status.
+- The **account page** shows your details on the left and your photo on the right. Click your
+  name (or username, phone) to change it; once something really changed, **Discard** and **Save
+  changes** appear at the bottom right (Esc gives up a change). Click the photo to **change** or
+  **remove** it. Accounts that sign in with a password also get a **Change password** section:
+  the current password, then the new one twice; it is changed when you save. Only an
+  administrator can change your email address, role or status.
 - **Profile photos stay on this computer**: they are saved in `workspace/profile_photos/` (one file
   per user id) and never sent to the server, so they do not follow you to another computer.
 - Administrators get a **Manage users** window: list users page by page, find anyone by email (type

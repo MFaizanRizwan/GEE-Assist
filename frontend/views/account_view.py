@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import dataclasses
 from datetime import datetime
 from pathlib import Path
 
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QImage, QPainter, QPainterPath, QPixmap
+from PyQt6.QtCore import QPoint, Qt, pyqtSignal
+from PyQt6.QtGui import QImage, QMouseEvent, QPainter, QPainterPath, QPixmap
 from PyQt6.QtWidgets import (
     QDialog,
     QFileDialog,
@@ -14,6 +15,7 @@ from PyQt6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
     QLabel,
+    QMenu,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -21,12 +23,12 @@ from PyQt6.QtWidgets import (
 
 from backend.auth_exceptions import AuthError, SessionExpiredError
 from backend.business.facade import IBusinessFacade
-from backend.business.user.user_service import PHOTO_FORMATS
 from backend.dto.user_dto import UserDTO
 from backend.dto.validation_dto import ValidationDTO
 from frontend import theme
-from frontend.views.account_dialogs import ChangePasswordDialog, EditDetailsDialog
-from frontend.widgets.form_widgets import Banner, BusyButton, add_soft_shadow, link_button
+from frontend.views.account_dialogs import PASSWORD_HINT
+from frontend.widgets.form_widgets import Banner, BusyButton, PasswordField, add_soft_shadow
+from frontend.widgets.inline_edit import InlineEdit
 from frontend.workers.task_worker import run_task
 
 _PROVIDERS = {"local": "Username and password", "google": "Google"}
@@ -96,8 +98,40 @@ class Avatar(QLabel):
             self.setPixmap(pixmap)
 
 
+class PhotoButton(Avatar):
+    """The large profile photo; clicking it offers to change or remove the photo."""
+
+    clicked = pyqtSignal()
+
+    def __init__(self, size: int, parent: QWidget | None = None):
+        super().__init__(size, parent)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setToolTip("Change or remove your photo")
+
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:  # noqa: N802 (Qt API)
+        if event.button() == Qt.MouseButton.LeftButton and self.rect().contains(event.position().toPoint()):
+            self.clicked.emit()
+        super().mouseReleaseEvent(event)
+
+
+# (key, title, hint) of the details you can change by clicking them. Keys are UserDTO fields.
+_EDITABLE = {
+    "full_name": "Click to change your name",
+    "username": "Click to change your username",
+    "phone_number": "Click to change your phone number",
+}
+_ROWS = (("full_name", "Full name"), ("username", "Username"), ("email", "Email"), ("phone_number", "Phone"),
+         ("role", "Role"), ("provider", "Sign-in method"), ("created", "Member since"),
+         ("last_login", "Last sign-in"))
+
+
 class AccountView(QFrame):
-    """The signed-in user's account: their details and photo, and the actions to change them."""
+    """The signed-in user's account: details on the left, photo on the right, password below.
+
+    Clicking the name (or username, phone) makes it editable; once something really changed,
+    Discard and Save changes appear at the bottom right. Saving also changes the password when
+    its fields are filled in. Clicking the photo offers to change or remove it.
+    """
 
     session_expired = pyqtSignal()
     user_changed = pyqtSignal(object)  # UserDTO, after details or the photo changed
@@ -106,127 +140,239 @@ class AccountView(QFrame):
         super().__init__(parent)
         self._facade = facade
         self._user: UserDTO | None = None
+        self._password: dict[str, str] = {}
+        self._messages: list[str] = []
         self.setObjectName("AuthCard")
-        self.setFixedWidth(560)
+        self.setMaximumWidth(1180)
         add_soft_shadow(self)
 
-        self.avatar = Avatar(72)
-        self.change_photo = link_button("Change photo")
-        self.change_photo.setToolTip(f"Choose a {PHOTO_FORMATS} image. It is kept on this computer only.")
-        self.remove_photo = link_button("Remove")
-        photo_actions = QHBoxLayout()
-        photo_actions.setSpacing(0)
-        photo_actions.addWidget(self.change_photo)
-        photo_actions.addWidget(self.remove_photo)
-        avatar_column = QVBoxLayout()
-        avatar_column.setSpacing(4)
-        avatar_column.addWidget(self.avatar, 0, Qt.AlignmentFlag.AlignHCenter)
-        avatar_column.addLayout(photo_actions)
-        avatar_column.addStretch(1)
-
-        self.greeting = QLabel(objectName="Title")
-        self.summary = QLabel(objectName="Subtitle")
-        self.summary.setWordWrap(True)
-        head_text = QVBoxLayout()
-        head_text.setSpacing(4)
-        head_text.addWidget(self.greeting)
-        head_text.addWidget(self.summary)
-        head_text.addStretch(1)
-        head = QHBoxLayout()
-        head.setSpacing(18)
-        head.addLayout(avatar_column)
-        head.addLayout(head_text, 1)
-
         self.banner = Banner()
+
+        # ---- details (left)
+        self.editors: dict[str, InlineEdit] = {}
         self._values: dict[str, QLabel] = {}
         grid = QGridLayout()
-        grid.setHorizontalSpacing(24)
-        grid.setVerticalSpacing(12)
-        rows = [("full_name", "Full name"), ("username", "Username"), ("email", "Email"), ("phone", "Phone"),
-                ("role", "Role"), ("provider", "Sign-in method"), ("created", "Member since"),
-                ("last_login", "Last sign-in")]
-        for row, (key, title) in enumerate(rows):
+        grid.setHorizontalSpacing(32)
+        grid.setVerticalSpacing(4)
+        grid.setColumnMinimumWidth(0, 140)
+        for row, (key, title) in enumerate(_ROWS):
             label = QLabel(title, objectName="Muted")
-            value = QLabel()
-            value.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-            value.setStyleSheet(f"color: {theme.INK};")
-            grid.addWidget(label, row, 0)
-            grid.addWidget(value, row, 1)
-            self._values[key] = value
+            label.setMinimumHeight(38)
+            grid.addWidget(label, row, 0, Qt.AlignmentFlag.AlignTop)
+            if key in _EDITABLE:
+                editor = InlineEdit(hint=_EDITABLE[key])
+                editor.changed.connect(self._update_save_bar)
+                editor.submitted.connect(self.save)
+                grid.addWidget(editor, row, 1)
+                self.editors[key] = editor
+            else:
+                value = QLabel()
+                value.setMinimumHeight(38)
+                value.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+                value.setStyleSheet(f"color: {theme.INK}; padding-left: 5px;")  # lines up with the editors
+                grid.addWidget(value, row, 1, Qt.AlignmentFlag.AlignTop)
+                self._values[key] = value
         grid.setColumnStretch(1, 1)
 
-        self.edit_details = QPushButton("Edit details", objectName="PrimaryButton")
-        self.change_password = QPushButton("Change password", objectName="SecondaryButton")
-        self.refresh = BusyButton("Refresh", "Refreshing…", object_name="SecondaryButton")
-        actions = QHBoxLayout()
-        actions.setSpacing(10)
-        for button in (self.edit_details, self.change_password, self.refresh):
-            button.setCursor(Qt.CursorShape.PointingHandCursor)
-            actions.addWidget(button)
+        # ---- photo (right)
+        self.photo = PhotoButton(184)
+        self.greeting = QLabel(alignment=Qt.AlignmentFlag.AlignCenter)
+        self.greeting.setWordWrap(True)
+        self.greeting.setStyleSheet(f"font-family: '{theme.SERIF}'; font-size: 17pt; color: {theme.INK};")
+        photo_hint = QLabel("Click the photo to change it", objectName="FieldHint",
+                            alignment=Qt.AlignmentFlag.AlignCenter)
+        self.photo_menu = QMenu(self)
+        self.photo_menu.setStyleSheet(theme.MENU_STYLE)
+        self.change_photo_action = self.photo_menu.addAction("Change photo…")
+        self.remove_photo_action = self.photo_menu.addAction("Remove photo")
+        photo_column = QVBoxLayout()
+        photo_column.setSpacing(10)
+        photo_column.addWidget(self.photo, 0, Qt.AlignmentFlag.AlignHCenter)
+        photo_column.addWidget(self.greeting)
+        photo_column.addWidget(photo_hint)
+        photo_column.addStretch(1)
+        photo_box = QWidget()
+        photo_box.setFixedWidth(260)
+        photo_box.setLayout(photo_column)
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(40, 36, 40, 34)
-        layout.setSpacing(18)
-        layout.addLayout(head)
-        layout.addWidget(self.banner)
+        top = QHBoxLayout()
+        top.setSpacing(48)
+        top.addLayout(grid, 1)
+        top.addWidget(photo_box, 0, Qt.AlignmentFlag.AlignTop)
+
+        # ---- password (only for accounts that sign in with one)
+        self.password_section = QWidget()
+        heading = QLabel("Change password")
+        heading.setStyleSheet(f"font-family: '{theme.SERIF}'; font-size: 14pt; color: {theme.INK};")
+        intro = QLabel("Type your current password, then the new one twice. It is changed when you save.",
+                       objectName="Muted")
+        intro.setWordWrap(True)
+        self.password_fields = {
+            "current_password": PasswordField("Current password", "Your current password"),
+            "new_password": PasswordField("New password", "New password", PASSWORD_HINT),
+            "confirm_password": PasswordField("Confirm new password", "Type the new password again"),
+        }
+        password_row = QHBoxLayout()
+        password_row.setSpacing(16)
+        for field in self.password_fields.values():
+            field.input.textEdited.connect(self._update_save_bar)
+            field.input.returnPressed.connect(self.save)
+            password_row.addWidget(field, 1, Qt.AlignmentFlag.AlignTop)
         separator = QFrame()
         separator.setFixedHeight(1)
         separator.setStyleSheet(f"background: {theme.BORDER};")
-        layout.addWidget(separator)
-        layout.addLayout(grid)
-        layout.addLayout(actions)
+        password_layout = QVBoxLayout(self.password_section)
+        password_layout.setContentsMargins(0, 0, 0, 0)
+        password_layout.setSpacing(10)
+        password_layout.addWidget(separator)
+        password_layout.addSpacing(8)
+        password_layout.addWidget(heading)
+        password_layout.addWidget(intro)
+        password_layout.addLayout(password_row)
 
-        self.refresh.clicked.connect(self.reload)
-        self.edit_details.clicked.connect(self.open_edit_details)
-        self.change_password.clicked.connect(self.open_change_password)
-        self.change_photo.clicked.connect(self.choose_photo)
-        self.remove_photo.clicked.connect(self.delete_photo)
+        # ---- Discard / Save, bottom right, only while something is changed
+        self.discard_button = QPushButton("Discard", objectName="SecondaryButton")
+        self.discard_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.discard_button.setMinimumHeight(44)
+        self.save_button = BusyButton("Save changes", "Saving…")
+        self.save_bar = QWidget()
+        bar = QHBoxLayout(self.save_bar)
+        bar.setContentsMargins(0, 0, 0, 0)
+        bar.addStretch(1)
+        bar.addWidget(self.discard_button)
+        bar.addWidget(self.save_button)
+        keep_place = self.save_bar.sizePolicy()
+        keep_place.setRetainSizeWhenHidden(True)  # the page does not jump when the buttons appear
+        self.save_bar.setSizePolicy(keep_place)
+        self.save_bar.hide()
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(44, 36, 44, 30)
+        layout.setSpacing(20)
+        layout.addWidget(self.banner)
+        layout.addLayout(top)
+        layout.addWidget(self.password_section)
+        layout.addStretch(1)
+        layout.addWidget(self.save_bar)
+
+        self.photo.clicked.connect(self.show_photo_menu)
+        self.change_photo_action.triggered.connect(self.choose_photo)
+        self.remove_photo_action.triggered.connect(self.delete_photo)
+        self.discard_button.clicked.connect(self.discard)
+        self.save_button.clicked.connect(self.save)
 
     def set_user(self, user: UserDTO) -> None:
+        """Show ``user``. A change being typed is kept."""
         self._user = user
         first_name = user.full_name.split()[0] if user.full_name.split() else user.username
-        self.avatar.set_user(user, self._facade.get_profile_photo(user.id))
-        self.remove_photo.setVisible(self.avatar.has_photo)
-        self.change_photo.setText("Change photo" if self.avatar.has_photo else "Add photo")
         self.greeting.setText(f"Welcome, {first_name}!")
-        self.summary.setText("Manage your GEE-Assist account: your details, password and profile photo.")
-        self._values["full_name"].setText(user.full_name)
-        self._values["username"].setText(user.username)
+        self.photo.set_user(user, self._facade.get_profile_photo(user.id))
+        self.change_photo_action.setText("Change photo…" if self.photo.has_photo else "Add photo…")
+        self.remove_photo_action.setVisible(self.photo.has_photo)
+        self.editors["full_name"].set_value(user.full_name)
+        self.editors["username"].set_value(user.username)
+        self.editors["phone_number"].set_value(user.phone_number)
         self._values["email"].setText(format_email(user))
-        self._values["phone"].setText(user.phone_number or "—")
+        self._values["email"].setToolTip("Only an administrator can change your email address.")
         self._values["role"].setText("Administrator" if user.is_admin else "User")
         self._values["provider"].setText(format_provider(user))
         self._values["created"].setText(format_date(user.created_at))
         self._values["last_login"].setText(format_date(user.last_login_at))
-        google = user.auth_provider == "google"
-        self.change_password.setEnabled(not google)
-        self.change_password.setToolTip("You sign in with Google, so there is no password to change." if google
-                                        else "Change the password you sign in with")
+        self.password_section.setVisible(user.auth_provider != "google")
+        self._update_save_bar()
 
-    # ------------------------------------------------------------- details and password
-    def open_edit_details(self) -> None:
-        if self._user is None:
+    # ------------------------------------------------------------- changes
+    def has_changes(self) -> bool:
+        typed_password = self.password_section.isVisibleTo(self) and any(
+            field.text() for field in self.password_fields.values())
+        return typed_password or any(editor.is_dirty() for editor in self.editors.values())
+
+    def _update_save_bar(self) -> None:
+        self.save_bar.setVisible(self.has_changes() or not self.save_button.isEnabled())
+
+    def discard(self) -> None:
+        for editor in self.editors.values():
+            editor.discard()
+        for field in self.password_fields.values():
+            field.set_text("")
+            field.clear_error()
+        self.banner.clear()
+        self._update_save_bar()
+
+    def save(self) -> None:
+        if self._user is None or not self.save_button.isEnabled() or not self.has_changes():
             return
-        dialog = EditDetailsDialog(self._facade, self._user, parent=self)
-        dialog.session_expired.connect(self.session_expired)
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            self._changed(dialog.result_message)
+        edits = {key: editor.value() for key, editor in self.editors.items() if editor.is_dirty()}
+        self._password = ({key: field.text() for key, field in self.password_fields.items()}
+                          if self.password_section.isVisibleTo(self) else {})
+        self._messages = []
+        self.banner.clear()
+        self.save_button.set_busy(True)
+        self.discard_button.setEnabled(False)
+        if edits:
+            run_task(self, self._facade.update_user, dataclasses.replace(self._user, **edits),
+                     on_success=self._on_details_saved, on_error=self._on_save_error)
+        else:
+            self._save_password()
 
-    def open_change_password(self) -> None:
-        if self._user is None:
+    def _on_details_saved(self, result: ValidationDTO) -> None:
+        if not result.is_valid:
+            self._show_errors(result.errors, self.editors)
+            self._finish_saving()
             return
-        dialog = ChangePasswordDialog(self._facade, self._user, parent=self)
-        dialog.session_expired.connect(self.session_expired)
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            self.banner.show_success(dialog.result_message)
-
-    def _changed(self, message: str) -> None:
         user = self._facade.get_current_user() or self._user
         self.set_user(user)
-        self.banner.show_success(message)
+        for editor in self.editors.values():
+            editor.discard()  # back to plain text, showing the saved (tidied) value
+        self._messages.append(result.message)
         self.user_changed.emit(user)
+        self._save_password()
+
+    def _save_password(self) -> None:
+        if not any(self._password.values()):
+            self._finish_saving()
+            return
+        for field in self.password_fields.values():
+            field.clear_error()
+        run_task(self, self._facade.change_password, self._user.id, self._password["new_password"],
+                 self._password["confirm_password"], self._password["current_password"],
+                 on_success=self._on_password_saved, on_error=self._on_save_error)
+
+    def _on_password_saved(self, result: ValidationDTO) -> None:
+        if result.is_valid:
+            for field in self.password_fields.values():
+                field.set_text("")
+            self._messages.append(result.message)
+        else:
+            self._show_errors(result.errors, self.password_fields)
+        self._finish_saving()
+
+    def _show_errors(self, errors: dict[str, str], fields: dict) -> None:
+        elsewhere = []
+        for key, message in errors.items():
+            if key in fields:
+                fields[key].set_error(message)
+            else:
+                elsewhere.append(message)
+        if elsewhere:
+            self.banner.show_error(" ".join(elsewhere))
+
+    def _finish_saving(self) -> None:
+        self.save_button.set_busy(False)
+        self.discard_button.setEnabled(True)
+        if self._messages and not self.banner.isVisibleTo(self):
+            self.banner.show_success(" ".join(self._messages))
+        self._update_save_bar()
+
+    def _on_save_error(self, exc: Exception) -> None:
+        self._finish_saving()
+        self._on_error(exc)
 
     # ------------------------------------------------------------- photo (kept on this computer)
+    def show_photo_menu(self) -> None:
+        x = (self.photo.width() - self.photo_menu.sizeHint().width()) // 2
+        self.photo_menu.popup(self.photo.mapToGlobal(QPoint(x, self.photo.height() + 6)))
+
     def choose_photo_file(self) -> str:
         path, _ = QFileDialog.getOpenFileName(
             self, "Choose a profile photo", str(Path.home()),
@@ -246,26 +392,30 @@ class AccountView(QFrame):
         if not result.is_valid:
             self.banner.show_error(" ".join(result.errors.values()))
             return
-        self._changed(result.message)
+        self._photo_changed(result.message)
 
     def delete_photo(self) -> None:
         self.banner.clear()
         run_task(self, self._facade.remove_profile_photo,
-                 on_success=lambda _: self._changed("Your photo was removed."), on_error=self._on_error)
+                 on_success=lambda _: self._photo_changed("Your photo was removed."), on_error=self._on_error)
+
+    def _photo_changed(self, message: str) -> None:
+        user = self._facade.get_current_user() or self._user
+        self.set_user(user)
+        self.banner.show_success(message)
+        self.user_changed.emit(user)
 
     # ------------------------------------------------------------- refresh
     def reload(self) -> None:
+        """Fetch the details again from the server."""
         self.banner.clear()
-        self.refresh.set_busy(True)
         run_task(self, self._facade.reload_current_user, on_success=self._on_reloaded, on_error=self._on_error)
 
     def _on_reloaded(self, user: UserDTO) -> None:
-        self.refresh.set_busy(False)
         self.set_user(user)
         self.user_changed.emit(user)
 
     def _on_error(self, exc: Exception) -> None:
-        self.refresh.set_busy(False)
         if isinstance(exc, SessionExpiredError):
             self.session_expired.emit()
         else:

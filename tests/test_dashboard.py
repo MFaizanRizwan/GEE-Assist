@@ -136,11 +136,9 @@ def test_profile_menu_offers_the_account_options(home, monkeypatch):
     assert home.manage_account_action.isEnabled()
 
 
-def test_manage_account_opens_the_details_form_on_the_account_page(home, monkeypatch):
-    opened = []
-    monkeypatch.setattr(home.account, "open_edit_details", lambda: opened.append(True))
+def test_manage_account_opens_the_account_page(home):
     home.manage_account_action.trigger()
-    assert home.current_page() is home._account_page and opened
+    assert home.current_page() is home._account_page
 
 
 def test_a_changed_account_shows_in_the_side_bar(home):
