@@ -44,7 +44,9 @@ Run the tests with `python -m pytest`.
   form (with the "Chat with Gemini" assistant); the back arrow (**←**) at the top of the side bar
   returns to it. On the dashboard itself there is no back arrow and the logo is at the top.
 - A menu bar runs along the top of every page, as in Word or Excel:
-  - **File**: New request (Ctrl+N), Open GeoTIFF… (Ctrl+O), Sign out, Exit (Ctrl+Q)
+  - **File**: New project… (Ctrl+Shift+N), Open project… (Ctrl+Shift+O), Recent projects, Rename
+    project…, Move project…, Close project, New request (Ctrl+N), Open GeoTIFF… (Ctrl+O), Sign out,
+    Exit (Ctrl+Q)
   - **Edit**: Undo, Redo, Cut, Copy, Paste, Select all, acting on the text field with the cursor
   - **View**: Dashboard, Query Input, Downloads, Account, Analysis (Ctrl+1 to Ctrl+5), Show analysis
     table (Ctrl+6), Side bar (Ctrl+B), Terminal (Ctrl+`), Full screen (F11), Theme
@@ -74,6 +76,38 @@ Run the tests with `python -m pytest`.
   it in the search box and press Enter), **add a user**, edit a user's details including their email
   (a new address must be verified again), change roles, reset passwords, enable / disable and
   **delete** accounts. Your own account is changed from the account page instead.
+
+## Projects
+
+As in other desktop apps, you work inside a project. A project is a folder:
+
+```
+<location>/<project name>/
+    project.json                 the project's id, name and creation time
+    downloads/                   every dataset downloaded while the project is open
+    analysis/                    analysis results you save
+        analysis_results.json    every analysis run in the project: settings, numbers, saved file
+```
+
+- **Create** one from the dashboard (**New project**) or **File → New project…**: give it a name and
+  the folder to create it in (by default next to your last project, else
+  `Documents/GEE-Assist Projects`). The dialog shows the folder that will be made.
+- **Open** one with **Open project…** (choose its folder), a card under **Recent projects** on the
+  dashboard, or **File → Recent projects**.
+- **Rename** or **Move** the open project from the dashboard card or the File menu: its folder is
+  renamed or moved, with everything in it. Saved downloads, even paused ones, follow it; this is
+  refused while one of its downloads is running (pause it first).
+- **Close** the open project from the dashboard card or the File menu; signing out closes it too.
+- A **download needs an open project**: the form's "Save to folder" always shows the project's
+  `downloads` folder. Starting a download without a project asks you to create or open one first.
+- **Analyses run inside the open project**: each run is recorded in `analysis_results.json` (what
+  ran, when, its numbers, and the GeoTIFF if you saved it; paths inside the project are stored
+  relative to it, so moving the project keeps them valid). **Save result…** suggests the project's
+  `analysis` folder.
+- The **dashboard** shows the open project, the **last 3 projects** (name and the folder they are
+  in; click one to open it) and the **latest analysis results of those 3 projects**.
+- Where your projects are is remembered on this computer in `workspace/projects.json` (per user).
+  Forgetting a project there never deletes its folder.
 
 ## Analysis
 
@@ -138,8 +172,9 @@ One-time setup:
 3. Sign in once on this computer: type `gee login` in gkonsol, or run `earthengine authenticate`
    in a command prompt (with the venv active). `gee verify` checks the whole set-up.
 
-Then fill the parameter form (or let Gemini fill it), press **Submit Parameters**, and press
-**Start Download** under Kept Requests. The **Downloads** page (dashboard card or side bar)
+Then create or open a project, fill the parameter form (or let Gemini fill it), press **Submit
+Parameters**, and press **Start Download** under Kept Requests. The dataset is saved in the project's
+`downloads` folder. The **Downloads** page (dashboard card or side bar)
 shows progress, speed and ETA, with Start / Pause / Cancel for every download.
 
 How it works:
@@ -156,7 +191,7 @@ How it works:
   that size. If even small requests fail, the download stops with a message: shorten the date
   range or use the mosaic composite, then press **Retry**.
 - Chunks are merged as soon as two exist: 1 + 2 -> 1 GB, + 3 -> 1.5 GB, + 4 -> the full file.
-- The result is `<output folder>/<name>/<name>.tif`, where `<name>` is
+- The result is `<project>/downloads/<name>/<name>.tif`, where `<name>` is
   `<satellite>_<lon>_<lat>_<start date>_<end date>`: the centre of the AOI and the request's dates, e.g.
   `Sentinel-2_73.8231_33.2334_2023-01-01_2023-12-31/Sentinel-2_73.8231_33.2334_2023-01-01_2023-12-31.tif`.
   The same request downloaded again gets `_2`, `_3`, ... at the end.
@@ -193,6 +228,9 @@ viewer:
 | Accounts (server) and profile photos (local) | `backend/data/dao/user_dao.py`, reached through `backend/data/data_facade.py` |
 | Business logic (tokens, refresh, flows, managing accounts) | `backend/business/user/user_service.py` |
 | Account page and its dialogs | `frontend/views/account_view.py`, `frontend/views/account_dialogs.py` |
+| Projects: folders, history and analysis results (JSON) | `backend/data/dao/project_dao.py`, `backend/dto/project_dto.py` |
+| Projects: create, open, rename, move | `backend/business/request/request_service.py`, `backend/business/request/project_rules.py` |
+| Project dialogs and dashboard | `frontend/views/project_dialogs.py`, `frontend/views/dashboard_view.py` |
 | Sign-up rules checked in the app | `backend/business/user/signup_validation.py` |
 | UI entry point (`IBusinessFacade`) | `backend/business/facade/` |
 | Intro video | `frontend/views/splash_view.py`, `frontend/views/startup_window.py` |

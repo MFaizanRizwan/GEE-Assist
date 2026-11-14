@@ -45,13 +45,13 @@ from PyQt6.QtWidgets import (
 )
 
 from backend.business.facade import IBusinessFacade
-from backend.config import DEFAULT_ANALYSIS_DIR, DEFAULT_DOWNLOAD_DIR
 from backend.dto.analysis_dto import AnalysisOptionDTO, AnalysisRequestDTO, ComputeDeviceDTO, ProcessOptionDTO
 from backend.dto.download_dto import DatasetDTO
 from backend.dto.map_dto import MapLayerDTO
 from backend.dto.result_dto import ResultDTO
 from backend.exceptions import GeeAssistError
 from frontend import theme
+from frontend.project_paths import analysis_folder, downloads_folder
 from frontend.download_format import format_size
 from frontend.widgets.form_parts import StatusBanner
 from frontend.widgets.process_picker import STYLESHEET as PICKER_STYLESHEET
@@ -396,7 +396,7 @@ class AnalysisView(QWidget):
             self.choose_dataset(None)
 
     def browse(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(self, "Open GeoTIFF to analyse", str(DEFAULT_DOWNLOAD_DIR),
+        path, _ = QFileDialog.getOpenFileName(self, "Open GeoTIFF to analyse", downloads_folder(self._facade),
                                               "GeoTIFF (*.tif *.tiff);;All files (*)")
         if path:
             self.open_file(path)
@@ -687,7 +687,8 @@ class AnalysisView(QWidget):
 
     # ------------------------------------------------------------- saving
     def suggested_save_path(self) -> str:
-        return str(DEFAULT_ANALYSIS_DIR / Path(self.result.output_path).name) if self.result else ""
+        folder = Path(analysis_folder(self._facade))  # the open project's analysis folder
+        return str(folder / Path(self.result.output_path).name) if self.result else ""
 
     def save_result(self) -> None:
         """Ask where to keep the result, then save it there (nothing is kept unless the user does this)."""

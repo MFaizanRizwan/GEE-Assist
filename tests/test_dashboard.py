@@ -14,6 +14,7 @@ from PyQt6.QtWidgets import QApplication, QLabel, QMainWindow, QPushButton  # no
 
 from backend.business.facade import IBusinessFacade  # noqa: E402
 from backend.dto import FormDTO  # noqa: E402
+from backend.dto.project_dto import ProjectDTO  # noqa: E402
 from backend.dto.user_dto import UserDTO  # noqa: E402
 from frontend.gkonsol.history import GkonsolStore  # noqa: E402
 from frontend.views import home_window  # noqa: E402
@@ -34,6 +35,9 @@ def app():
     return QApplication.instance() or QApplication([])
 
 
+PROJECT = ProjectDTO(id="p1", name="MyProject", folder="D:/work/MyProject")
+
+
 def _user(role: str = "user") -> UserDTO:
     return UserDTO(id="1", username="ayesha", full_name="Ayesha Khan", role=role)
 
@@ -47,6 +51,9 @@ def home(app, monkeypatch, tmp_path):
     facade.list_downloads.return_value = []
     facade.get_chunk_size_mb.return_value = 500
     facade.get_current_user.return_value = _user()
+    facade.get_current_project.return_value = PROJECT
+    facade.list_projects.return_value = [PROJECT]
+    facade.get_analysis_results.return_value = []
     window = HomeWindow(facade, _user())
     yield window
     window.terminal.shutdown()
@@ -197,6 +204,34 @@ def test_start_download_in_query_input_starts_the_job_and_shows_downloads(home, 
 
     assert started == [form]
     assert home.current_page() is home.downloads
+
+
+def test_downloading_without_a_project_asks_to_create_one_first(home, monkeypatch):
+    started, asked = [], []
+    monkeypatch.setattr(home.downloads, "start", started.append)
+    home._facade.get_current_project.return_value = None
+    monkeypatch.setattr(home, "ask_for_project", lambda: asked.append(True))  # cancelled
+    home.query_input.download_requested.emit(FormDTO(dataset="sentinel2_sr", aoi="{}"))
+    assert asked and started == [] and home.current_page() is not home.downloads
+
+    def create_one():
+        home._facade.get_current_project.return_value = PROJECT
+        return PROJECT
+
+    monkeypatch.setattr(home, "ask_for_project", lambda: "new")
+    monkeypatch.setattr(home.projects, "new_project", create_one)
+    home.query_input.download_requested.emit(FormDTO(dataset="sentinel2_sr", aoi="{}"))
+    assert len(started) == 1 and home.current_page() is home.downloads
+
+
+def test_the_open_project_shows_in_the_title_dashboard_and_menu(home):
+    assert home.windowTitle() == "GEE-Assist — MyProject"
+    assert home.dashboard.project_card.name.text() == "MyProject"
+    assert [item.project for item in home.dashboard.recent_items] == [PROJECT]
+    assert home.menu_bar.close_project.isEnabled()
+    home._facade.get_current_project.return_value = None
+    home.projects.close_project()
+    assert home.windowTitle() == "GEE-Assist" and not home.menu_bar.close_project.isEnabled()
 
 
 # ------------------------------------------------------------------ menu bar
@@ -507,8 +542,6 @@ def test_view_on_a_completed_download_opens_the_viewer(home, monkeypatch):
 def test_file_menu_opens_any_geotiff(home, monkeypatch, chosen):
     from PyQt6.QtWidgets import QFileDialog
 
-    from backend.config import DEFAULT_DOWNLOAD_DIR
-
     asked, opened = [], []
     monkeypatch.setattr(QFileDialog, "getOpenFileName",
                         lambda parent, title, folder, filters: asked.append((title, folder)) or (chosen, ""))
@@ -516,7 +549,7 @@ def test_file_menu_opens_any_geotiff(home, monkeypatch, chosen):
 
     home.menu_bar.open_geotiff.trigger()
 
-    assert asked == [("Open GeoTIFF", str(DEFAULT_DOWNLOAD_DIR))]   # starts in the downloads folder
+    assert asked == [("Open GeoTIFF", PROJECT.downloads_dir)]   # starts in the project's downloads folder
     if chosen:
         assert opened == [chosen] and home.current_page() is home.viewer
     else:                                                          # cancelled: stay where we were
