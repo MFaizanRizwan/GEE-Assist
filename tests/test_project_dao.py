@@ -127,3 +127,16 @@ def test_unreadable_files_mean_empty_lists(dao, tmp_path):
     (tmp_path / "work" / "MyProject" / "analysis").mkdir(parents=True)
     (tmp_path / "work" / "MyProject" / "analysis" / "analysis_results.json").write_text("broken")
     assert dao.find_analysis_results(project) == []
+
+
+def test_the_data_facade_hands_project_operations_to_the_dao(dao, tmp_path):
+    from backend.data.data_facade import DataFacade
+
+    facade = DataFacade(gemini_client=None, project_dao=dao)
+    project = _project(tmp_path)
+    assert facade.save_project(project)
+    assert facade.find_project_by_id("p1") == facade.find_projects_by_user("u1")[0]
+    assert facade.load_project_folder(project.folder).name == "MyProject"
+    record = AnalysisRecordDTO.from_result(_result(), project)
+    assert facade.save_analysis_record(project, record) and facade.find_analysis_records(project) == [record]
+    assert facade.delete_project("p1") and facade.find_all_projects() == []
