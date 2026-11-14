@@ -183,6 +183,9 @@ class BusinessFacade(IBusinessFacade):
     def formula_categories(self) -> list[tuple[str, str]]:
         return self._analysis().formula_categories()
 
+    def analysis_groups(self) -> list[tuple[str, str, str, tuple[str, ...]]]:
+        return self._analysis().analysis_groups()
+
     def list_analysis_datasets(self) -> list[DatasetDTO]:
         datasets = []
         jobs = sorted(self._download_service.list_jobs(), key=lambda job: job.finished_at or "", reverse=True)

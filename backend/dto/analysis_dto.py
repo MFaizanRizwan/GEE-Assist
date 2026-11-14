@@ -21,8 +21,9 @@ class FormulaDTO:
 
     key: str                                    # e.g. "NDVI", "WaterBodyDetection"
     name: str                                   # e.g. "Normalized Difference Vegetation Index"
-    category: str                               # e.g. "Vegetation" (see CATEGORY_ORDER in the formula DAO)
+    category: str                               # sub-type, e.g. "Burn & fire" (see SUBTYPES in the formula catalogue)
     formula: str                                # shown to the user, e.g. "(NIR − Red) / (NIR + Red)"
+    analysis: str = ""                          # its major analysis: "Water", "Vegetation", "LST" or "LULC"
     bands: tuple[str, ...] = ()                 # band roles it needs: "nir", "red", ... (see band_roles.ALL_ROLES)
     use_cases: tuple[str, ...] = ()
     description: str = ""                       # what the value means
@@ -57,15 +58,18 @@ class ProcessOptionDTO:
     reason: str = ""                            # why it is not available, e.g. "needs a SWIR2 band"
     periods: int = 1                            # datasets it needs (2 = an earlier one to compare with)
     params: tuple[str, ...] = ()
+    group: str = ""                             # its sub-type, e.g. "Burn & fire"
 
 
 @dataclass(frozen=True)
 class AnalysisOptionDTO:
-    """Class diagram: AnalysisOptionDTO. One analysis category and its processes for a dataset."""
+    """Class diagram: AnalysisOptionDTO. One of the four analyses and its processes for a dataset."""
 
-    category: str                               # e.g. "Vegetation"
+    category: str                               # "Water", "Vegetation", "LST" or "LULC"
     description: str
     processes: tuple[ProcessOptionDTO, ...] = ()
+    label: str = ""                             # e.g. "Land Use / Land Cover"
+    subtypes: tuple[str, ...] = ()              # its sub-types in display order, e.g. ("Vegetation indices", ...)
 
     @property
     def available(self) -> bool:

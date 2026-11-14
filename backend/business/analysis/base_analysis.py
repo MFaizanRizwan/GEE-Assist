@@ -94,7 +94,7 @@ class BaseAnalysis(IAnalysis):
             formula = self._formulas[key]
             reason = self._why_not(formula, period)
             options.append(ProcessOptionDTO(key, formula.name, reason is None, reason or "", formula.periods,
-                                            formula.params))
+                                            formula.params, group=formula.category))
         return options
 
     def run(self, processes: list[str], dataset: DatasetDTO, params: dict[str, Any]) -> ResultDTO:

@@ -1,4 +1,5 @@
-"""Class diagram: LSTAnalysis. Land surface temperature maps and their change over time (FR-09).
+"""Class diagram: LSTAnalysis (FR-09). Sub-types: surface temperature maps, their change over time,
+and heat stress (TCI, VHI).
 
 The thermal band (Landsat ST_B10 / ST_B6, MODIS LST_Day_1km, ERA5-Land skin
 temperature) is scaled to kelvin by ``sensors.scaling`` and shown in °C.
@@ -51,7 +52,7 @@ class PeriodMeans(Accumulator):
 
 
 class LSTAnalysis(BaseAnalysis):
-    CATEGORY = "Thermal"
+    CATEGORY = "LST"
 
     def _special_check(self, formula, period):
         if formula.key not in ("LSTMapping", "LSTTemporalAnalysis"):

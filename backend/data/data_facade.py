@@ -83,6 +83,9 @@ class DataFacade(IDataFacade):
     def formula_categories(self) -> list[tuple[str, str]]:
         return self._formula_dao.categories()
 
+    def analysis_groups(self) -> list[tuple[str, str, str, tuple[str, ...]]]:
+        return self._formula_dao.analyses()
+
     def _gee(self) -> IGEEClient:
         if self._gee_client is None:
             raise GEEError(_NO_GEE)

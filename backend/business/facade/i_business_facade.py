@@ -167,7 +167,11 @@ class IBusinessFacade(ABC):
 
     @abstractmethod
     def formula_categories(self) -> list[tuple[str, str]]:
-        """(category, what it is for), in display order."""
+        """(sub-type, what it is for), in display order."""
+
+    @abstractmethod
+    def analysis_groups(self) -> list[tuple[str, str, str, tuple[str, ...]]]:
+        """(analysis, label, what it is for, its sub-types) of the four analyses: water, vegetation, LST, LULC."""
 
     @abstractmethod
     def list_analysis_datasets(self) -> list[DatasetDTO]:
