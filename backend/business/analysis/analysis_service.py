@@ -91,7 +91,8 @@ class AnalysisService(IAnalysisService):
         params: dict[str, Any] = dict(request.params)
         params.update(_compare_with=list(request.compare_with), _backend=backend, _on_progress=on_progress)
         folder = Path(request.output_dir) if request.output_dir else self._scratch_folder()
-        name = analysis.default_output(dataset).name if hasattr(analysis, "default_output") else "result.tif"
+        name = (analysis.default_output(dataset, request.processes).name if hasattr(analysis, "default_output")
+                else "result.tif")
         params["_output_path"] = str(folder / name)
         result = analysis.run(list(request.processes), dataset, params)
         result.saved = bool(request.output_dir)  # an explicit folder is the user's choice

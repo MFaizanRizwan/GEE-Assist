@@ -503,3 +503,26 @@ def test_datasets_lined_up_with_the_reference_are_closed_after_a_run(service, tm
     service.run_analysis(after, AnalysisRequestDTO("Vegetation", ["dNBR"],
                                                    compare_with=[service.describe_dataset(before)]))
     os.rename(before, before + ".moved")  # fails on Windows while any handle on it is still open
+
+
+# ------------------------------------------------------------------ result file names
+def test_result_names_list_the_processes(service, tmp_path):
+    import re
+
+    dataset = service.describe_dataset(s2_file(tmp_path))
+    result = service.run_analysis(dataset, AnalysisRequestDTO("Vegetation", ["NDVI", "EVI"]))
+    name = Path(result.output_path).name
+    assert re.fullmatch(r"Sentinel-2_73\.0150_31\.4900_2024-06-01_2024-06-30_Vegetation_NDVI_EVI_"
+                        r"\d{4}-\d\d-\d\d_\d\d-\d\d-\d\d\.tif", name), name
+
+
+def test_many_processes_are_shortened_in_the_name():
+    from backend.business.analysis.base_analysis import PROCESSES_IN_NAME, processes_part
+
+    assert processes_part(["NDVI"]) == "NDVI"
+    many = ["NDVI", "EVI", "SAVI", "MSAVI", "GNDVI", "NDRE", "GCI", "CIre", "MTCI", "MCARI", "TCARI", "ARVI",
+            "VARI", "RVI", "DVI", "WDRVI", "PSRI", "LAI", "FAPAR", "FCover"]
+    part = processes_part(many)
+    assert len(part) <= PROCESSES_IN_NAME and part.startswith("NDVI_EVI_SAVI")
+    shown = part.split("_and_")[0].split("_")
+    assert part.endswith(f"_and_{len(many) - len(shown)}_more") and shown == many[:len(shown)]
