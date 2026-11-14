@@ -10,28 +10,36 @@ from backend.business.request import RequestService
 from backend.business.user import UserService
 from backend.config import DEFAULT_DOWNLOAD_DIR, DownloadSettingsStore
 from backend.config.llm import load_llm_settings
-from backend.config.settings import get_settings
+from backend.config.settings import PROFILE_PHOTO_DIR, get_settings
+from backend.data.auth_session import AuthSession
 from backend.data.clients.auth_api_client import AuthApiClient
 from backend.data.clients.gee_client import GEEClient
 from backend.data.clients.gemini_client import GeminiClient
 from backend.data.clients.nominatim_client import NominatimClient
+from backend.data.dao.user_dao import UserDAO
 from backend.data.data_facade import DataFacade
 from backend.data.session_store import KeyringSessionStore
 
 
 def build_business_facade() -> IBusinessFacade:
     settings = get_settings()
-    user_service = UserService(
-        api=AuthApiClient(settings.auth_api_url, timeout=settings.auth_api_timeout),
-        session_store=KeyringSessionStore(settings.keyring_service),
-        session_duration=settings.session_duration,
-    )
+    auth_api = AuthApiClient(settings.auth_api_url, timeout=settings.auth_api_timeout)
+    session_store = KeyringSessionStore(settings.keyring_service)
+    session = AuthSession(auth_api, session_store)  # the sign-in tokens, shared by UserService and UserDAO
 
     llm = load_llm_settings()
     data_facade = DataFacade(
         gemini_client=GeminiClient(api_key=llm.api_key, model=llm.model),
         gee_client=GEEClient(project=settings.gee_project),
+        user_dao=UserDAO(auth_api, session, PROFILE_PHOTO_DIR),
         geocoding_client=NominatimClient(),
+    )
+    user_service = UserService(
+        api=auth_api,
+        session_store=session_store,
+        session_duration=settings.session_duration,
+        session=session,
+        data_facade=data_facade,
     )
     request_service = RequestService(data_facade=data_facade)
 

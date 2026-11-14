@@ -4,6 +4,9 @@ import pytest
 
 from backend.auth_exceptions import AccountDisabledError, AuthError, ServerUnavailableError, SessionExpiredError
 from backend.business.user import UserService
+from backend.data.auth_session import AuthSession
+from backend.data.dao.user_dao import UserDAO
+from backend.data.data_facade import DataFacade
 from backend.data.session_store import MemorySessionStore
 
 USER = {"id": "u1", "username": "abdullah", "full_name": "Abdullah Habib", "role": "user",
@@ -66,10 +69,17 @@ def _save_session(store, expires_in=3600.0):
     store.save_expiry(time.time() + expires_in)
 
 
+def _service(api, store, clock, photo_dir, **options) -> UserService:
+    """A service whose admin operations go DataFacade -> UserDAO -> api, sharing its tokens."""
+    session = AuthSession(api, store, clock)
+    data_facade = DataFacade(gemini_client=None, user_dao=UserDAO(api, session, photo_dir))
+    return UserService(api, store, clock, session=session, data_facade=data_facade, **options)
+
+
 @pytest.fixture
-def setup():
+def setup(tmp_path):
     api, store, clock = FakeApi(), MemorySessionStore(), Clock()
-    return UserService(api, store, clock), api, store, clock
+    return _service(api, store, clock, tmp_path), api, store, clock
 
 
 def test_login_normalises_username_and_sets_current_user(setup):
