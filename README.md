@@ -66,23 +66,34 @@ Run the tests with `python -m pytest`.
 
 ## Analysis
 
-- **Analysis** (side bar, or View → Analysis): choose a dataset (a finished download, or any GeoTIFF
-  with **Open GeoTIFF…**), an analysis type, its processes and their parameters, then **Run analysis**.
-  Types and processes the dataset's bands cannot compute are greyed out with the reason. Before /
-  after processes (dNBR, RdNBR, RBR, land-cover change, LST trend) need a dataset of the same place
-  from another date, ticked under **Compare with**. The result (one GeoTIFF band per layer, plus a
-  `.json` with the numbers and settings) is written to `workspace/analyses/` and shown with its legend
-  and numbers; it can be opened in the viewer or laid over the map.
-- Analysis types: vegetation, moisture & drought, water, burn, soil & salinity, built-up & urban,
-  snow & ice, thermal (LST), land cover (change and transitions), transformations (Tasseled Cap,
-  PCA) and SAR (radar). Raw download values are scaled to reflectance / kelvin per satellite first.
+- **Analysis** (side bar, the dashboard's Analysis card, or View → Analysis): choose a dataset (a
+  finished download, or any GeoTIFF with **Open GeoTIFF…**), one of the four analyses, its processes
+  and their parameters, then **Run analysis**.
+- The four analyses (SRS FR-06 to FR-09) and their sub-types:
+  - **Water**: water indices, water quality, water bodies & area, snow & ice
+  - **Vegetation**: vegetation indices, moisture & drought, burn & fire
+  - **Land Surface Temperature**: surface temperature, temperature change, heat stress
+  - **Land Use / Land Cover**: land cover change, built-up & urban, soil & salinity,
+    transformations (Tasseled Cap, PCA), radar (SAR)
+- Processes are cards, grouped by sub-type (chips narrow them to one sub-type). Click a card (or press
+  Space) to select it. Processes the dataset **can run** come first; those it **can't run** are in a
+  separate section below, folded away, each showing why (e.g. "Needs the red-edge 1 band"). An
+  analysis the dataset cannot run at all is greyed out.
+- Before / after processes (dNBR, RdNBR, RBR, land-cover change, LST change) need a dataset of the
+  same place from another date, ticked under **Compare with**.
+- Results are **not saved** unless you ask: they are shown (each layer with its legend, and the
+  numbers) from a temporary file. **Save result…** asks where to keep the GeoTIFF (one band per layer)
+  and writes its numbers and settings next to it as `.json`. An unsaved result is deleted when the next
+  one replaces it or the app closes. A result can also be opened in the viewer or laid over the map.
+- Raw download values are scaled to reflectance / kelvin per satellite before any index is computed.
 - **GPU**: the app lists the computer's graphics cards. With a dedicated NVIDIA GPU and CuPy installed
   (`pip install cupy-cuda12x`), analyses run on the GPU; otherwise, or if the GPU runs out of memory,
   on the CPU. The line above **Run analysis** says which, and why. Files are processed in blocks of
   rows, so large downloads do not need to fit in memory.
 - **View → Show analysis table** (only there) opens the cheat sheet: every index with its formula,
-  bands, value range, how to read it and its use cases, by category, with search. Rows marked
-  "Reference" (SPI, PDSI, NDBaI, coherence) are described but not computed.
+  bands, value range, how to read it and its use cases, grouped the same way (e.g. "Vegetation ›
+  Burn & fire"), with chips for the four analyses and a search box. Rows marked "Reference" (SPI,
+  PDSI, NDBaI, coherence) are described but not computed.
 
 ## gkonsol, the command line
 

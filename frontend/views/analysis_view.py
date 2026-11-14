@@ -1,15 +1,18 @@
 """Analysis page (UC-06): run analyses on downloaded datasets.
 
 The left panel goes step by step: choose a dataset (a finished download, or any
-GeoTIFF), an analysis type (vegetation, water, burn, ...; types the dataset cannot
-run are greyed out), its processes (each with its formula as a tooltip, and the
-reason when it is unavailable), their parameters, and for before / after processes
-an earlier dataset to compare with. The line above "Run" says where the analysis runs:
+GeoTIFF), one of the four analyses (water, vegetation, land surface temperature,
+land use / land cover; one the dataset cannot run is greyed out), then its processes
+as cards grouped by sub-type (see ``ProcessPicker``): those the dataset can run come
+first, those it cannot are set apart below with the reason. Then their parameters,
+and for before / after processes an earlier dataset to compare with. The line above "Run" says where the analysis runs:
 the GPU when the computer has a dedicated NVIDIA card with CuPy, else the CPU.
 
 The right panel shows the result: each layer drawn with its legend, the numbers
-(means, areas, transitions), and buttons to open the result in the viewer, show it on
-the map or open its folder. Analyses run in the background with a progress bar.
+(means, areas, transitions), and buttons to save it, open it in the viewer or show it
+on the map. A result is temporary until the user saves it (“Save result…”, to a file
+they choose); an unsaved one is deleted when the next one replaces it or the app
+closes. Analyses run in the background with a progress bar.
 """
 
 from __future__ import annotations
@@ -20,14 +23,12 @@ from PyQt6.QtCore import QBuffer, QIODevice, QSize, Qt, QTimer, QUrl, pyqtSignal
 from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtWidgets import (
     QAbstractItemView,
-    QButtonGroup,
     QCheckBox,
     QComboBox,
     QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
     QFrame,
-    QGridLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -44,7 +45,7 @@ from PyQt6.QtWidgets import (
 )
 
 from backend.business.facade import IBusinessFacade
-from backend.config import DEFAULT_DOWNLOAD_DIR
+from backend.config import DEFAULT_ANALYSIS_DIR, DEFAULT_DOWNLOAD_DIR
 from backend.dto.analysis_dto import AnalysisOptionDTO, AnalysisRequestDTO, ComputeDeviceDTO, ProcessOptionDTO
 from backend.dto.download_dto import DatasetDTO
 from backend.dto.map_dto import MapLayerDTO
@@ -52,13 +53,14 @@ from backend.dto.result_dto import ResultDTO
 from backend.exceptions import GeeAssistError
 from frontend import theme
 from frontend.download_format import format_size
-from frontend.views.analysis_table_view import CATEGORY_COLOURS
 from frontend.widgets.form_parts import StatusBanner
+from frontend.widgets.process_picker import STYLESHEET as PICKER_STYLESHEET
+from frontend.widgets.process_picker import AnalysisTile, ProcessPicker
 from frontend.widgets.raster_canvas import RasterCanvas, rgba_to_image
 from frontend.widgets.raster_legend import RasterLegend, format_value
 from frontend.workers.task_worker import run_task
 
-PANEL_WIDTH = 400
+PANEL_WIDTH = 430
 PROGRESS_POLL_MS = 100
 MAP_IMAGE_SIZE = 1024
 
@@ -91,13 +93,8 @@ QListWidget {{
 }}
 QListWidget::item {{ padding: 6px; border-radius: 6px; }}
 QListWidget::item:selected {{ background: {theme.MINT}; color: {theme.INK}; }}
-QPushButton#CategoryTile {{
-    text-align: left; border: 1px solid {theme.BORDER_STRONG}; border-radius: 9px; padding: 8px 10px;
-    background: {theme.WHITE}; color: {theme.INK}; font-size: 9.5pt; font-weight: 600;
-}}
-QPushButton#CategoryTile:hover {{ background: {theme.FOAM}; }}
-QPushButton#CategoryTile:checked {{ background: {theme.MINT}; border: 1.5px solid {theme.LEAF}; }}
-QPushButton#CategoryTile:disabled {{ color: {theme.SUBTLE}; background: {theme.TILE_DISABLED_BG}; }}
+QLabel#SaveState {{ color: {theme.MUTED}; font-size: 9pt; }}
+QLabel#SaveState[saved="true"] {{ color: {theme.SUCCESS}; }}
 QComboBox, QDoubleSpinBox {{
     background: {theme.FIELD_BG}; border: 1px solid {theme.BORDER_STRONG}; border-radius: 8px;
     padding: 5px 8px; color: {theme.INK};
@@ -143,14 +140,14 @@ class AnalysisView(QWidget):
     def __init__(self, facade: IBusinessFacade, parent: QWidget | None = None):
         super().__init__(parent)
         self.setObjectName("AnalysisPage")
-        self.setStyleSheet(STYLESHEET)
+        self.setStyleSheet(STYLESHEET + PICKER_STYLESHEET)
         self._facade = facade
         self.datasets: list[DatasetDTO] = []
         self.opened: list[DatasetDTO] = []               # GeoTIFFs opened from disk this session
         self.dataset: DatasetDTO | None = None
         self.options: list[AnalysisOptionDTO] = []
         self.category: str = ""
-        self.process_boxes: dict[str, QCheckBox] = {}
+        self.analysis_tiles: dict[str, AnalysisTile] = {}
         self.param_boxes: dict[str, QDoubleSpinBox] = {}
         self.device: ComputeDeviceDTO | None = None
         self.result: ResultDTO | None = None
@@ -181,19 +178,14 @@ class AnalysisView(QWidget):
         self.dataset_note = QLabel(objectName="Muted")
         self.dataset_note.setWordWrap(True)
 
-        # ---- step 2: analysis type
-        self.category_grid = QGridLayout()
-        self.category_grid.setSpacing(6)
-        self.category_group = QButtonGroup(self)
-        self.category_group.setExclusive(True)
-        self.category_buttons: dict[str, QPushButton] = {}
+        # ---- step 2: one of the four analyses
+        self.tiles_area = QVBoxLayout()
+        self.tiles_area.setSpacing(6)
         self.category_note = QLabel(objectName="Muted")
         self.category_note.setWordWrap(True)
 
         # ---- step 3: processes and parameters
-        self.process_area = QVBoxLayout()
-        self.process_area.setSpacing(4)
-        self.select_all = QPushButton("Select all available", objectName="LinkButton")
+        self.picker = ProcessPicker()
         self.params_title = _section("Parameters")
         self.params_form = QFormLayout()
         self.params_form.setHorizontalSpacing(10)
@@ -228,16 +220,12 @@ class AnalysisView(QWidget):
         column.addLayout(row)
         column.addWidget(self.dataset_note)
         column.addSpacing(6)
-        column.addWidget(_step(2, "Analysis type"))
-        column.addLayout(self.category_grid)
+        column.addWidget(_step(2, "Analysis"))
+        column.addLayout(self.tiles_area)
         column.addWidget(self.category_note)
         column.addSpacing(6)
-        header = QHBoxLayout()
-        header.addWidget(_step(3, "Processes"))
-        header.addStretch(1)
-        header.addWidget(self.select_all)
-        column.addLayout(header)
-        column.addLayout(self.process_area)
+        column.addWidget(_step(3, "Processes"))
+        column.addWidget(self.picker)
         column.addSpacing(4)
         column.addWidget(self.params_title)
         column.addLayout(self.params_form)
@@ -289,6 +277,10 @@ class AnalysisView(QWidget):
         self.metrics_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.metrics_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         self.metrics_table.setMaximumHeight(200)
+        self.save_state = QLabel(objectName="SaveState")
+        self.save_state.setWordWrap(True)
+        self.save_button = QPushButton("Save result…", objectName="PrimaryButton")
+        self.save_button.setToolTip("Keep this result: choose where to save its GeoTIFF (and its numbers as .json)")
         self.viewer_button = QPushButton("Open in viewer", objectName="SecondaryButton")
         self.map_button = QPushButton("Show on map", objectName="SecondaryButton")
         self.folder_button = QPushButton("Open folder", objectName="SecondaryButton")
@@ -318,8 +310,8 @@ class AnalysisView(QWidget):
         result_layout.addWidget(_section("Numbers"))
         result_layout.addWidget(self.metrics_table)
         buttons = QHBoxLayout()
-        buttons.addStretch(1)
-        for button in (self.viewer_button, self.map_button, self.folder_button):
+        buttons.addWidget(_shrinkable(self.save_state), 1)
+        for button in (self.save_button, self.viewer_button, self.map_button, self.folder_button):
             buttons.addWidget(button)
         result_layout.addLayout(buttons)
 
@@ -336,10 +328,10 @@ class AnalysisView(QWidget):
         layout.addLayout(body, 1)
 
         for button in (self.refresh_button, self.browse_button, self.run_button, self.viewer_button,
-                       self.map_button, self.folder_button, self.select_all):
+                       self.map_button, self.folder_button, self.save_button):
             button.setCursor(Qt.CursorShape.PointingHandCursor)
-        for widget in (self.refresh_button, self.browse_button, self.select_all, self.dataset_note,
-                       self.category_note, self.compare_note):
+        for widget in (self.refresh_button, self.browse_button, self.dataset_note, self.category_note,
+                       self.compare_note):
             _shrinkable(widget)
         self._progress_timer = QTimer(self)
         self._progress_timer.setInterval(PROGRESS_POLL_MS)
@@ -348,7 +340,8 @@ class AnalysisView(QWidget):
         self.dataset_list.currentRowChanged.connect(self._on_dataset_row)
         self.refresh_button.clicked.connect(self.refresh_datasets)
         self.browse_button.clicked.connect(self.browse)
-        self.select_all.clicked.connect(self.select_all_available)
+        self.picker.changed.connect(self._on_processes_changed)
+        self.save_button.clicked.connect(self.save_result)
         self.use_gpu.toggled.connect(self._on_use_gpu)
         self.run_button.clicked.connect(self.run)
         self.layer_box.currentIndexChanged.connect(self.show_layer)
@@ -357,6 +350,7 @@ class AnalysisView(QWidget):
         self.folder_button.clicked.connect(self.open_folder)
         self._show_processes(None)
         self._set_result_buttons(False)
+        self._show_save_state()
         self._update_run_button()
 
     # ------------------------------------------------------------- loading
@@ -443,87 +437,47 @@ class AnalysisView(QWidget):
         self._fill_categories()
         available = [option for option in self.options if option.available]
         self.category_note.setText(
-            f"{len(available)} of {len(self.options)} analysis types can run on this dataset."
+            f"{len(available)} of {len(self.options)} analyses can run on this dataset."
             if self.options else "")
         keep = next((o for o in available if o.category == self.category), None)
         self.choose_category((keep or (available[0] if available else None)).category if available else "")
 
     def _fill_categories(self) -> None:
-        while self.category_grid.count():
-            item = self.category_grid.takeAt(0)
-            if item.widget() is not None:
-                self.category_group.removeButton(item.widget())
-                item.widget().deleteLater()
-        self.category_buttons = {}
+        """One tile per analysis (water, vegetation, LST, LULC), two to a row."""
+        while self.tiles_area.count():
+            item = self.tiles_area.takeAt(0)
+            row = item.layout()
+            while row is not None and row.count():
+                widget = row.takeAt(0).widget()
+                if widget is not None:
+                    widget.deleteLater()
+        self.analysis_tiles = {}
+        row = None
         for index, option in enumerate(self.options):
-            count = sum(1 for p in option.processes if p.available)
-            button = QPushButton(f"{option.category}\n{count} of {len(option.processes)} processes",
-                                 objectName="CategoryTile")
-            button.setCheckable(True)
-            button.setEnabled(option.available)
-            button.setCursor(Qt.CursorShape.PointingHandCursor)
-            button.setToolTip(option.description if option.available else
-                              f"{option.description}\nThis dataset has none of the bands it needs.")
-            colour = CATEGORY_COLOURS.get(option.category, theme.OCEAN)
-            button.setStyleSheet(f"QPushButton#CategoryTile {{ border-left: 4px solid {colour}; }}")
-            button.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
-            button.setMinimumHeight(48)
-            button.clicked.connect(lambda _=False, category=option.category: self.choose_category(category))
-            self.category_group.addButton(button)
-            self.category_grid.addWidget(button, index // 2, index % 2)
-            self.category_buttons[option.category] = button
+            if index % 2 == 0:
+                row = QHBoxLayout()
+                row.setSpacing(6)
+                self.tiles_area.addLayout(row)
+            tile = AnalysisTile(option)
+            tile.clicked.connect(lambda _=False, category=option.category: self.choose_category(category))
+            row.addWidget(tile, 1)
+            self.analysis_tiles[option.category] = tile
         if not self.options:
             self.category = ""
             self._show_processes(None)
 
     def choose_category(self, category: str) -> None:
         self.category = category
-        button = self.category_buttons.get(category)
-        if button is not None:
-            button.setChecked(True)
+        for name, tile in self.analysis_tiles.items():
+            tile.setChecked(name == category)
         self._show_processes(self.option(category))
 
     def option(self, category: str) -> AnalysisOptionDTO | None:
         return next((option for option in self.options if option.category == category), None)
 
     def _show_processes(self, option: AnalysisOptionDTO | None) -> None:
-        while self.process_area.count():
-            item = self.process_area.takeAt(0)
-            if item.widget() is not None:
-                item.widget().deleteLater()
-        self.process_boxes = {}
-        if option is None:
-            hint = QLabel("Choose a dataset and an analysis type.", objectName="Muted")
-            self.process_area.addWidget(hint)
-        else:
-            formulas = {formula.key: formula for formula in self._formulas()}
-            for process in option.processes:
-                formula = formulas.get(process.key)
-                box = QCheckBox(process.key)
-                box.setEnabled(process.available)
-                tip = f"{process.label}\n{formula.formula}" if formula else process.label
-                tip = tip if process.available else f"{tip}\n\nNot available: {process.reason}"
-                box.setToolTip(tip)
-                box.toggled.connect(self._on_processes_changed)
-                name = process.label + ("  ·  before / after" if process.periods > 1 else "")
-                label = QLabel(name if process.available else f"{name}  ·  {process.reason}", objectName="Muted")
-                label.setWordWrap(True)
-                label.setToolTip(tip)
-                label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
-                row = QWidget()
-                line = QHBoxLayout(row)
-                line.setContentsMargins(0, 0, 0, 0)
-                line.setSpacing(8)
-                box.setFixedWidth(130)
-                line.addWidget(box, 0, Qt.AlignmentFlag.AlignTop)
-                line.addWidget(label, 1)
-                self.process_area.addWidget(row)
-                self.process_boxes[process.key] = box
-            first = next((p for p in option.processes if p.available), None)
-            if first is not None:
-                self.process_boxes[first.key].setChecked(True)
-        self.select_all.setVisible(option is not None)
-        self._on_processes_changed()
+        formulas = {formula.key: formula for formula in self._formulas()} if option is not None else {}
+        self.picker.set_option(option, formulas)
 
     def _formulas(self):
         if not hasattr(self, "_formula_cache"):
@@ -533,18 +487,11 @@ class AnalysisView(QWidget):
                 self._formula_cache = []
         return self._formula_cache
 
-    def select_all_available(self) -> None:
-        for box in self.process_boxes.values():
-            if box.isEnabled():
-                box.setChecked(True)
-
     def chosen_processes(self) -> list[str]:
-        return [key for key, box in self.process_boxes.items() if box.isChecked() and box.isEnabled()]
+        return self.picker.selected()
 
     def _chosen_options(self) -> list[ProcessOptionDTO]:
-        option = self.option(self.category)
-        chosen = set(self.chosen_processes())
-        return [p for p in option.processes if p.key in chosen] if option else []
+        return self.picker.selected_options()
 
     def _on_processes_changed(self, *_args) -> None:
         self._fill_params()
@@ -687,7 +634,10 @@ class AnalysisView(QWidget):
 
     def _on_result(self, result: ResultDTO) -> None:
         self._finish_run()
+        if self.result is not None and not self.result.saved:
+            self._facade.discard_analysis_result(self.result)  # replaced before it was saved
         self.result = result
+        self._show_save_state()
         self.result_title.setText(f"{result.category}: {', '.join(result.processes)}")
         parts = [f"{result.device}", f"{result.seconds:.2f} s", Path(result.output_path).name]
         self.result_info.setText("  ·  ".join(parts) + ("\n" + " ".join(result.notes) if result.notes else ""))
@@ -730,9 +680,60 @@ class AnalysisView(QWidget):
             self.metrics_table.setItem(row, 1, item)
 
     def _set_result_buttons(self, ready: bool) -> None:
-        for button in (self.viewer_button, self.map_button, self.folder_button):
+        for button in (self.viewer_button, self.map_button, self.save_button):
             button.setEnabled(ready)
         self.layer_box.setEnabled(ready)
+        self.folder_button.setEnabled(ready and self.result is not None and self.result.saved)
+
+    # ------------------------------------------------------------- saving
+    def suggested_save_path(self) -> str:
+        return str(DEFAULT_ANALYSIS_DIR / Path(self.result.output_path).name) if self.result else ""
+
+    def save_result(self) -> None:
+        """Ask where to keep the result, then save it there (nothing is kept unless the user does this)."""
+        if self.result is None:
+            return
+        path, _ = QFileDialog.getSaveFileName(self, "Save analysis result", self.suggested_save_path(),
+                                              "GeoTIFF (*.tif)")
+        if path:
+            self.save_to(path)
+
+    def save_to(self, path: str) -> None:
+        if self.result is None:
+            return
+        self.save_button.setEnabled(False)
+        run_task(self, self._facade.save_analysis_result, self.result, path, on_success=self._on_saved,
+                 on_error=self._on_save_failed)
+
+    def _on_saved(self, result: ResultDTO) -> None:
+        self.result = result
+        self.save_button.setEnabled(True)
+        self.folder_button.setEnabled(True)
+        self._show_save_state()
+        self.banner.show_success(f"Saved to {result.output_path}")
+
+    def _on_save_failed(self, exc: Exception) -> None:
+        self.save_button.setEnabled(True)
+        self._show_error(exc)
+
+    def _show_save_state(self) -> None:
+        result = self.result
+        if result is None:
+            self.save_state.setText("")
+        elif result.saved:
+            self.save_state.setText(f"✓ Saved: {Path(result.output_path).name}")
+            self.save_state.setToolTip(result.output_path)
+        else:
+            self.save_state.setText("Not saved: this result is deleted unless you save it.")
+            self.save_state.setToolTip("")
+        self.save_state.setProperty("saved", bool(result and result.saved))
+        self.save_state.style().unpolish(self.save_state)
+        self.save_state.style().polish(self.save_state)
+
+    def discard_unsaved(self) -> None:
+        """Delete the result shown if it was not saved (e.g. when the window closes)."""
+        if self.result is not None and not self.result.saved:
+            self._facade.discard_analysis_result(self.result)
 
     # ------------------------------------------------------------- result actions
     def _open_in_viewer(self) -> None:
@@ -740,7 +741,7 @@ class AnalysisView(QWidget):
             self.open_in_viewer_requested.emit(self.result.output_path)
 
     def open_folder(self) -> None:
-        if self.result is not None:
+        if self.result is not None and self.result.saved:
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(Path(self.result.output_path).parent)))
 
     def show_on_map(self) -> None:

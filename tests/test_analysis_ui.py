@@ -37,14 +37,27 @@ AFTER = DatasetDTO("1", "COPERNICUS/S2_SR_HARMONIZED", "C:/data/after.tif", name
                    satellite="Sentinel-2", start_date="2024-06-01", end_date="2024-06-30", size_bytes=2048)
 BEFORE = DatasetDTO("2", "COPERNICUS/S2_SR_HARMONIZED", "C:/data/before.tif", name="Sentinel-2_1_2_2023-06-01_2023-06-30",
                     satellite="Sentinel-2", start_date="2023-06-01", end_date="2023-06-30")
+VEG = ("Vegetation indices", "Moisture & drought", "Burn & fire")
 OPTIONS = [
+    AnalysisOptionDTO("Water", "Water", (
+        ProcessOptionDTO("NDWI", "Normalized Difference Water Index", True, group="Water indices"),
+    ), "Water", ("Water indices",)),
     AnalysisOptionDTO("Vegetation", "Greenness", (
-        ProcessOptionDTO("NDVI", "Normalized Difference Vegetation Index", True),
-        ProcessOptionDTO("SAVI", "Soil Adjusted Vegetation Index", True, params=("savi_l",)),
-        ProcessOptionDTO("NDRE", "Normalized Difference Red Edge", False, "Needs the red-edge 1 band."),
-    )),
-    AnalysisOptionDTO("Burn", "Fire", (ProcessOptionDTO("dNBR", "Differenced NBR", True, periods=2),)),
-    AnalysisOptionDTO("Thermal", "Heat", (ProcessOptionDTO("LSTMapping", "LST", False, "Needs a thermal band."),)),
+        ProcessOptionDTO("NDVI", "Normalized Difference Vegetation Index", True, group="Vegetation indices"),
+        ProcessOptionDTO("SAVI", "Soil Adjusted Vegetation Index", True, params=("savi_l",),
+                         group="Vegetation indices"),
+        ProcessOptionDTO("NDRE", "Normalized Difference Red Edge", False, "Needs the red-edge 1 band.",
+                         group="Vegetation indices"),
+        ProcessOptionDTO("SPI", "Standardized Precipitation Index", False, "Needs decades of rainfall.",
+                         group="Moisture & drought"),
+        ProcessOptionDTO("dNBR", "Differenced NBR", True, periods=2, group="Burn & fire"),
+    ), "Vegetation", VEG),
+    AnalysisOptionDTO("LST", "Heat", (
+        ProcessOptionDTO("LSTMapping", "LST", False, "Needs a thermal band.", group="Surface temperature"),
+    ), "Land Surface Temperature", ("Surface temperature",)),
+    AnalysisOptionDTO("LULC", "Land", (
+        ProcessOptionDTO("NDBI", "Normalized Difference Built-up Index", True, group="Built-up & urban"),
+    ), "Land Use / Land Cover", ("Built-up & urban",)),
 ]
 CPU = ComputeDeviceDTO("numpy", "CPU", (GpuDTO("AMD Radeon (TM) Graphics", "AMD", GPU_INTEGRATED),),
                        "No dedicated GPU (graphics: AMD Radeon (TM) Graphics), so analyses run on the CPU.")
@@ -62,6 +75,7 @@ def _facade():
     facade = MagicMock(spec=IBusinessFacade)
     facade.list_formulas.return_value = DAO.find_all()
     facade.formula_categories.return_value = DAO.categories()
+    facade.analysis_groups.return_value = DAO.analyses()
     facade.list_analysis_datasets.return_value = [AFTER, BEFORE]
     facade.get_available_analyses.return_value = OPTIONS
     facade.get_compute_device.return_value = CPU
@@ -71,8 +85,10 @@ def _facade():
                         LegendDTO("scale", "NDVI", -0.2, 0.8, ("#000000", "#FFFFFF")), 6, 4, (73, 31, 74, 32))
     facade.get_map_layers.return_value = [layer]
     facade.run_analysis.return_value = ResultDTO(
-        "r1", "Vegetation", ["NDVI"], {"NDVI mean": 0.42}, "C:/out/result.tif", dataset=AFTER,
+        "r1", "Vegetation", ["NDVI"], {"NDVI mean": 0.42}, "C:/tmp/result.tif", dataset=AFTER,
         layers=[ResultLayerDTO("NDVI", "NDVI", "vegetation")], device="CPU", seconds=0.5)
+    facade.save_analysis_result.side_effect = lambda result, path: __import__("dataclasses").replace(
+        result, output_path=path, saved=True)
     return facade
 
 
@@ -106,17 +122,20 @@ def table():
     view.deleteLater()
 
 
-def test_table_lists_every_formula_grouped_by_category(table):
+def test_table_lists_every_formula_grouped_by_analysis_and_sub_type(table):
     assert len(table.visible_formulas()) == len(DAO.find_all())
     group_rows = table.table.rowCount() - len(table.visible_formulas())
-    assert group_rows == len(DAO.categories())
-    assert table.formula_at(1).key == "NDVI"  # row 0 is the "VEGETATION" group row
+    assert group_rows == len(DAO.categories())  # one per sub-type
+    assert table.table.item(0, 0).text() == "WATER  ›  WATER INDICES"
+    assert table.formula_at(1).key == "NDWI"
+    assert list(table.chips) == ["All", "Water", "Vegetation", "LST", "LULC"]  # the four analyses
+    assert table.chips["LST"].text().startswith("Land Surface Temperature")
 
 
 def test_table_filters_by_category_and_search(table):
     table.set_category("Water")
-    assert {f.category for f in table.visible_formulas()} == {"Water"}
-    assert "MNDWI" in [f.key for f in table.visible_formulas()]
+    assert {f.analysis for f in table.visible_formulas()} == {"Water"}
+    assert {"MNDWI", "NDCI", "NDSI", "WaterAreaEstimation"} <= {f.key for f in table.visible_formulas()}
     table.set_category("All")
     table.search.setText("chlorophyll")
     keys = [f.key for f in table.visible_formulas()]
@@ -129,6 +148,7 @@ def test_table_filters_by_category_and_search(table):
 def test_selecting_a_row_shows_it_in_full(table):
     assert table.select_formula("dNBR")
     assert table.detail.key.text() == "dNBR"
+    assert table.detail.badge.text() == "Vegetation › Burn & fire"
     assert "NBRpre − NBRpost" in table.detail.formula.text()
     assert "before and after" in table.detail.bands.text()
     assert table.select_formula("SPI")
@@ -149,23 +169,72 @@ def page():
     view.deleteLater()
 
 
-def test_page_lists_datasets_and_what_they_can_run(page):
+def test_page_offers_the_four_analyses(page):
     view, facade = page
     assert view.dataset_list.count() == 2 and view.dataset is AFTER
     facade.get_available_analyses.assert_called_with(AFTER)
-    assert view.category_buttons["Vegetation"].isEnabled() and not view.category_buttons["Thermal"].isEnabled()
-    assert view.category == "Vegetation" and view.chosen_processes() == ["NDVI"]
-    assert not view.process_boxes["NDRE"].isEnabled()
-    assert "red-edge 1" in view.process_boxes["NDRE"].toolTip()
+    assert list(view.analysis_tiles) == ["Water", "Vegetation", "LST", "LULC"]
+    assert not view.analysis_tiles["LST"].isEnabled()
+    assert view.analysis_tiles["LST"].text().startswith("Land Surface Temperature")
+    assert "3 of 5 can run" in view.analysis_tiles["Vegetation"].text()
+    assert view.category == "Water" and view.chosen_processes() == ["NDWI"]
     assert view.device_label.text() == "Runs on the CPU"
     assert "AMD Radeon" in view.device_label.toolTip()
     assert not view.use_gpu.isEnabled()
 
 
+def test_processes_that_can_and_cannot_run_are_kept_apart(page):
+    view, _ = page
+    view.choose_category("Vegetation")
+    picker = view.picker
+    can = [picker.can_area.itemAt(i).widget() for i in range(picker.can_area.count())]
+    cannot = [picker.cannot_area.itemAt(i).widget() for i in range(picker.cannot_area.count())]
+    assert [c.key for c in can if hasattr(c, "key")] == ["NDVI", "SAVI", "dNBR"]
+    assert [c.key for c in cannot if hasattr(c, "key")] == ["NDRE", "SPI"]
+    assert "(3)" in picker.can_title.text() and "(2)" in picker.cannot_toggle.text()
+    assert not picker.cannot_box.isVisibleTo(view)  # folded away until opened
+    picker.cannot_toggle.click()
+    assert picker.cannot_box.isVisibleTo(view) and "▾" in picker.cannot_toggle.text()
+    titles = [w.text() for w in can if not hasattr(w, "key")]
+    assert titles == ["VEGETATION INDICES", "BURN & FIRE"]  # grouped by sub-type
+
+
+def test_cards_select_by_click_and_cannot_select_what_cannot_run(page):
+    from PyQt6.QtCore import QPoint
+
+    view, _ = page
+    view.choose_category("Vegetation")
+    cards = view.picker.cards
+    assert view.chosen_processes() == ["NDVI"]  # the first that can run
+    QTest.mouseClick(cards["SAVI"], Qt.MouseButton.LeftButton, pos=QPoint(10, 10))
+    assert view.chosen_processes() == ["NDVI", "SAVI"] and cards["SAVI"].check.text() == "✓"
+    QTest.mouseClick(cards["NDRE"], Qt.MouseButton.LeftButton, pos=QPoint(10, 10))
+    assert "NDRE" not in view.chosen_processes() and "red-edge 1" in cards["NDRE"].toolTip()
+    cards["NDVI"].setFocus()
+    QTest.keyClick(cards["NDVI"], Qt.Key.Key_Space)
+    assert view.chosen_processes() == ["SAVI"]
+    view.picker.select_all()
+    assert view.chosen_processes() == ["NDVI", "SAVI", "dNBR"]
+    view.picker.clear()
+    assert view.chosen_processes() == [] and not view.run_button.isEnabled()
+
+
+def test_sub_type_chips_narrow_the_cards(page):
+    view, _ = page
+    view.choose_category("Vegetation")
+    picker = view.picker
+    assert list(picker.chip_buttons) == ["All", *VEG]
+    picker.show_subtype("Burn & fire")
+    assert picker.cards["dNBR"].isVisibleTo(view) and not picker.cards["NDVI"].isVisibleTo(view)
+    picker.select_all()  # only the sub-type shown
+    assert view.chosen_processes() == ["NDVI", "dNBR"]
+
+
 def test_parameters_appear_for_the_processes_that_read_them(page):
     view, _ = page
+    view.choose_category("Vegetation")
     assert view.param_boxes == {}
-    view.process_boxes["SAVI"].setChecked(True)
+    view.picker.cards["SAVI"].set_selected(True)
     assert list(view.param_boxes) == ["savi_l"] and view.param_boxes["savi_l"].value() == pytest.approx(0.5)
     view.param_boxes["savi_l"].setValue(0.25)
     request = view.build_request()
@@ -174,8 +243,9 @@ def test_parameters_appear_for_the_processes_that_read_them(page):
 
 def test_before_after_processes_ask_for_an_earlier_dataset(page):
     view, facade = page
-    view.choose_category("Burn")
-    assert view.chosen_processes() == ["dNBR"] and view.compare_list.isVisibleTo(view)
+    view.choose_category("Vegetation")
+    view.picker.set_selected(["dNBR"])
+    assert view.compare_list.isVisibleTo(view)
     view.run()
     assert "Compare with" in view.banner.text() and not facade.run_analysis.called
     view.set_compare([BEFORE.path])
@@ -186,7 +256,7 @@ def test_before_after_processes_ask_for_an_earlier_dataset(page):
     assert dataset is AFTER and request.compare_with == [BEFORE] and request.processes == ["dNBR"]
 
 
-def test_running_shows_layers_and_numbers(page):
+def test_running_shows_layers_and_numbers_but_does_not_save(page):
     view, facade = page
     opened = []
     view.open_in_viewer_requested.connect(opened.append)
@@ -196,8 +266,36 @@ def test_running_shows_layers_and_numbers(page):
     assert view.layer_box.count() == 1 and view.canvas.has_image()
     assert view.metrics_table.item(0, 0).text() == "NDVI mean" and view.metrics_table.item(0, 1).text() == "0.420"
     assert "CPU" in view.result_info.text()
+    assert not facade.save_analysis_result.called
+    assert "Not saved" in view.save_state.text()
+    assert view.save_button.isEnabled() and not view.folder_button.isEnabled()
     view.viewer_button.click()
-    assert opened == ["C:/out/result.tif"]
+    assert opened == ["C:/tmp/result.tif"]
+
+
+def test_saving_keeps_the_result_where_the_user_chose(page):
+    view, facade = page
+    view.run()
+    _wait(lambda: view.layers)
+    assert view.suggested_save_path().endswith("result.tif")
+    view.save_to("D:/kept/ndvi.tif")
+    _wait(lambda: view.result.saved)
+    facade.save_analysis_result.assert_called_once()
+    assert view.result.output_path == "D:/kept/ndvi.tif" and "Saved" in view.save_state.text()
+    assert view.folder_button.isEnabled()
+    view.discard_unsaved()
+    assert not facade.discard_analysis_result.called  # a saved result is never deleted
+
+
+def test_an_unsaved_result_is_discarded_when_replaced(page):
+    view, facade = page
+    view.run()
+    _wait(lambda: view.layers)
+    first = view.result
+    view.layers = []
+    view.run()
+    _wait(lambda: view.layers)
+    facade.discard_analysis_result.assert_called_once_with(first)
 
 
 def test_errors_are_shown_and_the_page_can_run_again(page):

@@ -1,9 +1,10 @@
 """Analysis table: a cheat sheet of every spectral index and method GEE-Assist knows.
 
 Reference only (no analysis runs here): each row gives the index, its formula, the
-bands it needs, its value range and what it is used for, grouped by category
-(vegetation, water, burn, snow & ice, ...). Category chips and a search box narrow
-the table; the panel on the right shows the selected row in full. Opened from
+bands it needs, its value range and what it is used for, grouped like the analyses:
+the four analyses (water, vegetation, land surface temperature, land use / land
+cover) and their sub-types (e.g. vegetation › burn & fire). Chips for the four
+analyses and a search box narrow the table; the panel on the right shows the selected row in full. Opened from
 View → Show analysis table.
 """
 
@@ -31,26 +32,19 @@ from PyQt6.QtWidgets import (
 from backend.business.facade import IBusinessFacade
 from backend.dto.analysis_dto import FormulaDTO
 from frontend import theme
+from frontend.widgets.process_picker import ANALYSIS_COLOURS
 
 ALL = "All"
 PANEL_WIDTH = 340
 COLUMNS = ("Index", "Name", "Formula", "Bands", "Range", "Use cases", "In app")
 FORMULA_FONT = "Cambria Math"
 
-# A colour per category, for the chips, the group rows and the badge in the detail panel.
-CATEGORY_COLOURS: dict[str, str] = {
-    "Vegetation": "#3E9B4F",
-    "Moisture & drought": "#B7791F",
-    "Water": "#2F7CC4",
-    "Burn": "#D0482B",
-    "Soil & salinity": "#8C6239",
-    "Built-up & urban": "#7A6F86",
-    "Snow & ice": "#4FA9C9",
-    "Thermal": "#D9534F",
-    "Land cover": "#6B8E23",
-    "Transformations": "#6C5CE7",
-    "SAR (radar)": "#4A5568",
-}
+# Colours follow the four analyses (see ANALYSIS_COLOURS): chips, group rows, keys and the badge.
+
+
+def colour_of(formula: FormulaDTO) -> str:
+    return ANALYSIS_COLOURS.get(formula.analysis, theme.OCEAN)
+
 
 ROLE_LABELS = {"coastal": "Coastal", "blue": "Blue", "green": "Green", "red": "Red", "re1": "RE1", "re2": "RE2",
                "re3": "RE3", "nir": "NIR", "nir2": "NIR narrow", "swir1": "SWIR1", "swir2": "SWIR2",
@@ -105,7 +99,8 @@ def matches(formula: FormulaDTO, query: str) -> bool:
     """Whether the search text appears in the index's key, name, aliases, formula or use cases."""
     if not query:
         return True
-    text = " ".join((formula.key, formula.name, formula.formula, formula.category, formula.description,
+    text = " ".join((formula.key, formula.name, formula.formula, formula.category, formula.analysis,
+                     formula.description,
                      *formula.aliases, *formula.use_cases)).lower()
     return all(word in text for word in query.lower().split())
 
@@ -121,6 +116,7 @@ class FormulaDetail(QFrame):
         self.badge = QLabel()
         self.name = QLabel(objectName="DetailName")
         self.formula = QLabel(objectName="FormulaBox")
+        self._labels: dict[str, str] = {}
         self.bands = QLabel(objectName="Value")
         self.range = QLabel(objectName="Value")
         self.description = QLabel(objectName="Value")
@@ -140,11 +136,8 @@ class FormulaDetail(QFrame):
         column = QVBoxLayout(content)
         column.setContentsMargins(18, 16, 18, 16)
         column.setSpacing(8)
-        top = QHBoxLayout()
-        top.addWidget(self.key)
-        top.addStretch(1)
-        top.addWidget(self.badge, 0, Qt.AlignmentFlag.AlignVCenter)
-        column.addLayout(top)
+        column.addWidget(self.key)
+        column.addWidget(self.badge, 0, Qt.AlignmentFlag.AlignLeft)  # "Vegetation › Burn & fire", below the key
         column.addWidget(self.name)
         self._sections: dict[str, list[QWidget]] = {}
         for title, widget in (("Formula", self.formula), ("Bands", self.bands), ("Range", self.range),
@@ -185,8 +178,8 @@ class FormulaDetail(QFrame):
         self.key.setText(formula.key)
         aliases = f"  (also: {', '.join(formula.aliases)})" if formula.aliases else ""
         self.name.setText(formula.name + aliases)
-        colour = CATEGORY_COLOURS.get(formula.category, theme.OCEAN)
-        self.badge.setText(formula.category)
+        colour = colour_of(formula)
+        self.badge.setText(f"{self._labels.get(formula.analysis, formula.analysis)} › {formula.category}")
         self.badge.setStyleSheet(f"background: {colour}; color: white; border-radius: 9px; padding: 2px 9px; "
                                  "font-size: 8.5pt; font-weight: 600;")
         self.badge.show()
@@ -242,11 +235,13 @@ class AnalysisTableView(QWidget):
         self.table.setShowGrid(False)
         self.table.setAlternatingRowColors(False)
         header = self.table.horizontalHeader()
-        for column, mode in enumerate((QHeaderView.ResizeMode.ResizeToContents, QHeaderView.ResizeMode.Interactive,
+        # Fixed widths where content would mislead: the group rows' long titles span every column.
+        for column, mode in enumerate((QHeaderView.ResizeMode.Interactive, QHeaderView.ResizeMode.Interactive,
                                        QHeaderView.ResizeMode.Stretch, QHeaderView.ResizeMode.Interactive,
                                        QHeaderView.ResizeMode.Interactive, QHeaderView.ResizeMode.Stretch,
                                        QHeaderView.ResizeMode.ResizeToContents)):
             header.setSectionResizeMode(column, mode)
+        self.table.setColumnWidth(0, 120)
         self.table.setColumnWidth(1, 200)
         self.table.setColumnWidth(3, 120)
         self.table.setColumnWidth(4, 110)
@@ -298,8 +293,12 @@ class AnalysisTableView(QWidget):
         """Read the formulas (built into the app, so this is instant) and build the chips and rows."""
         self.formulas = list(self._facade.list_formulas())
         self._loaded = True
-        categories = [category for category, _ in self._facade.formula_categories()]
-        descriptions = dict(self._facade.formula_categories())
+        groups = list(self._facade.analysis_groups())
+        categories = [major for major, *_ in groups]
+        self.labels = {major: label for major, label, *_ in groups}
+        self.detail._labels = self.labels
+        descriptions = {major: f"{description}\nSub-types: {', '.join(subtypes)}"
+                        for major, _, description, subtypes in groups}
         while self.chips_row.count():
             item = self.chips_row.takeAt(0)
             if item.widget() is not None:
@@ -307,13 +306,13 @@ class AnalysisTableView(QWidget):
         self.chips = {}
         for category in [ALL, *categories]:
             count = len(self.formulas) if category == ALL else \
-                sum(1 for formula in self.formulas if formula.category == category)
-            chip = QPushButton(f"{category}  {count}", objectName="CategoryChip")
+                sum(1 for formula in self.formulas if formula.analysis == category)
+            chip = QPushButton(f"{self.labels.get(category, category)}  {count}", objectName="CategoryChip")
             chip.setCheckable(True)
             chip.setCursor(Qt.CursorShape.PointingHandCursor)
-            chip.setToolTip(descriptions.get(category, "Every category"))
+            chip.setToolTip(descriptions.get(category, "Every analysis"))
             if category != ALL:
-                colour = CATEGORY_COLOURS.get(category, theme.OCEAN)
+                colour = ANALYSIS_COLOURS.get(category, theme.OCEAN)
                 chip.setStyleSheet(f"QPushButton#CategoryChip {{ border-left: 4px solid {colour}; }}")
             chip.clicked.connect(lambda _=False, category=category: self.set_category(category))
             self.chip_group.addButton(chip)
@@ -333,7 +332,7 @@ class AnalysisTableView(QWidget):
     def visible_formulas(self) -> list[FormulaDTO]:
         query = self.search.text().strip()
         return [formula for formula in self.formulas
-                if (self.category == ALL or formula.category == self.category) and matches(formula, query)]
+                if (self.category == ALL or formula.analysis == self.category) and matches(formula, query)]
 
     def refresh_rows(self) -> None:
         shown = self.visible_formulas()
@@ -341,24 +340,24 @@ class AnalysisTableView(QWidget):
         self._row_formulas: dict[int, FormulaDTO] = {}
         current = None
         for formula in shown:
-            if formula.category != current:  # a group row before each category
+            if formula.category != current:  # a group row before each sub-type: "Vegetation › Burn & fire"
                 current = formula.category
-                self._add_group_row(current)
+                self._add_group_row(formula)
             self._add_row(formula)
         self.table.resizeRowsToContents()
         self._fit_rows.start()
         self.count.setText(f"{len(shown)} of {len(self.formulas)} shown")
         self.detail.show_formula(shown[0] if len(shown) == 1 else None)
 
-    def _add_group_row(self, category: str) -> None:
+    def _add_group_row(self, formula: FormulaDTO) -> None:
         row = self.table.rowCount()
         self.table.insertRow(row)
-        item = QTableWidgetItem(category.upper())
+        label = getattr(self, "labels", {}).get(formula.analysis, formula.analysis)
+        item = QTableWidgetItem(f"{label.upper()}  ›  {formula.category.upper()}")
         font = QFont(theme.SANS, 9)
         font.setBold(True)
         item.setFont(font)
-        colour = CATEGORY_COLOURS.get(category, theme.OCEAN)
-        item.setForeground(QColor(colour))
+        item.setForeground(QColor(colour_of(formula)))
         item.setBackground(QColor(theme.FIELD_BG))
         item.setFlags(Qt.ItemFlag.ItemIsEnabled)  # not selectable
         self.table.setItem(row, 0, item)
@@ -377,7 +376,7 @@ class AnalysisTableView(QWidget):
                 font = QFont(theme.SANS, 10)
                 font.setBold(True)
                 item.setFont(font)
-                item.setForeground(QColor(CATEGORY_COLOURS.get(formula.category, theme.INK)))
+                item.setForeground(QColor(colour_of(formula)))
             elif column == 2:
                 item.setFont(QFont(FORMULA_FONT, 10))
             elif column == 6:

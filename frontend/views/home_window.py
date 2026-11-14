@@ -411,6 +411,7 @@ class HomeWindow(QMainWindow):
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 (Qt API)
         self.terminal.shutdown()  # e.g. an Earth Engine sign-in stops waiting for the browser
+        self.analysis.discard_unsaved()  # results are kept only when the user saves them
         super().closeEvent(event)
 
     # ------------------------------------------------------------- account
