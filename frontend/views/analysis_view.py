@@ -164,6 +164,12 @@ class AnalysisView(QWidget):
         self.dataset_list.setMinimumHeight(110)
         self.dataset_list.setMaximumHeight(170)
         self.dataset_list.setIconSize(QSize(0, 0))
+        self.compare_list = QListWidget()
+        self.compare_list.setMaximumHeight(120)
+        for widget in (self.dataset_list, self.compare_list):  # long names wrap instead of widening the panel
+            widget.setWordWrap(True)
+            widget.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+            widget.setSizePolicy(QSizePolicy.Policy.Ignored, widget.sizePolicy().verticalPolicy())
         self.refresh_button = QPushButton("Refresh", objectName="SecondaryButton")
         self.browse_button = QPushButton("Open GeoTIFF…", objectName="SecondaryButton")
         self.dataset_note = QLabel(objectName="Muted")
@@ -190,8 +196,6 @@ class AnalysisView(QWidget):
         self.compare_note = QLabel("Before / after processes need another dataset of the same place.",
                                    objectName="Muted")
         self.compare_note.setWordWrap(True)
-        self.compare_list = QListWidget()
-        self.compare_list.setMaximumHeight(120)
 
         # ---- device and run
         self.device_label = QLabel("Looking for a GPU…", objectName="DeviceLine")
@@ -453,7 +457,8 @@ class AnalysisView(QWidget):
                               f"{option.description}\nThis dataset has none of the bands it needs.")
             colour = CATEGORY_COLOURS.get(option.category, theme.OCEAN)
             button.setStyleSheet(f"QPushButton#CategoryTile {{ border-left: 4px solid {colour}; }}")
-            button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            button.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+            button.setMinimumHeight(48)
             button.clicked.connect(lambda _=False, category=option.category: self.choose_category(category))
             self.category_group.addButton(button)
             self.category_grid.addWidget(button, index // 2, index % 2)
@@ -485,15 +490,25 @@ class AnalysisView(QWidget):
             formulas = {formula.key: formula for formula in self._formulas()}
             for process in option.processes:
                 formula = formulas.get(process.key)
-                text = process.key if process.label == process.key else f"{process.key}  —  {process.label}"
-                if process.periods > 1:
-                    text += "  (before / after)"
-                box = QCheckBox(text)
+                box = QCheckBox(process.key)
                 box.setEnabled(process.available)
-                tip = formula.formula if formula else process.label
-                box.setToolTip(tip if process.available else f"{tip}\n\nNot available: {process.reason}")
+                tip = f"{process.label}\n{formula.formula}" if formula else process.label
+                tip = tip if process.available else f"{tip}\n\nNot available: {process.reason}"
+                box.setToolTip(tip)
                 box.toggled.connect(self._on_processes_changed)
-                self.process_area.addWidget(box)
+                name = process.label + ("  ·  before / after" if process.periods > 1 else "")
+                label = QLabel(name if process.available else f"{name}  ·  {process.reason}", objectName="Muted")
+                label.setWordWrap(True)
+                label.setToolTip(tip)
+                label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+                row = QWidget()
+                line = QHBoxLayout(row)
+                line.setContentsMargins(0, 0, 0, 0)
+                line.setSpacing(8)
+                box.setFixedWidth(130)
+                line.addWidget(box, 0, Qt.AlignmentFlag.AlignTop)
+                line.addWidget(label, 1)
+                self.process_area.addWidget(row)
                 self.process_boxes[process.key] = box
             first = next((p for p in option.processes if p.available), None)
             if first is not None:
@@ -590,9 +605,11 @@ class AnalysisView(QWidget):
         first_time = self.device is None
         self.device = device
         self.device_label.setText(device_text(device))
-        cards = ", ".join(f"{gpu.name} ({gpu.kind})" for gpu in device.gpus) or "none found"
-        self.device_detail.setText(f"{device.reason}\nGraphics: {cards}")
-        self.device_detail.setToolTip(device.reason)
+        cards = "\n".join(f"• {gpu.name} ({gpu.kind})" for gpu in device.gpus) or "none found"
+        self.device_detail.setText(device.reason)
+        tip = f"{device.reason}\n\nGraphics cards on this computer:\n{cards}"
+        for widget in (self.device_label, self.device_detail):
+            widget.setToolTip(tip)
         if first_time:
             usable = device.uses_gpu
             self.use_gpu.blockSignals(True)
