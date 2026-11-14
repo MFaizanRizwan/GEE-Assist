@@ -280,8 +280,6 @@ def test_ndvi_is_written_with_no_data_kept(service, tmp_path):
     np.testing.assert_allclose(ndvi[1:, 1:], ((nir - red) / (nir + red))[1:, 1:], rtol=1e-5)
     assert result.metrics["NDVI mean"] == pytest.approx(float(np.mean(ndvi[ndvi != NODATA])), rel=1e-4)
     assert [layer.key for layer in result.layers] == ["NDVI"]
-    summary = json.loads((tmp_path / "out" / (result.output_path.rsplit("\\", 1)[-1].rsplit("/", 1)[-1]))
-                         .with_suffix(".json").read_text()) if False else None  # noqa: F841 - see next test
 
 
 def test_block_size_does_not_change_the_result(tmp_path):
