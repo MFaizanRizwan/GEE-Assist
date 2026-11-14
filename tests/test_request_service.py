@@ -64,6 +64,36 @@ class FakeDataFacade(IDataFacade):
     def analysis_groups(self):  # not used here
         return []
 
+    def save_user(self, *args, **kwargs):  # not used here
+        raise NotImplementedError
+
+    def find_user_by_id(self, *args, **kwargs):  # not used here
+        raise NotImplementedError
+
+    def find_user_by_email(self, *args, **kwargs):  # not used here
+        raise NotImplementedError
+
+    def find_users(self, *args, **kwargs):  # not used here
+        raise NotImplementedError
+
+    def delete_user(self, *args, **kwargs):  # not used here
+        raise NotImplementedError
+
+    def create_user(self, *args, **kwargs):  # not used here
+        raise NotImplementedError
+
+    def change_password(self, *args, **kwargs):  # not used here
+        raise NotImplementedError
+
+    def save_profile_photo(self, *args, **kwargs):  # not used here
+        raise NotImplementedError
+
+    def find_profile_photo(self, *args, **kwargs):  # not used here
+        raise NotImplementedError
+
+    def delete_profile_photo(self, *args, **kwargs):  # not used here
+        raise NotImplementedError
+
 
 # ------------------------------------------------------------------ submit_query
 RULES_ONLY = QueryEntityExtractor(use_spacy=False, today=TODAY)  # deterministic, no spaCy model needed

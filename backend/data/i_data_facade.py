@@ -6,6 +6,7 @@ from typing import Optional
 from backend.data.clients.i_gee_client import ProgressCallback, StopCheck
 from backend.dto import CheckDTO, ChunkDTO, FormDTO, PlaceDTO
 from backend.dto.analysis_dto import FormulaDTO
+from backend.dto.user_dto import NewUserDTO, UserDTO, UserPageDTO
 
 
 class IDataFacade(ABC):
@@ -74,3 +75,36 @@ class IDataFacade(ABC):
     @abstractmethod
     def analysis_groups(self) -> list[tuple[str, str, str, tuple[str, ...]]]:
         """(analysis, label, what it is for, its sub-types) of the four analyses (delegates to IFormulaDAO)."""
+
+    # ------------------------------------------------------------- user accounts (delegate to IUserDAO)
+    @abstractmethod
+    def save_user(self, user: UserDTO) -> UserDTO:
+        """Store the user's details; returns them as stored."""
+
+    @abstractmethod
+    def find_user_by_id(self, user_id: str) -> UserDTO | None: ...
+
+    @abstractmethod
+    def find_user_by_email(self, email: str) -> UserDTO | None: ...
+
+    @abstractmethod
+    def find_users(self, skip: int = 0, limit: int = 50) -> UserPageDTO: ...
+
+    @abstractmethod
+    def delete_user(self, user_id: str) -> bool: ...
+
+    @abstractmethod
+    def create_user(self, user: NewUserDTO) -> UserDTO: ...
+
+    @abstractmethod
+    def change_password(self, user_id: str, new_password: str, current_password: str | None = None) -> bool: ...
+
+    @abstractmethod
+    def save_profile_photo(self, user_id: str, image: bytes) -> bool:
+        """Kept on this computer only."""
+
+    @abstractmethod
+    def find_profile_photo(self, user_id: str) -> bytes | None: ...
+
+    @abstractmethod
+    def delete_profile_photo(self, user_id: str) -> bool: ...
