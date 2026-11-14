@@ -134,18 +134,21 @@ class ProcessCard(QFrame):
         self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
         _shrinkable(self)
 
-        self.check = QLabel("", objectName="CardCheck")
+        # Children are created with the card as parent: a parentless widget that is shown (as the check
+        # circle is, before the layout adopts it) becomes a window of its own for a moment, which made the
+        # app's window and logo flicker every time the cards were rebuilt.
+        self.check = QLabel("", self, objectName="CardCheck")
         self.check.setFixedSize(20, 20)
         self.check.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.check.setProperty("on", False)
         self.check.setVisible(process.available)
-        key = QLabel(process.key, objectName="CardKey")
-        name = QLabel(process.label if process.label != process.key else "", objectName="CardName")
+        key = QLabel(process.key, self, objectName="CardKey")
+        name = QLabel(process.label if process.label != process.key else "", self, objectName="CardName")
         name.setWordWrap(True)
         if process.available:
-            detail = QLabel(formula.formula if formula else "", objectName="CardFormula")
+            detail = QLabel(formula.formula if formula else "", self, objectName="CardFormula")
         else:
-            detail = QLabel(f"✕  {process.reason}", objectName="CardReason")
+            detail = QLabel(f"✕  {process.reason}", self, objectName="CardReason")
         detail.setWordWrap(True)
         for label in (name, detail):
             _shrinkable(label)
@@ -154,7 +157,7 @@ class ProcessCard(QFrame):
         top.setSpacing(8)
         top.addWidget(key)
         if process.periods > 1:
-            top.addWidget(QLabel("before / after", objectName="CardBadge"))
+            top.addWidget(QLabel("before / after", self, objectName="CardBadge"))
         top.addStretch(1)
         top.addWidget(self.check)
         layout = QVBoxLayout(self)
@@ -334,7 +337,7 @@ class ProcessPicker(QWidget):
         for name in [ALL, *present]:
             count = len(option.processes) if name == ALL else sum(1 for p in option.processes if p.group == name)
             available = sum(1 for p in option.processes if p.available and (name == ALL or p.group == name))
-            chip = QPushButton(f"{name}  {available}/{count}", objectName="SubtypeChip")
+            chip = QPushButton(f"{name}  {available}/{count}", self.chips_box, objectName="SubtypeChip")
             chip.setCheckable(True)
             chip.setCursor(Qt.CursorShape.PointingHandCursor)
             chip.setToolTip(f"Show {'every sub-type' if name == ALL else name}: {available} of {count} can run")
