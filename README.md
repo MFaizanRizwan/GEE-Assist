@@ -46,22 +46,43 @@ Run the tests with `python -m pytest`.
 - A menu bar runs along the top of every page, as in Word or Excel:
   - **File**: New request (Ctrl+N), Open GeoTIFF… (Ctrl+O), Sign out, Exit (Ctrl+Q)
   - **Edit**: Undo, Redo, Cut, Copy, Paste, Select all, acting on the text field with the cursor
-  - **View**: Dashboard, Query Input, Downloads, Account (Ctrl+1 to Ctrl+4), Side bar (Ctrl+B),
-    Terminal (Ctrl+`), Full screen (F11), Theme
+  - **View**: Dashboard, Query Input, Downloads, Account, Analysis (Ctrl+1 to Ctrl+5), Show analysis
+    table (Ctrl+6), Side bar (Ctrl+B), Terminal (Ctrl+`), Full screen (F11), Theme
   - **Terminal** (gkonsol's, as in VS Code): Show terminal (Ctrl+`), Maximise terminal, Clear terminal,
     Stop running command; Check everything, Verify Earth Engine sign-in, Sign in to Earth Engine…,
     Verify my session, Watch download progress, Download speed chart, List downloads and gkonsol help,
     which run that command in the terminal; Command reference (opens docs/GKONSOL.md)
   - **Options**: Download chunk size…, Manage users… (administrators)
   - **Help**: About GEE-Assist
-- Navigation is in a side bar on the left: **Query Input**, **Downloads** and **Terminal**, each with
-  an icon that animates while the pointer is over it (a pencil writing on a sheet; an arrow sliding
-  down into a tray; a prompt typing). It starts collapsed (icons only); clicking the logo slides it
+- Navigation is in a side bar on the left: **Query Input**, **Downloads**, **Analysis** and
+  **Terminal**, each with an icon that animates while the pointer is over it (a pencil writing on a
+  sheet; an arrow sliding down into a tray; chart bars rising in a wave under a sweeping magnifying
+  lens; a prompt typing). It starts collapsed (icons only); clicking the logo slides it
   open (icons and names) or closed again. **Terminal** opens gkonsol (see below) and stays
   highlighted while it is open.
 - Clicking your name or avatar in the side bar opens the account menu: **Manage account**
   (coming soon), **View account**, **Sign-up details** and **Sign out**.
 - Administrators get a **Manage users** window (list users, change roles, enable / disable accounts).
+
+## Analysis
+
+- **Analysis** (side bar, or View → Analysis): choose a dataset (a finished download, or any GeoTIFF
+  with **Open GeoTIFF…**), an analysis type, its processes and their parameters, then **Run analysis**.
+  Types and processes the dataset's bands cannot compute are greyed out with the reason. Before /
+  after processes (dNBR, RdNBR, RBR, land-cover change, LST trend) need a dataset of the same place
+  from another date, ticked under **Compare with**. The result (one GeoTIFF band per layer, plus a
+  `.json` with the numbers and settings) is written to `workspace/analyses/` and shown with its legend
+  and numbers; it can be opened in the viewer or laid over the map.
+- Analysis types: vegetation, moisture & drought, water, burn, soil & salinity, built-up & urban,
+  snow & ice, thermal (LST), land cover (change and transitions), transformations (Tasseled Cap,
+  PCA) and SAR (radar). Raw download values are scaled to reflectance / kelvin per satellite first.
+- **GPU**: the app lists the computer's graphics cards. With a dedicated NVIDIA GPU and CuPy installed
+  (`pip install cupy-cuda12x`), analyses run on the GPU; otherwise, or if the GPU runs out of memory,
+  on the CPU. The line above **Run analysis** says which, and why. Files are processed in blocks of
+  rows, so large downloads do not need to fit in memory.
+- **View → Show analysis table** (only there) opens the cheat sheet: every index with its formula,
+  bands, value range, how to read it and its use cases, by category, with search. Rows marked
+  "Reference" (SPI, PDSI, NDBaI, coherence) are described but not computed.
 
 ## gkonsol, the command line
 

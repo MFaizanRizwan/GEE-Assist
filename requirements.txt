@@ -10,3 +10,5 @@ rasterio>=1.3
 spacy>=3.8
 en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl
 pytest>=8.0
+# Optional: analyses run on a dedicated NVIDIA GPU when CuPy is installed (CUDA 12 drivers):
+#   pip install cupy-cuda12x
