@@ -15,7 +15,7 @@ from backend.business.request.geojson_utils import (
     validate_geometry,
 )
 from backend.business.request.i_request_service import IRequestService
-from backend.business.request.project_rules import clean_project_name, project_name_error
+from backend.business.request.project_rules import clean_project_name, default_project_name, project_name_error
 from backend.business.request.query_entities import IEntityExtractor, QueryEntityExtractor, format_entity_hints
 from backend.business.request.query_interpretation import check_interpretation, ground_with_entities, has_form_values
 from backend.config import AUTO_UTM, COMPOSITE_METHODS, get_dataset
@@ -270,13 +270,16 @@ class RequestService(IRequestService):
     def list_projects(self, user_id: str) -> list[ProjectDTO]:
         return [p for p in self._data().find_projects_by_user(user_id) if Path(p.folder).is_dir()]
 
+    def suggest_project_name(self, location: str) -> str:
+        return default_project_name(location)
+
     def create_project(self, name: str, location: str, owner_id: str = "") -> ProjectDTO:
-        name = clean_project_name(name)
-        if message := project_name_error(name):
-            raise ProjectError(message, "name")
         location = (location or "").strip()
         if not location:
             raise ProjectError("Choose the folder to create the project in", "location")
+        name = clean_project_name(name) or default_project_name(location)  # no name given: Project 1, 2, ...
+        if message := project_name_error(name):
+            raise ProjectError(message, "name")
         parent = Path(location).expanduser()
         if parent.exists() and not parent.is_dir():
             raise ProjectError("This is a file, not a folder", "location")

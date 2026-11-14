@@ -91,7 +91,9 @@ As in other desktop apps, you work inside a project. A project is a folder:
 
 - **Create** one from the dashboard (**New project**) or **File → New project…**: give it a name and
   the folder to create it in (by default next to your last project, else
-  `Documents/GEE-Assist Projects`). The dialog shows the folder that will be made.
+  `Documents/GEE-Assist Projects`). The dialog shows the folder that will be made. Leave the name
+  empty to get **Project 1**, then **Project 2**, **Project 3**, ... (the first number not already a
+  folder in that location).
 - **Open** one with **Open project…** (choose its folder), a card under **Recent projects** on the
   dashboard, or **File → Recent projects**.
 - **Rename** or **Move** the open project from the dashboard card or the File menu: its folder is

@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 NAME_MAX_LENGTH = 80
+DEFAULT_NAME = "Project"
 _FORBIDDEN = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 _RESERVED = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
 
@@ -27,3 +29,16 @@ def project_name_error(name: str) -> str | None:
     if name in (".", "..") or name.split(".")[0].upper() in _RESERVED:
         return f"'{name}' is reserved by Windows; choose another name"
     return None
+
+
+def default_project_name(location: str) -> str:
+    """The name used when none is given: "Project 1", or the first of "Project 2", "Project 3", ...
+    that is not a folder in ``location`` yet."""
+    parent = Path(location).expanduser() if location and location.strip() else None
+    taken = set()
+    if parent is not None and parent.is_dir():
+        taken = {child.name.lower() for child in parent.iterdir()}
+    number = 1
+    while f"{DEFAULT_NAME} {number}".lower() in taken:
+        number += 1
+    return f"{DEFAULT_NAME} {number}"

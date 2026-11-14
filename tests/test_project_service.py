@@ -148,3 +148,23 @@ def test_analysis_results_are_recorded_in_the_open_project(service, work):
     service.close_project()
     with pytest.raises(ProjectError):
         service.record_analysis_result(result)
+
+
+def test_no_name_means_project_1_then_2_then_3(service, work):
+    assert service.suggest_project_name(str(work)) == "Project 1"
+    names = [service.create_project("", str(work)).name for _ in range(3)]
+    assert names == ["Project 1", "Project 2", "Project 3"]
+    assert sorted(p.name for p in work.iterdir()) == ["Project 1", "Project 2", "Project 3"]
+    assert service.suggest_project_name(str(work)) == "Project 4"
+
+
+def test_the_first_free_number_is_used(service, work):
+    (work / "Project 1").mkdir()
+    (work / "project 3").mkdir()  # Windows names ignore case
+    assert service.create_project("   ", str(work)).name == "Project 2"
+    assert service.create_project("", str(work)).name == "Project 4"
+    assert service.suggest_project_name(str(work / "new place")) == "Project 1"  # a folder not made yet
+
+
+def test_a_typed_name_is_still_used(service, work):
+    assert service.create_project("Lahore NDVI", str(work)).name == "Lahore NDVI"

@@ -28,6 +28,9 @@ class Facade:
         data = DataFacade(gemini_client=None, project_dao=ProjectDAO(tmp_path / "projects.json"))
         self.requests = RequestService(data_facade=data)
 
+    def suggest_project_name(self, location):
+        return self.requests.suggest_project_name(location)
+
     def create_project(self, name, location):
         return self.requests.create_project(name, location, "u1")
 
@@ -144,3 +147,14 @@ def test_move_can_be_cancelled(actions, facade, tmp_path):
 def test_new_projects_are_suggested_next_to_the_last_one(actions, facade, tmp_path):
     facade.create_project("First", str(tmp_path / "projects"))
     assert actions.default_location() == str((tmp_path / "projects").resolve())
+
+
+def test_an_empty_name_shows_and_uses_the_next_project_number(app, facade, tmp_path):
+    (tmp_path / "work").mkdir()
+    (tmp_path / "work" / "Project 1").mkdir()
+    dialog = NewProjectDialog(facade, str(tmp_path / "work"))
+    assert dialog.fields["name"].input.placeholderText() == "Project 2"
+    assert str(tmp_path / "work" / "Project 2") in dialog.preview.text()
+    dialog.action_button.click()
+    assert wait_until(lambda: dialog.result() == QDialog.DialogCode.Accepted)
+    assert dialog.project.name == "Project 2" and (tmp_path / "work" / "Project 2" / "downloads").is_dir()

@@ -137,3 +137,10 @@ def test_analysis_runs_are_recorded_in_the_project(services):
 
     with pytest.raises(ProjectError):
         facade.run_analysis("dataset", "request")
+
+
+def test_the_suggested_project_name_comes_from_the_request_service(facade, services):
+    _, request, _ = services
+    request.suggest_project_name.return_value = "Project 3"
+    assert facade.suggest_project_name("C:/work") == "Project 3"
+    request.suggest_project_name.assert_called_once_with("C:/work")
