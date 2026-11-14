@@ -153,3 +153,23 @@ def test_deleting_a_user_removes_their_photo(dao):
     assert users.delete("u1")
     assert users.find_photo("u1") is None
     assert not users.delete("u1")  # already gone
+
+
+# ------------------------------------------------------------- through the DataFacade
+def test_data_facade_hands_user_operations_to_the_dao(dao):
+    from backend.data.data_facade import DataFacade
+
+    users, _ = dao
+    facade = DataFacade(gemini_client=None, user_dao=users)
+    assert facade.find_user_by_id("u1").username == "ayesha"
+    assert facade.find_users().total == 1
+    assert facade.save_profile_photo("u1", b"img") and facade.find_profile_photo("u1") == b"img"
+    assert facade.delete_profile_photo("u1") and facade.find_profile_photo("u1") is None
+
+
+def test_data_facade_without_a_user_dao_says_so():
+    from backend.auth_exceptions import AuthError
+    from backend.data.data_facade import DataFacade
+
+    with pytest.raises(AuthError, match="not set up"):
+        DataFacade(gemini_client=None).find_users()
