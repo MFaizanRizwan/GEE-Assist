@@ -24,6 +24,7 @@ from backend.business.analysis.raster_engine import (
     MinMaxPass,
     Period,
     RasterEngine,
+    order_periods,
     ScenePass,
 )
 from backend.business.analysis.sensors import PRODUCT_BANDS, resolve_satellite
@@ -105,7 +106,7 @@ class BaseAnalysis(IAnalysis):
         backend: ComputeBackend = params.get("_backend") or cpu_backend()
         compare = list(params.get("_compare_with") or [])
         primary = make_period(dataset)
-        periods = [primary] + [make_period(other) for other in compare]
+        periods = order_periods(primary, [make_period(other) for other in compare])  # oldest first
         for key in processes:
             formula = self._formulas[key]
             reason = self._why_not(formula, primary)
@@ -114,7 +115,7 @@ class BaseAnalysis(IAnalysis):
             if len(periods) < formula.periods:
                 raise AnalysisError(f"{key} compares {formula.periods} datasets of the same place: choose an "
                                     "earlier dataset to compare with.")
-            for other in periods[1:]:
+            for other in (period for period in periods if period is not primary):
                 other_reason = self._why_not(formula, other) if formula.periods > 1 else None
                 if other_reason:
                     raise AnalysisError(f"{key}: {Path(other.dataset.path).stem}: {other_reason}")
@@ -123,14 +124,14 @@ class BaseAnalysis(IAnalysis):
         notes: list[str] = []
         started = time.perf_counter()
         try:
-            metrics, layers = self._run_on(backend, periods, processes, user_params, output, params, notes)
+            metrics, layers = self._run_on(backend, periods, primary, processes, user_params, output, params, notes)
         except Exception as exc:
             if not (backend.uses_gpu and _is_out_of_memory(exc)):
                 raise
             backend.free()
             notes.append("The GPU ran out of memory, so this analysis ran on the CPU.")
             backend = cpu_backend(backend.device.gpus, backend.device.reason)
-            metrics, layers = self._run_on(backend, periods, processes, user_params, output, params, notes)
+            metrics, layers = self._run_on(backend, periods, primary, processes, user_params, output, params, notes)
         result = ResultDTO(
             id=uuid.uuid4().hex[:12], category=self.CATEGORY, processes=list(processes), metrics=metrics,
             output_path=output, created_at=datetime.now().isoformat(timespec="seconds"), dataset=dataset,
@@ -141,7 +142,7 @@ class BaseAnalysis(IAnalysis):
         return result
 
     # ------------------------------------------------------------- running
-    def _run_on(self, backend, periods, processes, user_params, output, params, notes):
+    def _run_on(self, backend, periods, primary, processes, user_params, output, params, notes):
         layers: list[LayerSpec] = []
         passes: list[ScenePass] = []
         accumulators: list[Accumulator] = []
@@ -155,7 +156,7 @@ class BaseAnalysis(IAnalysis):
             passes += [p for p in new_passes if p.name not in {q.name for q in passes}]
             known = {_identity(a) for a in accumulators}
             accumulators += [a for a in new_accumulators if _identity(a) not in known]
-        with RasterEngine(periods, backend, self.config.block_rows) as engine:
+        with RasterEngine(periods, backend, self.config.block_rows, reference=primary) as engine:
             metrics = engine.run(layers, output, user_params, passes, accumulators, params.get("_on_progress"))
         return metrics, layers
 
