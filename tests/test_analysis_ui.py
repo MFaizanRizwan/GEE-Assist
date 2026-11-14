@@ -368,3 +368,31 @@ def test_switching_analyses_never_opens_stray_windows(page):
     finally:
         app.removeEventFilter(watch)
     assert watch.opened == []
+
+
+def test_save_result_saves_in_the_projects_analysis_folder_without_asking(page, tmp_path, monkeypatch):
+    from PyQt6.QtWidgets import QFileDialog
+
+    from backend.dto.project_dto import ProjectDTO
+
+    view, facade = page
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", lambda *a, **k: pytest.fail("must not ask where to save"))
+    project = ProjectDTO(id="p1", name="MyProject", folder=str(tmp_path / "MyProject"))
+    (tmp_path / "MyProject" / "analysis").mkdir(parents=True)
+    (tmp_path / "MyProject" / "analysis" / "result.tif").write_bytes(b"an earlier result")
+    facade.get_current_project.return_value = project
+    view.run()
+    _wait(lambda: view.layers)
+    view.save_button.click()
+    _wait(lambda: view.result.saved)
+    saved_to = facade.save_analysis_result.call_args.args[1]
+    assert saved_to == str(tmp_path / "MyProject" / "analysis" / "result_2.tif")  # the earlier one is kept
+
+
+def test_save_result_needs_an_open_project(page):
+    view, facade = page
+    facade.get_current_project.return_value = None
+    view.run()
+    _wait(lambda: view.layers)
+    view.save_button.click()
+    assert "Open a project" in view.banner.text() and not facade.save_analysis_result.called
