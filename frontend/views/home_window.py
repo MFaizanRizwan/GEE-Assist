@@ -261,6 +261,7 @@ class HomeWindow(QMainWindow):
         self.signup_details_action.triggered.connect(self.show_signup_details)
         self.dashboard.open_query_input.connect(self.show_query_input)
         self.dashboard.open_downloads.connect(self.show_downloads)
+        self.dashboard.open_analysis.connect(self.show_analysis)
         self.query_input_button.clicked.connect(self.show_query_input)
         self.downloads_button.clicked.connect(self.show_downloads)
         self.analysis_button.clicked.connect(self.show_analysis)
