@@ -106,7 +106,19 @@ def test_unknown_values_are_refused(view):
 def test_analysis_none_means_download_only(view):
     view.set_analysis("Water", ["NDWI"])
     view.set_analysis("", [])
-    assert view.collect_form().analysis_type == "" and view.processes_field.isHidden()
+    form = view.collect_form()
+    assert form.analysis_type == "" and form.processes == []
+
+
+def test_the_page_has_no_analysis_section(view):
+    """Analyses are run on the Analysis page; the request form only says what to download."""
+    from PyQt6.QtWidgets import QLabel
+
+    texts = [label.text() for label in view.findChildren(QLabel)]
+    assert not any(text.startswith("Analysis") for text in texts)
+    assert view.collect_form().analysis_type == ""  # the form on screen downloads only
+    view.reset()
+    assert view.collect_form().processes == []
 
 
 def test_a_drawn_area_switches_to_draw_mode(view):
