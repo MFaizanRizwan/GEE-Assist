@@ -71,6 +71,11 @@ class IDownloadService(ABC):
         """Stop waiting for the Earth Engine browser sign-in."""
 
     @abstractmethod
+    def save_copy(self, job: DownloadJobDTO, folder: str) -> str:
+        """Copy a finished download's GeoTIFF into ``folder`` (the project keeps its own); returns the copy's path.
+        An existing file there is never overwritten: the copy is then named ``<name>_2.tif``, ``_3`` ..."""
+
+    @abstractmethod
     def is_busy_in(self, folder: str) -> bool:
         """True while a download into ``folder`` (or a folder inside it) is running or waiting to run."""
 

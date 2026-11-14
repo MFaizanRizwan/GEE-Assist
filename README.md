@@ -101,7 +101,8 @@ As in other desktop apps, you work inside a project. A project is a folder:
   refused while one of its downloads is running (pause it first).
 - **Close** the open project from the dashboard card or the File menu; signing out closes it too.
 - A **download needs an open project**: the form's "Save to folder" always shows the project's
-  `downloads` folder. Starting a download without a project asks you to create or open one first.
+  `downloads` folder (use **Save to…** on the Downloads page to copy a dataset elsewhere). The
+  parameter form only says what to download; analyses are chosen and run on the Analysis page. Starting a download without a project asks you to create or open one first.
 - **Analyses run inside the open project**: each run is recorded in `analysis_results.json` (what
   ran, when, its numbers, and the GeoTIFF if you saved it; paths inside the project are stored
   relative to it, so moving the project keeps them valid). **Save result** puts the GeoTIFF in the
@@ -202,6 +203,9 @@ How it works:
   `<satellite>_<lon>_<lat>_<start date>_<end date>`: the centre of the AOI and the request's dates, e.g.
   `Sentinel-2_73.8231_33.2334_2023-01-01_2023-12-31/Sentinel-2_73.8231_33.2334_2023-01-01_2023-12-31.tif`.
   The same request downloaded again gets `_2`, `_3`, ... at the end.
+- **Save to…** on a finished download copies its GeoTIFF into any folder you choose (a USB drive, a
+  shared folder, ...). The project keeps its own copy, so the Analysis page still finds it; an
+  existing file there is never overwritten (the copy gets `_2`, `_3`, ...).
 - Pause keeps finished parts; Start continues where it stopped, even after closing the app.
   Cancel deletes the files. Failed chunks are retried 3 times, then **Retry** re-runs only them.
 

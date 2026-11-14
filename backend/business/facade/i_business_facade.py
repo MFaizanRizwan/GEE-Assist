@@ -189,6 +189,10 @@ class IBusinessFacade(ABC):
     def list_downloads(self) -> list[DownloadJobDTO]: ...
 
     @abstractmethod
+    def save_download_copy(self, job: DownloadJobDTO, folder: str) -> str:
+        """Copy a finished download's GeoTIFF into a folder the user chose; returns the copy's path."""
+
+    @abstractmethod
     def get_chunk_size_mb(self) -> int: ...
 
     @abstractmethod

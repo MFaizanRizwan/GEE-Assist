@@ -57,7 +57,6 @@ from frontend.widgets.aoi_map_widget import AoiMapWidget
 from frontend.widgets.query_assistant import QueryAssistant
 from frontend.widgets.form_parts import (
     CheckComboBox,
-    CheckGrid,
     StatusBanner,
     field_row,
     hint_label,
@@ -71,19 +70,11 @@ from frontend.workers.task_worker import run_task
 AOI_FILE, AOI_DRAW = 0, 1
 NO_SHAPE_TEXT = "No shape drawn yet."
 NO_FILE_TEXT = "No file imported."
-NO_ANALYSIS_TEXT = "None (download only)"
-PROCESS_COLUMNS = 2
 
 
 # ---------------------------------------------------------------------- helpers
 def _qdate(value) -> QDate:
     return QDate(value.year, value.month, value.day)
-
-
-def _set_combo_item_enabled(combo: QComboBox, index: int, enabled: bool, tooltip: str = "") -> None:
-    item = combo.model().item(index)
-    item.setEnabled(enabled)
-    item.setToolTip(tooltip)
 
 
 def _segment_button(text: str, position: str) -> QPushButton:
@@ -106,7 +97,8 @@ class ParameterFormView(QWidget):
     def __init__(self, facade: IBusinessFacade, parent=None):
         super().__init__(parent)
         self._facade = facade
-        self._project_downloads = ""  # the open project's downloads folder: every download goes there
+        self._project_downloads = ""
+        self._analysis: tuple[str, list[str]] = ("", [])  # set only by gkonsol; the page is download-only  # the open project's downloads folder: every download goes there
         self._imported_aoi: str = ""
         self._imported_name: str = ""
         self._drawn_aoi: str = ""  # GeoJSON of the rectangle / circle / polygon on the map
@@ -144,7 +136,6 @@ class ParameterFormView(QWidget):
         content_layout.addWidget(self._build_dataset_group())
         content_layout.addWidget(self._build_aoi_group())
         content_layout.addLayout(time_and_output)
-        content_layout.addWidget(self._build_analysis_group())
         content_layout.addStretch(1)
 
         scroll = QScrollArea()
@@ -182,7 +173,6 @@ class ParameterFormView(QWidget):
         layout.addWidget(action_bar)
 
         self.dataset_combo.currentIndexChanged.connect(self._on_dataset_changed)
-        self.analysis_combo.currentIndexChanged.connect(self._on_analysis_changed)
         self._aoi_mode.idClicked.connect(self._on_aoi_mode_changed)
         self.import_button.clicked.connect(self._on_import_geojson)
         self.map_widget.bbox_drawn.connect(self._on_map_bbox_drawn)
@@ -426,26 +416,6 @@ class ParameterFormView(QWidget):
         body.addStretch(1)
         return card
 
-    def _build_analysis_group(self) -> QFrame:
-        card, body = section_card(
-            "Analysis (optional)",
-            "Leave as None to only download the data. Greyed-out options do not suit the selected dataset.",
-        )
-        self.analysis_combo = QComboBox()
-        self.analysis_combo.addItem(NO_ANALYSIS_TEXT, "")
-        for category in ANALYSIS_CATEGORIES:
-            self.analysis_combo.addItem(category, category)
-        self.processes_grid = CheckGrid(PROCESS_COLUMNS)
-        self.processes_field = labelled(
-            "Processes", self.processes_grid, self._error_label("processes", self.processes_grid)
-        )
-        body.addLayout(field_row(
-            labelled("Analysis type", self.analysis_combo, self._error_label("analysis_type", self.analysis_combo)),
-            self.processes_field,
-            stretches=(2, 3),
-        ))
-        return card
-
     # ------------------------------------------------------------- behaviour
     def reset(self) -> None:
         today = QDate.currentDate()
@@ -467,7 +437,7 @@ class ParameterFormView(QWidget):
 
         self.crs_combo.setCurrentIndex(0)
         self.output_dir_edit.setText(self._project_downloads)
-        self.analysis_combo.setCurrentIndex(0)  # None: download only
+        self._analysis = ("", [])  # download only
 
         self._show_validation(ValidationDTO())
         self.status_banner.clear()
@@ -496,7 +466,8 @@ class ParameterFormView(QWidget):
         )
 
         self._apply_date_limits(info)
-        self._apply_analysis_compatibility(info)
+        if self._analysis[0] and self._analysis[0] not in info.supported_analyses:
+            self._analysis = ("", [])  # an analysis set from the terminal that this dataset cannot run
 
     def _apply_date_limits(self, info: DatasetInfo) -> None:
         lowest = _qdate(info.min_date)
@@ -505,37 +476,6 @@ class ParameterFormView(QWidget):
             edit.setDateRange(lowest, highest)  # out-of-range values are clamped
         if self.start_date_edit.date() >= self.end_date_edit.date():
             self.start_date_edit.setDate(self.end_date_edit.date().addMonths(-3))
-
-    def _apply_analysis_compatibility(self, info: DatasetInfo) -> None:
-        """Grey out analysis types the dataset cannot support (UC-03 8c)."""
-        self.analysis_combo.blockSignals(True)
-        for i in range(1, self.analysis_combo.count()):  # item 0 ("None") always stays available
-            category = self.analysis_combo.itemData(i)
-            enabled = category in info.supported_analyses
-            tooltip = "" if enabled else f"Not available for {info.name}"
-            _set_combo_item_enabled(self.analysis_combo, i, enabled, tooltip)
-        if self.analysis_combo.currentData() and self.analysis_combo.currentData() not in info.supported_analyses:
-            self.analysis_combo.setCurrentIndex(0)  # fall back to download only
-        self.analysis_combo.blockSignals(False)
-        self._on_analysis_changed()
-
-    def _on_analysis_changed(self) -> None:
-        """List every process of the category; grey out the unsupported ones."""
-        info = self._current_dataset()
-        category = self.analysis_combo.currentData() or ""
-        self.processes_field.setVisible(bool(category))
-        supported = info.supported_analyses.get(category, ()) if info else ()
-        previously_checked = set(self.processes_grid.checked())
-
-        self.processes_grid.set_items([
-            (
-                process,
-                process in previously_checked,
-                process in supported,
-                "" if process in supported or info is None else f"Not available for {info.name}",
-            )
-            for process in ANALYSIS_CATEGORIES.get(category, ())
-        ])
 
     # ------------------------------------------------------------------- AOI
     def _on_aoi_mode_changed(self, mode: int) -> None:
@@ -804,13 +744,6 @@ class ParameterFormView(QWidget):
             self.map_widget.set_shape(form.aoi, fit=True)  # the place's outline, not its bounding box
             filled.append(f"area ({name})")
 
-        analysis_index = self.analysis_combo.findData(form.analysis_type) if form.analysis_type else -1
-        if analysis_index > 0 and self.analysis_combo.model().item(analysis_index).isEnabled():
-            self.analysis_combo.setCurrentIndex(analysis_index)
-            self._on_analysis_changed()
-            self.processes_grid.set_checked(form.processes)
-            filled.append("analysis")
-
         return filled
 
     # --------------------------------------------- setting fields (gkonsol's "form set")
@@ -878,12 +811,11 @@ class ParameterFormView(QWidget):
         self._set_field_error("output_dir", "")
 
     def set_analysis(self, analysis_type: str, processes: list[str]) -> None:
-        index = self.analysis_combo.findData(analysis_type) if analysis_type else 0
-        if index < 0:
+        """Only for gkonsol's ``form set analysis``: the form on screen no longer has an analysis section
+        (analyses are run on the Analysis page). "" means download only."""
+        if analysis_type and analysis_type not in ANALYSIS_CATEGORIES:
             raise ValueError(f"Unknown analysis {analysis_type!r}")
-        self.analysis_combo.setCurrentIndex(index)
-        self._on_analysis_changed()
-        self.processes_grid.set_checked(processes)
+        self._analysis = (analysis_type, list(processes) if analysis_type else [])
 
     # ---------------------------------------------------------------- output
     def _on_browse_output(self) -> None:
@@ -938,8 +870,8 @@ class ParameterFormView(QWidget):
             end_date=self.end_date_edit.date().toPyDate(),
             crs=self.crs_combo.currentData(),
             output_dir=self.output_dir_edit.text().strip(),
-            analysis_type=self.analysis_combo.currentData() or "",
-            processes=self.processes_grid.checked(),
+            analysis_type=self._analysis[0],
+            processes=list(self._analysis[1]),
             source="form",
         )
 
@@ -969,7 +901,9 @@ class ParameterFormView(QWidget):
         if result.is_valid:
             self.status_banner.show_success(result.message)
         else:
-            self.status_banner.show_error(result.message)
+            # problems with fields not on the page (e.g. an analysis set from the terminal) go in the banner
+            elsewhere = [message for key, message in result.errors.items() if key not in self._error_labels]
+            self.status_banner.show_error(" ".join([result.message, *elsewhere]).strip())
 
     def _set_field_error(self, key: str, message: str) -> None:
         label = self._error_labels[key]

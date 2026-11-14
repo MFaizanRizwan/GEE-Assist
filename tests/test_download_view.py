@@ -287,3 +287,40 @@ def test_completed_download_can_be_viewed_when_its_file_is_there(view, facade, t
     view.view_requested.connect(asked.append)
     present.view_button.click()
     assert asked == [str(tif)]
+
+
+# ------------------------------------------------------------------ saving a copy elsewhere
+def test_a_finished_download_can_be_saved_to_a_chosen_folder(view, facade, tmp_path, monkeypatch):
+    import time
+
+    from backend.dto.download_dto import DatasetDTO
+
+    tif = tmp_path / "data.tif"
+    tif.write_bytes(b"tif")
+    done = _job("7", "completed", dataset=DatasetDTO("7", "", str(tif)), finished_at="2024-09-01T10:00:00")
+    facade.list_downloads.return_value = [done]
+    facade.save_download_copy.return_value = "E:/backup/data.tif"
+    view.refresh()
+    [row] = _rows(view.completed)
+    assert row.save_button.isEnabled() and row.save_button.text() == "Save to…"
+
+    monkeypatch.setattr(view, "choose_save_folder", lambda job: "")  # cancelled
+    row.save_button.click()
+    facade.save_download_copy.assert_not_called()
+
+    monkeypatch.setattr(view, "choose_save_folder", lambda job: "E:/backup")
+    row.save_button.click()
+    deadline = time.monotonic() + 5
+    while "Saved a copy" not in view.banner.text() and time.monotonic() < deadline:
+        QApplication.processEvents()
+    facade.save_download_copy.assert_called_once()
+    assert facade.save_download_copy.call_args.args[1] == "E:/backup"
+    assert view.banner.text() == "Saved a copy to E:/backup/data.tif"
+
+
+def test_a_missing_file_cannot_be_saved(app, tmp_path):
+    from backend.dto.download_dto import DatasetDTO
+
+    row = CompletedRow(_job("8", "completed", dataset=DatasetDTO("8", "", str(tmp_path / "gone.tif"))))
+    assert not row.save_button.isEnabled()
+    row.deleteLater()

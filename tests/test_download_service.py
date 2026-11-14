@@ -518,3 +518,26 @@ def test_relocating_a_paused_download_lets_it_resume(env):
     done = _wait(service, job, JOB_COMPLETED)
     assert Path(done.dataset.path).exists() and "New" in Path(done.dataset.path).parts
     assert _strip_values(done) == [1, 2]
+
+
+# ------------------------------------------------------------------ a copy in another folder
+def test_a_finished_download_is_copied_to_another_folder(env):
+    make, data, tmp_path = env
+    service = make()
+    job = _wait(service, service.start_download(_form(tmp_path)), JOB_COMPLETED)
+    first = Path(service.save_copy(job, str(tmp_path / "backup")))
+    assert first.read_bytes() == Path(job.dataset.path).read_bytes()
+    assert first.name == Path(job.dataset.path).name and Path(job.dataset.path).exists()  # the project keeps its own
+    second = Path(service.save_copy(job, str(tmp_path / "backup")))
+    assert second.name == f"{Path(job.dataset.path).stem}_2.tif"  # never overwrites
+    assert not list((tmp_path / "backup").glob("*.part"))
+
+
+def test_only_finished_downloads_can_be_copied(env):
+    make, data, tmp_path = env
+    data.gate = threading.Event()
+    service = make()
+    job = service.start_download(_form(tmp_path))
+    with pytest.raises(ValidationError, match="Only a finished download"):
+        service.save_copy(job, str(tmp_path / "backup"))
+    data.gate.set()
