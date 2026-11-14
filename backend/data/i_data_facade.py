@@ -5,6 +5,7 @@ from typing import Optional
 
 from backend.data.clients.i_gee_client import ProgressCallback, StopCheck
 from backend.dto import CheckDTO, ChunkDTO, FormDTO, PlaceDTO
+from backend.dto.analysis_dto import FormulaDTO
 
 
 class IDataFacade(ABC):
@@ -57,3 +58,15 @@ class IDataFacade(ABC):
     @abstractmethod
     def cancel_gee_sign_in(self) -> None:
         """Stop waiting for the Earth Engine browser sign-in (delegates to IGEEClient)."""
+
+    @abstractmethod
+    def list_formulas(self) -> list[FormulaDTO]:
+        """Every spectral index and method, in category order (delegates to IFormulaDAO)."""
+
+    @abstractmethod
+    def get_formula(self, key: str) -> FormulaDTO | None:
+        """The formula with this key or alias, or None (delegates to IFormulaDAO)."""
+
+    @abstractmethod
+    def formula_categories(self) -> list[tuple[str, str]]:
+        """(category, what it is for), in display order (delegates to IFormulaDAO)."""
