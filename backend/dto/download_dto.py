@@ -71,6 +71,11 @@ class DatasetDTO:
     bands: list[str] = field(default_factory=list)
     time_periods: int = 1         # composites over the date range count as one period
     size_bytes: int = 0
+    # Shown when choosing a dataset to analyse (from the download name, see naming.py).
+    name: str = ""                # e.g. Sentinel-2_73.8231_33.2334_2023-01-01_2023-12-31
+    satellite: str = ""           # e.g. "Sentinel-2"
+    start_date: str = ""          # "YYYY-MM-DD"
+    end_date: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
