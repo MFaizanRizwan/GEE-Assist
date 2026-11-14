@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Generator
 
 from backend.auth_exceptions import AuthError
-from backend.config import DEFAULT_DOWNLOAD_DIR
 from backend.config.download_settings import DownloadSettingsStore
 from backend.config.llm import load_llm_settings
 from backend.config.settings import PROJECT_ROOT, get_settings
@@ -25,6 +24,7 @@ from frontend.gkonsol.history import STORE_FILE
 from frontend.gkonsol.parser import Args, UsageError
 from frontend.gkonsol.ports import PAGES, Context
 from frontend.gkonsol.text import Span
+from frontend.project_paths import current_project, downloads_folder
 
 GROUP = "App"
 LOW_DISK_BYTES = 5_000_000_000   # warn below 5 GB free
@@ -107,6 +107,7 @@ def _config(ctx: Context, args: Args) -> None:
     settings = get_settings()
     llm = load_llm_settings()
     downloads = DownloadSettingsStore().load()
+    project = current_project(ctx.facade)
     ctx.out.heading("Settings")
     ctx.out.pairs([
         ("Auth server", f"{settings.auth_api_url}  (AUTH_API_URL)"),
@@ -115,7 +116,8 @@ def _config(ctx: Context, args: Args) -> None:
         ("Earth Engine project", settings.gee_project or Span("not set  (GEE_PROJECT)", text.WARNING)),
         ("Gemini model", f"{llm.model}  (GEMINI_MODEL)"),
         ("Gemini API key", Span("set", text.SUCCESS) if llm.api_key else Span("not set  (GEMINI_API_KEY)", text.WARNING)),
-        ("Download folder", str(DEFAULT_DOWNLOAD_DIR)),
+        ("Project", project.folder if project is not None else Span("none open  (File > New project)", text.WARNING)),
+        ("Download folder", downloads_folder(ctx.facade)),
         ("Chunk size", f"{downloads.chunk_size_mb} MB"),
         ("Retries per chunk", str(downloads.retry_limit)),
         ("Theme", appearance.THEMES.get(palette.THEME, palette.THEME)),
@@ -143,7 +145,7 @@ def _doctor(ctx: Context, args: Args) -> Generator:
     checks.append(CheckDTO("Gemini", CHECK_OK, "GEMINI_API_KEY is set.") if load_llm_settings().api_key
                   else CheckDTO("Gemini", CHECK_WARN, "GEMINI_API_KEY is not set: 'ask' fills the form only from "
                                 "what it recognises itself.", "Create a key at https://aistudio.google.com/apikey"))
-    checks.append(_folder_check(Path(ctx.form.current().output_dir or DEFAULT_DOWNLOAD_DIR)))
+    checks.append(_folder_check(Path(downloads_folder(ctx.facade))))
     print_checks(ctx, checks)
 
     ctx.out.print(Span("Earth Engine", text.BOLD))
