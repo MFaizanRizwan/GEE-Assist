@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import time
 import uuid
+from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -267,6 +268,8 @@ class BaseAnalysis(IAnalysis):
             "compared_with": [other.path for other in compare],
             "params": {k: v for k, v in params.items() if isinstance(v, (int, float, str, bool))},
             "metrics": result.metrics, "layers": [layer.key for layer in result.layers], "notes": result.notes,
+            # how each band is coloured on the Analysis page, so the viewer can show it the same way
+            "styles": [asdict(layer) for layer in result.layers],
         }
         try:
             Path(result.output_path).with_suffix(".json").write_text(json.dumps(summary, indent=2), encoding="utf-8")

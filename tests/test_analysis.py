@@ -526,3 +526,11 @@ def test_many_processes_are_shortened_in_the_name():
     assert len(part) <= PROCESSES_IN_NAME and part.startswith("NDVI_EVI_SAVI")
     shown = part.split("_and_")[0].split("_")
     assert part.endswith(f"_and_{len(many) - len(shown)}_more") and shown == many[:len(shown)]
+
+
+def test_the_summary_keeps_how_each_layer_is_coloured(service, tmp_path):
+    dataset = service.describe_dataset(s2_file(tmp_path))
+    result = service.run_analysis(dataset, AnalysisRequestDTO("Vegetation", ["NDVI"]))
+    summary = json.loads(Path(result.output_path).with_suffix(".json").read_text())
+    [ndvi] = summary["styles"]
+    assert (ndvi["key"], ndvi["style"], ndvi["low"], ndvi["high"]) == ("NDVI", "vegetation", -0.2, 0.8)
