@@ -10,12 +10,13 @@ from backend.business.request import RequestService
 from backend.business.user import UserService
 from backend.config import DEFAULT_DOWNLOAD_DIR, DownloadSettingsStore
 from backend.config.llm import load_llm_settings
-from backend.config.settings import PROFILE_PHOTO_DIR, get_settings
+from backend.config.settings import PROFILE_PHOTO_DIR, PROJECT_HISTORY_FILE, get_settings
 from backend.data.auth_session import AuthSession
 from backend.data.clients.auth_api_client import AuthApiClient
 from backend.data.clients.gee_client import GEEClient
 from backend.data.clients.gemini_client import GeminiClient
 from backend.data.clients.nominatim_client import NominatimClient
+from backend.data.dao.project_dao import ProjectDAO
 from backend.data.dao.user_dao import UserDAO
 from backend.data.data_facade import DataFacade
 from backend.data.session_store import KeyringSessionStore
@@ -32,6 +33,7 @@ def build_business_facade() -> IBusinessFacade:
         gemini_client=GeminiClient(api_key=llm.api_key, model=llm.model),
         gee_client=GEEClient(project=settings.gee_project),
         user_dao=UserDAO(auth_api, session, PROFILE_PHOTO_DIR),
+        project_dao=ProjectDAO(PROJECT_HISTORY_FILE),  # project folders and their history, on this computer
         geocoding_client=NominatimClient(),
     )
     user_service = UserService(
