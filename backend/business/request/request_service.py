@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import json
 import re
+import uuid
 from dataclasses import replace
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 from backend.business.request.geojson_utils import (
@@ -14,13 +15,15 @@ from backend.business.request.geojson_utils import (
     validate_geometry,
 )
 from backend.business.request.i_request_service import IRequestService
+from backend.business.request.project_rules import clean_project_name, project_name_error
 from backend.business.request.query_entities import IEntityExtractor, QueryEntityExtractor, format_entity_hints
 from backend.business.request.query_interpretation import check_interpretation, ground_with_entities, has_form_values
 from backend.config import AUTO_UTM, COMPOSITE_METHODS, get_dataset
 from backend.config.limits import MAX_QUERY_LENGTH
 from backend.data.i_data_facade import IDataFacade
 from backend.dto import FormDTO, PlaceDTO, ValidationDTO
-from backend.exceptions import GeeAssistError, LLMServiceError, PlaceSearchError, ValidationError
+from backend.dto.project_dto import AnalysisRecordDTO, ProjectDTO
+from backend.exceptions import GeeAssistError, LLMServiceError, PlaceSearchError, ProjectError, ValidationError
 
 _EPSG_CODE = re.compile(r"^EPSG:\d{4,5}$")
 MAX_PLACE_NAME_LENGTH = 200
@@ -32,13 +35,15 @@ MAX_PLACE_VERTICES = 5000
 class RequestService(IRequestService):
     """Class diagram: RequestService (-dataFacade: IDataFacade).
 
-    The data facade reaches Gemini (Interpret Query) and, later, MongoDB (saveProject).
+    The data facade reaches Gemini (Interpret Query) and the project folders (saveProject).
+    It also keeps the open project, whose folder receives downloads and analysis results.
     """
 
     def __init__(self, data_facade: IDataFacade | None = None, entity_extractor: IEntityExtractor | None = None):
         self._data_facade = data_facade
         self._entity_extractor = entity_extractor or QueryEntityExtractor()
         self._kept_requests: list[FormDTO] = []
+        self._project: ProjectDTO | None = None
 
     # ------------------------------------------------------------------
     # UC-02 Enter Natural Language Query + Interpret Query (LLM)
@@ -256,5 +261,112 @@ class RequestService(IRequestService):
     def get_kept_requests(self) -> list[FormDTO]:
         return list(self._kept_requests)
 
+    # ------------------------------------------------------------------
+    # Projects
+    # ------------------------------------------------------------------
+    def save_project(self, project: ProjectDTO) -> bool:
+        return self._data().save_project(project)
+
+    def list_projects(self, user_id: str) -> list[ProjectDTO]:
+        return [p for p in self._data().find_projects_by_user(user_id) if Path(p.folder).is_dir()]
+
+    def create_project(self, name: str, location: str, owner_id: str = "") -> ProjectDTO:
+        name = clean_project_name(name)
+        if message := project_name_error(name):
+            raise ProjectError(message, "name")
+        location = (location or "").strip()
+        if not location:
+            raise ProjectError("Choose the folder to create the project in", "location")
+        parent = Path(location).expanduser()
+        if parent.exists() and not parent.is_dir():
+            raise ProjectError("This is a file, not a folder", "location")
+        folder = parent / name
+        self._check_free(folder)
+        now = _now()
+        project = ProjectDTO(id=uuid.uuid4().hex[:12], name=name, folder=str(folder.resolve()), owner_id=owner_id,
+                             created_at=now, last_opened_at=now)
+        self.save_project(project)
+        self._project = project
+        return project
+
+    def open_project(self, folder: str, owner_id: str = "") -> ProjectDTO:
+        path = Path(folder).expanduser()
+        if not path.is_dir():
+            raise ProjectError(f"The folder {path} no longer exists. It may have been moved or deleted.")
+        found = self._data().load_project_folder(str(path))
+        if found is None:
+            raise ProjectError(f"{path} is not a GEE-Assist project. Choose a folder made with New project.")
+        project = replace(found, owner_id=owner_id or found.owner_id, last_opened_at=_now())
+        self.save_project(project)  # remembered as recent; also restores missing sub-folders
+        self._project = project
+        return project
+
+    def rename_project(self, new_name: str) -> ProjectDTO:
+        project = self._require_project()
+        name = clean_project_name(new_name)
+        if message := project_name_error(name):
+            raise ProjectError(message, "name")
+        if name == project.name:
+            return project
+        target = Path(project.folder).parent / name
+        if name.lower() != project.name.lower():  # only the letter case changes: the same folder
+            self._check_free(target)
+        self._project = self._data().move_project(replace(project, name=name), str(target))
+        return self._project
+
+    def move_project(self, new_location: str) -> ProjectDTO:
+        project = self._require_project()
+        location = (new_location or "").strip()
+        if not location:
+            raise ProjectError("Choose the folder to move the project to", "location")
+        parent = Path(location).expanduser().resolve()
+        current = Path(project.folder).resolve()
+        target = parent / project.name
+        if target == current:
+            return project
+        if current == parent or current in parent.parents:
+            raise ProjectError("A project cannot be moved into its own folder", "location")
+        self._check_free(target)
+        self._project = self._data().move_project(project, str(target))
+        return self._project
+
+    def close_project(self) -> None:
+        self._project = None
+
+    def get_current_project(self) -> ProjectDTO | None:
+        return self._project
+
+    def record_analysis_result(self, result) -> AnalysisRecordDTO:
+        project = self._require_project()
+        record = AnalysisRecordDTO.from_result(result, project)
+        self._data().save_analysis_record(project, record)
+        return record
+
+    def get_analysis_results(self, project: ProjectDTO) -> list[AnalysisRecordDTO]:
+        return self._data().find_analysis_records(project)
+
+    def _require_project(self) -> ProjectDTO:
+        if self._project is None:
+            raise ProjectError("Create or open a project first.")
+        return self._project
+
+    def _check_free(self, folder: Path) -> None:
+        """The project folder must not exist yet (an empty folder is fine)."""
+        if not folder.exists():
+            return
+        if self._data().load_project_folder(str(folder)) is not None:
+            raise ProjectError(f"There is already a project called '{folder.name}' there. Open it instead.", "name")
+        if not folder.is_dir() or any(folder.iterdir()):
+            raise ProjectError(f"A folder called '{folder.name}' already exists there. Choose another name.", "name")
+
+    def _data(self) -> IDataFacade:
+        if self._data_facade is None:
+            raise ProjectError("Projects are not set up in this build.")
+        return self._data_facade
+
     def _keep(self, form: FormDTO) -> None:
         self._kept_requests.append(form)
+
+
+def _now() -> str:
+    return datetime.now().isoformat(timespec="seconds")

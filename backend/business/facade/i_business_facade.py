@@ -7,6 +7,7 @@ from backend.dto import CheckDTO, DownloadJobDTO, FormDTO, PlaceDTO, ValidationD
 from backend.dto.analysis_dto import AnalysisOptionDTO, AnalysisRequestDTO, ComputeDeviceDTO, FormulaDTO
 from backend.dto.download_dto import DatasetDTO
 from backend.dto.map_dto import MapLayerDTO, RasterInfoDTO, RasterViewDTO, ViewPresetDTO
+from backend.dto.project_dto import AnalysisRecordDTO, ProjectDTO
 from backend.dto.result_dto import ResultDTO
 from backend.dto.user_dto import (
     GoogleSignInDTO,
@@ -127,9 +128,43 @@ class IBusinessFacade(ABC):
     @abstractmethod
     def get_kept_requests(self) -> list[FormDTO]: ...
 
+    # ------------------------------------------------------------- projects
+    @abstractmethod
+    def save_project(self, project: ProjectDTO) -> bool: ...
+
+    @abstractmethod
+    def list_projects(self, user_id: str | None = None) -> list[ProjectDTO]:
+        """The user's projects (the signed-in user's by default), most recently opened first."""
+
+    @abstractmethod
+    def create_project(self, name: str, location: str) -> ProjectDTO:
+        """Make ``<location>/<name>`` with ``downloads/`` and ``analysis/`` folders, and open it."""
+
+    @abstractmethod
+    def open_project(self, folder: str) -> ProjectDTO: ...
+
+    @abstractmethod
+    def rename_project(self, new_name: str) -> ProjectDTO:
+        """Rename the open project and its folder (not while one of its downloads is running)."""
+
+    @abstractmethod
+    def move_project(self, new_location: str) -> ProjectDTO:
+        """Move the open project's folder (not while one of its downloads is running)."""
+
+    @abstractmethod
+    def close_project(self) -> None: ...
+
+    @abstractmethod
+    def get_current_project(self) -> ProjectDTO | None: ...
+
+    @abstractmethod
+    def get_analysis_results(self, project: ProjectDTO) -> list[AnalysisRecordDTO]:
+        """The project's analysis results, newest first."""
+
     # ------------------------------------------------------------- download (UC-05)
     @abstractmethod
-    def start_download(self, form: FormDTO) -> DownloadJobDTO: ...
+    def start_download(self, form: FormDTO) -> DownloadJobDTO:
+        """Download into the open project's downloads folder. ProjectError if no project is open."""
 
     @abstractmethod
     def get_download_progress(self, job: DownloadJobDTO) -> DownloadJobDTO: ...

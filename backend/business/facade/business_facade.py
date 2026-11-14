@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+from dataclasses import replace
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -14,8 +16,9 @@ from backend.dto import CheckDTO, DownloadJobDTO, FormDTO, PlaceDTO, ValidationD
 from backend.dto.analysis_dto import AnalysisOptionDTO, AnalysisRequestDTO, ComputeDeviceDTO, FormulaDTO
 from backend.dto.download_dto import JOB_COMPLETED, DatasetDTO
 from backend.dto.map_dto import MapLayerDTO, RasterInfoDTO, RasterViewDTO, ViewPresetDTO
+from backend.dto.project_dto import AnalysisRecordDTO, ProjectDTO
 from backend.dto.result_dto import ResultDTO
-from backend.exceptions import AnalysisError
+from backend.exceptions import AnalysisError, GeeAssistError, ProjectError
 from backend.dto.user_dto import (
     GoogleSignInDTO,
     NewUserDTO,
@@ -27,6 +30,8 @@ from backend.dto.user_dto import (
     VerificationStatusDTO,
 )
 
+
+logger = logging.getLogger(__name__)
 
 class BusinessFacade(IBusinessFacade):
     """Class diagram: BusinessFacade. Delegates to the services.
@@ -70,6 +75,7 @@ class BusinessFacade(IBusinessFacade):
 
     def log_out(self) -> None:
         self._user_service.log_out()
+        self._request_service.close_project()  # the next user starts without one
 
     def sign_up(self, data: SignupDTO) -> SignupResultDTO:
         return self._user_service.sign_up(data)
@@ -145,9 +151,69 @@ class BusinessFacade(IBusinessFacade):
     def get_kept_requests(self) -> list[FormDTO]:
         return self._request_service.get_kept_requests()
 
+    # ------------------------------------------------------------- projects
+    def save_project(self, project: ProjectDTO) -> bool:
+        return self._request_service.save_project(project)
+
+    def list_projects(self, user_id: str | None = None) -> list[ProjectDTO]:
+        user_id = user_id if user_id is not None else self._user_id()
+        return self._request_service.list_projects(user_id) if user_id else []
+
+    def create_project(self, name: str, location: str) -> ProjectDTO:
+        return self._request_service.create_project(name, location, self._user_id())
+
+    def open_project(self, folder: str) -> ProjectDTO:
+        return self._request_service.open_project(folder, self._user_id())
+
+    def rename_project(self, new_name: str) -> ProjectDTO:
+        return self._relocating(lambda: self._request_service.rename_project(new_name))
+
+    def move_project(self, new_location: str) -> ProjectDTO:
+        return self._relocating(lambda: self._request_service.move_project(new_location))
+
+    def close_project(self) -> None:
+        self._request_service.close_project()
+
+    def get_current_project(self) -> ProjectDTO | None:
+        return self._request_service.get_current_project()
+
+    def get_analysis_results(self, project: ProjectDTO) -> list[AnalysisRecordDTO]:
+        return self._request_service.get_analysis_results(project)
+
+    def _relocating(self, change: Callable[[], ProjectDTO]) -> ProjectDTO:
+        """Rename or move the open project; its saved downloads follow it."""
+        before = self._request_service.get_current_project()
+        if before is not None and self._download_service.is_busy_in(before.folder):
+            raise ProjectError("A download in this project is running. Pause it, or let it finish, "
+                               "before renaming or moving the project.")
+        after = change()
+        if before is not None and after.folder != before.folder:
+            self._download_service.relocate(before.folder, after.folder)
+        return after
+
+    def _user_id(self) -> str:
+        user = self._user_service.current_user
+        return user.id if user is not None else ""
+
+    def _require_project(self, why: str) -> ProjectDTO:
+        project = self._request_service.get_current_project()
+        if project is None:
+            raise ProjectError(f"Create or open a project first: {why}")
+        return project
+
+    def _record(self, result: ResultDTO) -> None:
+        """Keep the result in the open project's analysis_results.json; never lose the result over it."""
+        if self._request_service.get_current_project() is None:
+            return
+        try:
+            self._request_service.record_analysis_result(result)
+        except GeeAssistError:
+            logger.warning("Could not record the analysis result in the project", exc_info=True)
+
     # ------------------------------------------------------------- download (UC-05)
     def start_download(self, form: FormDTO) -> DownloadJobDTO:
-        return self._download_service.start_download(form)
+        project = self._require_project("datasets are downloaded into the project's downloads folder.")
+        return self._download_service.start_download(replace(form, output_dir=project.downloads_dir))
 
     def get_download_progress(self, job: DownloadJobDTO) -> DownloadJobDTO:
         return self._download_service.get_progress(job)
@@ -238,10 +304,15 @@ class BusinessFacade(IBusinessFacade):
 
     def run_analysis(self, dataset: DatasetDTO, request: AnalysisRequestDTO,
                      on_progress: Optional[Callable[[float], None]] = None) -> ResultDTO:
-        return self._analysis().run_analysis(dataset, request, on_progress)
+        self._require_project("analysis results are kept in the project.")
+        result = self._analysis().run_analysis(dataset, request, on_progress)
+        self._record(result)
+        return result
 
     def save_analysis_result(self, result: ResultDTO, path: str) -> ResultDTO:
-        return self._analysis().save_result(result, path)
+        saved = self._analysis().save_result(result, path)
+        self._record(saved)  # now with the saved file
+        return saved
 
     def discard_analysis_result(self, result: ResultDTO) -> None:
         if self._analysis_service is not None:
