@@ -115,7 +115,7 @@ class NewProjectDialog(ProjectDialog):
                          "A project is a folder for your work: downloaded datasets go into its downloads "
                          "folder and analysis results into its analysis folder.",
                          "Create project", "Creating…", parent)
-        name = self.add_field("name", FormField("Project name", "e.g. Lahore vegetation 2024"))
+        name = self.add_field("name", FormField("Project name", "", "Leave empty to use the name shown"))
         self.form.addWidget(name)
         location_field = self.add_field("location", FormField("Location", "Folder to create the project in"),
                                         location)
@@ -144,8 +144,16 @@ class NewProjectDialog(ProjectDialog):
         if folder:
             self.fields["location"].set_text(str(Path(folder)))
 
+    def suggested_name(self) -> str:
+        try:
+            return self._facade.suggest_project_name(self.fields["location"].text())
+        except GeeAssistError:
+            return ""
+
     def _update_preview(self) -> None:
-        name = " ".join(self.fields["name"].text().split())
+        suggested = self.suggested_name()
+        self.fields["name"].input.setPlaceholderText(suggested)
+        name = " ".join(self.fields["name"].text().split()) or suggested
         location = self.fields["location"].text().strip()
         self.preview.setText(f"The project folder will be:  {Path(location) / name}" if name and location else "")
 

@@ -159,6 +159,9 @@ class BusinessFacade(IBusinessFacade):
         user_id = user_id if user_id is not None else self._user_id()
         return self._request_service.list_projects(user_id) if user_id else []
 
+    def suggest_project_name(self, location: str) -> str:
+        return self._request_service.suggest_project_name(location)
+
     def create_project(self, name: str, location: str) -> ProjectDTO:
         return self._request_service.create_project(name, location, self._user_id())
 

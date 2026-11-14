@@ -137,6 +137,10 @@ class IBusinessFacade(ABC):
         """The user's projects (the signed-in user's by default), most recently opened first."""
 
     @abstractmethod
+    def suggest_project_name(self, location: str) -> str:
+        """The name a new project in ``location`` gets when none is typed: Project 1, Project 2, ..."""
+
+    @abstractmethod
     def create_project(self, name: str, location: str) -> ProjectDTO:
         """Make ``<location>/<name>`` with ``downloads/`` and ``analysis/`` folders, and open it."""
 

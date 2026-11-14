@@ -47,8 +47,13 @@ class IRequestService(ABC):
         """The user's projects whose folders still exist, most recently opened first."""
 
     @abstractmethod
+    def suggest_project_name(self, location: str) -> str:
+        """The name a project in ``location`` gets when none is given: Project 1, Project 2, ..."""
+
+    @abstractmethod
     def create_project(self, name: str, location: str, owner_id: str = "") -> ProjectDTO:
-        """Make ``<location>/<name>`` with its downloads and analysis folders, and open it."""
+        """Make ``<location>/<name>`` with its downloads and analysis folders, and open it.
+        An empty ``name`` means the suggested one (Project 1, Project 2, ...)."""
 
     @abstractmethod
     def open_project(self, folder: str, owner_id: str = "") -> ProjectDTO:
