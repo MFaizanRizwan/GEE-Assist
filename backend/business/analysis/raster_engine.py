@@ -216,6 +216,7 @@ class RasterEngine:
         self.backend = backend
         self.block_rows = max(16, block_rows)
         self._sources: list[Any] = []
+        self._wrapped: list = []  # files under a WarpedVRT
         self.width = self.height = 0
         self.crs = self.transform = None
         self.row_areas_km2 = np.zeros(0)
@@ -243,6 +244,7 @@ class RasterEngine:
                 if src.crs is None or self.crs is None:
                     raise AnalysisError(f"{Path(period.dataset.path).name} has no coordinates, so it cannot be "
                                         "lined up with the other dataset.")
+                self._wrapped.append(src)  # the VRT does not close the file it reads: we do
                 src = WarpedVRT(src, crs=self.crs, transform=self.transform, width=self.width,
                                 height=self.height, src_nodata=src.nodata, nodata=NODATA)
             self._sources.append(src)
@@ -250,9 +252,10 @@ class RasterEngine:
         return self
 
     def __exit__(self, *exc) -> None:
-        for src in self._sources:
+        for src in self._sources + self._wrapped:
             src.close()
         self._sources = []
+        self._wrapped = []
         self.backend.free()
 
     def read(self, period: int, band: str, row: int, height: int, scaled: bool = True) -> np.ndarray:
