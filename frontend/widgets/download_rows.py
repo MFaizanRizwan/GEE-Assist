@@ -225,10 +225,12 @@ class JobRow(QFrame):
 
 
 class CompletedRow(QFrame):
-    """A finished download: "View" shows its GeoTIFF; the green button opens its folder."""
+    """A finished download: "View" shows its GeoTIFF, "Save to…" copies it to a folder of the user's choice,
+    the green button opens its folder."""
 
     open_clicked = pyqtSignal(object)  # DownloadJobDTO
     view_clicked = pyqtSignal(object)  # DownloadJobDTO
+    save_clicked = pyqtSignal(object)  # DownloadJobDTO
 
     def __init__(self, job: DownloadJobDTO, parent: QWidget | None = None):
         super().__init__(parent)
@@ -246,6 +248,9 @@ class CompletedRow(QFrame):
         self.view_button = QPushButton("View", objectName="ViewButton")
         self.view_button.setFixedHeight(28)
         self.view_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.save_button = QPushButton("Save to…", objectName="ViewButton")
+        self.save_button.setFixedHeight(28)
+        self.save_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.open_button = QPushButton("▶", objectName="OpenButton")
         self.open_button.setFixedSize(30, 28)
         self.open_button.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -257,11 +262,14 @@ class CompletedRow(QFrame):
         layout.addSpacing(10)
         layout.addWidget(self.view_button)
         layout.addSpacing(6)
+        layout.addWidget(self.save_button)
+        layout.addSpacing(6)
         layout.addWidget(self.open_button)
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
 
         self.open_button.clicked.connect(lambda: self.open_clicked.emit(self.job))
         self.view_button.clicked.connect(lambda: self.view_clicked.emit(self.job))
+        self.save_button.clicked.connect(lambda: self.save_clicked.emit(self.job))
         self.update_job(job)
 
     def update_job(self, job: DownloadJobDTO) -> None:
@@ -275,3 +283,6 @@ class CompletedRow(QFrame):
         has_file = job.dataset is not None and Path(job.dataset.path).is_file()
         self.view_button.setEnabled(has_file)
         self.view_button.setToolTip("Show the downloaded GeoTIFF" if has_file else "The GeoTIFF is no longer there")
+        self.save_button.setEnabled(has_file)
+        self.save_button.setToolTip("Save a copy of the GeoTIFF in a folder you choose (the project keeps its own)"
+                                    if has_file else "The GeoTIFF is no longer there")

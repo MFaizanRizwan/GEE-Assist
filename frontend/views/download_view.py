@@ -11,9 +11,12 @@ keeps a continuous history (like Task Manager).
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from PyQt6.QtCore import Qt, QTimer, QUrl, pyqtSignal
 from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtWidgets import (
+    QFileDialog,
     QFrame,
     QGridLayout,
     QHBoxLayout,
@@ -264,6 +267,19 @@ class DownloadView(QWidget):
     def _open_job(self, job: DownloadJobDTO) -> None:
         QDesktopServices.openUrl(QUrl.fromLocalFile(job.folder))
 
+    def choose_save_folder(self, job: DownloadJobDTO) -> str:
+        return QFileDialog.getExistingDirectory(self, f"Save {job.name} to", str(Path.home()))
+
+    def save_copy(self, job: DownloadJobDTO) -> None:
+        """Copy the finished dataset to a folder the user chooses (copying a big GeoTIFF takes a while)."""
+        folder = self.choose_save_folder(job)
+        if not folder:
+            return
+        self.banner.show_info(f"Saving a copy of {job.name} to {folder}…")
+        run_task(self, self._facade.save_download_copy, job, folder,
+                 on_success=lambda path: self.banner.show_success(f"Saved a copy to {path}"),
+                 on_error=self._show_error)
+
     def change_chunk_size(self) -> None:
         current = self._facade.get_chunk_size_mb()
         size, accepted = QInputDialog.getInt(
@@ -334,6 +350,7 @@ class DownloadView(QWidget):
         else:
             row.open_clicked.connect(self._open_job)
             row.view_clicked.connect(lambda job: self.view_requested.emit(job.dataset.path))
+            row.save_clicked.connect(self.save_copy)
         return row
 
     def _remove_row(self, job_id: str) -> None:

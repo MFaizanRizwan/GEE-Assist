@@ -183,6 +183,35 @@ class DownloadService(IDownloadService):
                 self._delete_files(current)
             return self._snapshot(current)
 
+    def save_copy(self, job: DownloadJobDTO, folder: str) -> str:
+        with self._lock:
+            current = self._job(job)
+            dataset = current.dataset
+        if current.status != JOB_COMPLETED or dataset is None:
+            raise ValidationError("Only a finished download can be saved to another folder.")
+        source = Path(dataset.path)
+        if not source.is_file():
+            raise ValidationError(f"{source.name} is no longer there: it may have been moved or deleted.")
+        target_folder = Path(folder).expanduser()
+        if not str(folder).strip():
+            raise ValidationError("Choose a folder to save the dataset in.")
+        target = target_folder / source.name
+        number = 2
+        while target.exists():
+            if target.resolve() == source.resolve():
+                return str(target)  # it is already there
+            target = target_folder / f"{source.stem}_{number}{source.suffix}"
+            number += 1
+        try:
+            target_folder.mkdir(parents=True, exist_ok=True)
+            temporary = target.with_name(target.name + ".part")
+            shutil.copyfile(source, temporary)  # a half-copied file is never left under the real name
+            os.replace(temporary, target)
+        except OSError as exc:
+            Path(str(target) + ".part").unlink(missing_ok=True)
+            raise ValidationError(f"Could not save to {target_folder}: {exc.strerror or exc}") from exc
+        return str(target)
+
     def is_busy_in(self, folder: str) -> bool:
         with self._lock:
             return any(job.status in (JOB_RUNNING, JOB_QUEUED) and _is_under(job.folder, folder)

@@ -236,6 +236,9 @@ class BusinessFacade(IBusinessFacade):
     def list_downloads(self) -> list[DownloadJobDTO]:
         return self._download_service.list_jobs()
 
+    def save_download_copy(self, job: DownloadJobDTO, folder: str) -> str:
+        return self._download_service.save_copy(job, folder)
+
     def get_chunk_size_mb(self) -> int:
         return self._download_service.chunk_size_mb()
 
