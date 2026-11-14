@@ -98,3 +98,85 @@ def test_avatar_falls_back_to_initials(app):
     avatar.set_user(_user(), b"not an image")
     assert not avatar.has_photo and avatar.text() == "AK"
     avatar.deleteLater()
+
+
+class PhotoFacade:
+    """Keeps one photo in memory, like the DataFacade keeps it in a file."""
+
+    def __init__(self, user):
+        self.user, self.photo = user, None
+
+    def get_current_user(self):
+        return self.user
+
+    def get_profile_photo(self, user_id=None):
+        return self.photo
+
+    def set_profile_photo(self, path):
+        from backend.dto.validation_dto import ValidationDTO
+
+        data = open(path, "rb").read()
+        if not data.startswith(b"\x89PNG"):
+            result = ValidationDTO()
+            result.add_error("photo", "This file is not a supported image.")
+            return result
+        self.photo = data
+        return ValidationDTO(message="Your photo was updated. It is kept on this computer only.")
+
+    def remove_profile_photo(self):
+        self.photo = None
+        return True
+
+
+def _wait(condition, timeout=5.0):
+    import time
+
+    end = time.monotonic() + timeout
+    while time.monotonic() < end:
+        QApplication.processEvents()
+        if condition():
+            return True
+        time.sleep(0.01)
+    return False
+
+
+def test_choosing_and_removing_a_photo_updates_the_page(app, tmp_path):
+    facade = PhotoFacade(_user())
+    card = AccountView(facade)
+    card.set_user(_user())
+    assert not card.avatar.has_photo and card.change_photo.text() == "Add photo" and card.remove_photo.isHidden()
+    changed = []
+    card.user_changed.connect(changed.append)
+
+    image = tmp_path / "me.png"
+    image.write_bytes(_png())
+    card.choose_photo_file = lambda: str(image)
+    card.choose_photo()
+    assert _wait(lambda: card.avatar.has_photo)
+    assert not card.remove_photo.isHidden() and "this computer only" in card.banner.text() and changed
+
+    card.delete_photo()
+    assert _wait(lambda: not card.avatar.has_photo)
+    assert card.remove_photo.isHidden() and card.banner.text() == "Your photo was removed."
+    card.deleteLater()
+
+
+def test_a_file_that_is_not_an_image_is_refused(app, tmp_path):
+    card = AccountView(PhotoFacade(_user()))
+    card.set_user(_user())
+    text = tmp_path / "notes.txt"
+    text.write_text("hello")
+    card.choose_photo_file = lambda: str(text)
+    card.choose_photo()
+    assert _wait(lambda: card.banner.text() == "This file is not a supported image.")
+    assert not card.avatar.has_photo
+    card.deleteLater()
+
+
+def test_google_accounts_have_no_password_to_change(app):
+    card = AccountView(PhotoFacade(_user()))
+    card.set_user(_user(auth_provider="google"))
+    assert not card.change_password.isEnabled()
+    card.set_user(_user())
+    assert card.change_password.isEnabled()
+    card.deleteLater()
