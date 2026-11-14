@@ -45,3 +45,14 @@ class MapError(GeeAssistError):
 
 class AnalysisError(GeeAssistError):
     """An analysis cannot run: no dataset, a band it needs is missing, or the files cannot be read."""
+
+
+class ProjectError(GeeAssistError):
+    """A project cannot be created, opened, renamed or moved, or there is none open when one is needed.
+
+    ``field`` names the form field the problem is about (``name`` or ``location``), when there is one.
+    """
+
+    def __init__(self, message: str, field: str | None = None):
+        super().__init__(message)
+        self.field = field
