@@ -339,3 +339,32 @@ def test_analysis_table_opens_from_the_view_menu_only(window):
     assert not any("table" in name.lower() for name in names)
     window.menu_bar.view_analysis.trigger()
     assert window.current_page() is window.analysis
+
+
+def test_switching_analyses_never_opens_stray_windows(page):
+    """A card widget shown before it had a parent became a window of its own for a moment: on Windows the
+    app's window and logo flickered each time the analysis changed."""
+    from PyQt6.QtCore import QEvent, QObject
+    from PyQt6.QtWidgets import QWidget
+
+    class Windows(QObject):
+        def __init__(self):
+            super().__init__()
+            self.opened = []
+
+        def eventFilter(self, obj, event):
+            if event.type() in (QEvent.Type.Show, QEvent.Type.WinIdChange) and isinstance(obj, QWidget) \
+                    and obj.isWindow():
+                self.opened.append(obj.objectName() or type(obj).__name__)
+            return False
+
+    view, _ = page
+    watch = Windows()
+    app.installEventFilter(watch)
+    try:
+        for category in ("Vegetation", "LULC", "Water", "Vegetation"):
+            view.analysis_tiles[category].click()
+            QTest.qWait(20)
+    finally:
+        app.removeEventFilter(watch)
+    assert watch.opened == []
