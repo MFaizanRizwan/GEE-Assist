@@ -96,7 +96,7 @@ def _from_nvidia_smi(output: str) -> list[GpuDTO]:
 
 
 _INTEGRATED_AMD = re.compile(r"radeon graphics|vega \d+|radeon \d{3}m")  # APU graphics: Ryzen's built-in GPU
-_DEDICATED_AMD = re.compile(r"rx ?\d|radeon pro|firepro|instinct|radeon vii")
+_DEDICATED_AMD = re.compile(r"(?:^|\s)rx ?\d|radeon pro|firepro|instinct|radeon vii")
 
 
 def classify(name: str, vendor_hint: str = "", memory_bytes: int = 0) -> GpuDTO:
