@@ -15,33 +15,51 @@ from __future__ import annotations
 
 from backend.dto.analysis_dto import FormulaDTO
 
-# Categories in the order the table and the analysis page show them, with what each is for.
-CATEGORY_ORDER: tuple[str, ...] = (
-    "Vegetation",
-    "Moisture & drought",
-    "Water",
-    "Burn",
-    "Soil & salinity",
-    "Built-up & urban",
-    "Snow & ice",
-    "Thermal",
-    "Land cover",
-    "Transformations",
-    "SAR (radar)",
-)
+# The four analyses of the SRS (FR-06 to FR-09, class diagram: WaterAnalysis, VegetationAnalysis,
+# LSTAnalysis, LULCAnalysis), each made of sub-types, in display order.
+ANALYSIS_ORDER: tuple[str, ...] = ("Water", "Vegetation", "LST", "LULC")
+
+ANALYSIS_LABELS: dict[str, str] = {
+    "Water": "Water",
+    "Vegetation": "Vegetation",
+    "LST": "Land Surface Temperature",
+    "LULC": "Land Use / Land Cover",
+}
+
+ANALYSIS_DESCRIPTIONS: dict[str, str] = {
+    "Water": "Open water, water quality, flooding and water area, snow and ice.",
+    "Vegetation": "Plant greenness and chlorophyll, moisture and drought, fire and burn severity.",
+    "LST": "Surface temperature maps, its change over time and heat stress.",
+    "LULC": "Land-cover change, built-up land, soil and salinity, band transformations and radar.",
+}
+
+SUBTYPES: dict[str, tuple[str, ...]] = {
+    "Water": ("Water indices", "Water quality", "Water bodies & area", "Snow & ice"),
+    "Vegetation": ("Vegetation indices", "Moisture & drought", "Burn & fire"),
+    "LST": ("Surface temperature", "Temperature change", "Heat stress"),
+    "LULC": ("Land cover change", "Built-up & urban", "Soil & salinity", "Transformations", "Radar (SAR)"),
+}
+
+# Sub-types in the order the table and the analysis page show them, with what each is for.
+CATEGORY_ORDER: tuple[str, ...] = tuple(sub for major in ANALYSIS_ORDER for sub in SUBTYPES[major])
+ANALYSIS_OF: dict[str, str] = {sub: major for major, subs in SUBTYPES.items() for sub in subs}
 
 CATEGORY_DESCRIPTIONS: dict[str, str] = {
-    "Vegetation": "Greenness, vigour, chlorophyll and canopy structure of plants.",
-    "Moisture & drought": "Water held by vegetation and soil, and drought stress.",
-    "Water": "Open water, flooding, turbidity and algae in lakes and rivers.",
-    "Burn": "Burnt areas and how severely a fire changed the land.",
-    "Soil & salinity": "Bare soil, salt-affected land, minerals and crop residue.",
-    "Built-up & urban": "Buildings, roads and other impervious surfaces.",
+    "Water indices": "Indices that separate open water from land.",
+    "Water quality": "Turbidity, chlorophyll and floating algae in lakes and rivers.",
+    "Water bodies & area": "Water / land masks and the area of open water.",
     "Snow & ice": "Snow cover, glaciers and ice.",
-    "Thermal": "Land surface temperature and how it changes over time.",
-    "Land cover": "Changes between land-cover classes over time.",
+    "Vegetation indices": "Greenness, vigour, chlorophyll and canopy structure of plants.",
+    "Moisture & drought": "Water held by vegetation and soil, and drought stress.",
+    "Burn & fire": "Burnt areas and how severely a fire changed the land.",
+    "Surface temperature": "Land surface temperature maps from thermal bands.",
+    "Temperature change": "How surface temperature changed between dates.",
+    "Heat stress": "Temperature-based condition of vegetation.",
+    "Land cover change": "Changes between land-cover classes over time.",
+    "Built-up & urban": "Buildings, roads and other impervious surfaces.",
+    "Soil & salinity": "Bare soil, salt-affected land, minerals and crop residue.",
     "Transformations": "New axes built from all bands, that separate brightness, greenness and wetness.",
-    "SAR (radar)": "Sentinel-1 radar backscatter: works through clouds and at night.",
+    "Radar (SAR)": "Sentinel-1 radar backscatter: works through clouds and at night.",
 }
 
 
@@ -53,21 +71,25 @@ def _f(key: str, name: str, category: str, formula: str, bands: str = "", **more
     for name_ in ("params", "aliases"):
         if isinstance(more.get(name_), str):
             more[name_] = tuple(more[name_].split())
-    return FormulaDTO(key=key, name=name, category=category, formula=formula, bands=tuple(bands.split()),
-                      use_cases=use_cases, **more)
+    return FormulaDTO(key=key, name=name, category=category, formula=formula, analysis=ANALYSIS_OF[category],
+                      bands=tuple(bands.split()), use_cases=use_cases, **more)
 
 
-_VEG = "Vegetation"
+_VEG = "Vegetation indices"
 _DRY = "Moisture & drought"
-_WATER = "Water"
-_BURN = "Burn"
+_WATER = "Water indices"
+_QUALITY = "Water quality"
+_BODIES = "Water bodies & area"
+_BURN = "Burn & fire"
 _SOIL = "Soil & salinity"
 _URBAN = "Built-up & urban"
 _SNOW = "Snow & ice"
-_HEAT = "Thermal"
-_LC = "Land cover"
+_HEAT = "Surface temperature"
+_CHANGE = "Temperature change"
+_STRESS = "Heat stress"
+_LC = "Land cover change"
 _TRANSFORM = "Transformations"
-_SAR = "SAR (radar)"
+_SAR = "Radar (SAR)"
 
 _NO_TIME_SERIES = ("Not computed in GEE-Assist: it needs decades of monthly rainfall for each place, "
                    "not one satellite download.")
@@ -234,14 +256,14 @@ FORMULAS: tuple[FormulaDTO, ...] = (
        interpretation="< 35 drought stress; 35–50 fair; > 50 good condition.",
        note="Kogan's VCI uses each pixel's multi-year minimum and maximum. Here NDVImin and NDVImax are taken "
             "across the dataset's own pixels, so it compares places, not years."),
-    _f("TCI", "Temperature Condition Index (scene-relative)", _DRY,
+    _f("TCI", "Temperature Condition Index (scene-relative)", _STRESS,
        "100 × (BTmax − BT) / (BTmax − BTmin)", "thermal",
        use_cases="Heat stress on vegetation; Drought monitoring with VCI; Crop yield risk",
        value_range="0 to 100", reference="Kogan (1995)",
        description="Where each pixel's surface temperature sits between the hottest and coolest.",
        interpretation="Low values mean hot, stressful conditions.",
        note="Scene-relative: the hottest and coolest pixels of the dataset, not multi-year extremes."),
-    _f("VHI", "Vegetation Health Index (scene-relative)", _DRY, "0.5 × VCI + 0.5 × TCI", "nir red thermal",
+    _f("VHI", "Vegetation Health Index (scene-relative)", _STRESS, "0.5 × VCI + 0.5 × TCI", "nir red thermal",
        use_cases="Agricultural drought monitoring (NOAA STAR); Combined moisture and heat stress; Crop losses",
        value_range="0 to 100", reference="Kogan (1995)",
        description="Average of the vegetation (VCI) and temperature (TCI) condition indices.",
@@ -294,31 +316,31 @@ FORMULAS: tuple[FormulaDTO, ...] = (
        value_range="0 to ~5", reference="Shen & Li (2010)",
        description="Visible bands over infrared bands: high over water.",
        interpretation="> 1 usually water."),
-    _f("NDTI", "Normalized Difference Turbidity Index", _WATER, "(Red − Green) / (Red + Green)", "red green",
+    _f("NDTI", "Normalized Difference Turbidity Index", _QUALITY, "(Red − Green) / (Red + Green)", "red green",
        use_cases="Water turbidity and suspended sediment; River plumes; Reservoir siltation",
        value_range="−1 to 1", reference="Lacaux et al. (2007)",
        description="Suspended particles raise red reflectance relative to green.",
        interpretation="Higher means more turbid water (read over water pixels only)."),
-    _f("NDCI", "Normalized Difference Chlorophyll Index", _WATER, "(RE1 − Red) / (RE1 + Red)", "re1 red",
+    _f("NDCI", "Normalized Difference Chlorophyll Index", _QUALITY, "(RE1 − Red) / (RE1 + Red)", "re1 red",
        use_cases="Chlorophyll-a in lakes and coastal water; Algal blooms; Eutrophication monitoring",
        value_range="−1 to 1", reference="Mishra & Mishra (2012)",
        description="Chlorophyll in water absorbs red and reflects the red edge.",
        interpretation="Higher means more chlorophyll-a; > 0.2 often bloom conditions. Read over water only."),
-    _f("FAI", "Floating Algae Index", _WATER,
+    _f("FAI", "Floating Algae Index", _QUALITY,
        "NIR − (Red + (SWIR1 − Red) × (λNIR − λRed) / (λSWIR1 − λRed))", "nir red swir1",
        use_cases="Floating algae and Sargassum; Cyanobacteria scums; Floating vegetation on reservoirs",
        value_range="about −0.05 to 0.2", reference="Hu (2009)",
        description="NIR height above the line between red and SWIR: floating plants stand out from water.",
        interpretation="> 0 over water suggests floating algae or plants.",
        note="Hu used MODIS bands at 645, 859 and 1240 nm; here SWIR1 (~1610 nm) with wavelengths 665, 842, 1610 nm."),
-    _f("WaterBodyDetection", "Water body detection", _WATER,
+    _f("WaterBodyDetection", "Water body detection", _BODIES,
        "Water where MNDWI > t (or NDWI > t without SWIR); radar: VV < −16 dB; JRC: water class",
        "green", params="water_threshold",
        use_cases="Flood mapping; Lake and reservoir outlines; Wetland inventories",
        value_range="0 (land) or 1 (water)",
        description="Turns a water index into a water / land mask with a threshold t (0 by default).",
        interpretation="1 water, 0 land."),
-    _f("WaterAreaEstimation", "Water area estimation", _WATER, "Σ water pixels × pixel area", "green",
+    _f("WaterAreaEstimation", "Water area estimation", _BODIES, "Σ water pixels × pixel area", "green",
        params="water_threshold",
        use_cases="Reservoir storage trends; Flood extent in km²; Lake shrinkage",
        value_range="km²",
@@ -491,7 +513,7 @@ FORMULAS: tuple[FormulaDTO, ...] = (
        value_range="about −40 to 70 °C", reference="USGS Landsat C2; Wan (2014) MODIS",
        description="Temperature of the ground surface (not the air), from the thermal band.",
        interpretation="Built-up and bare land are hottest in the day; water and dense vegetation are cooler."),
-    _f("LSTTemporalAnalysis", "Land Surface Temperature change and trend", _HEAT,
+    _f("LSTTemporalAnalysis", "Land Surface Temperature change and trend", _CHANGE,
        "Change = LSTlast − LSTfirst;  Trend = least-squares slope of LST over time (°C / year)", "thermal",
        periods=2,
        use_cases="Warming trends; Urbanisation effects on heat; Seasonal temperature comparison",
