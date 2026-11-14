@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import types
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import numpy as np
@@ -421,3 +422,42 @@ def test_cpu_backend_moves_arrays_unchanged():
     backend: ComputeBackend = cpu_backend()
     array = np.arange(4.0)
     assert backend.to_host(backend.to_device(array)) is not None and backend.label() == "CPU"
+
+
+# ------------------------------------------------------------------ saving only on request
+def test_results_are_temporary_until_saved(service, tmp_path):
+    from backend.config import DEFAULT_ANALYSIS_DIR
+
+    dataset = service.describe_dataset(s2_file(tmp_path))
+    before = set(DEFAULT_ANALYSIS_DIR.glob("*")) if DEFAULT_ANALYSIS_DIR.exists() else set()
+    result = service.run_analysis(dataset, AnalysisRequestDTO("Vegetation", ["NDVI"]))
+    temporary = Path(result.output_path)
+    assert not result.saved and temporary.is_file() and temporary.with_suffix(".json").is_file()
+    assert DEFAULT_ANALYSIS_DIR not in temporary.parents
+    assert (set(DEFAULT_ANALYSIS_DIR.glob("*")) if DEFAULT_ANALYSIS_DIR.exists() else set()) == before
+
+    saved = service.save_result(result, str(tmp_path / "kept" / "my_ndvi"))
+    assert saved.saved and saved.output_path == str(tmp_path / "kept" / "my_ndvi.tif")
+    assert Path(saved.output_path).is_file() and (tmp_path / "kept" / "my_ndvi.json").is_file()
+    assert not temporary.exists()  # the temporary copy is gone
+    service.discard_result(saved)
+    assert Path(saved.output_path).is_file()  # saved results are never discarded
+
+
+def test_unsaved_results_can_be_discarded_and_are_cleaned_up(service, tmp_path):
+    dataset = service.describe_dataset(s2_file(tmp_path))
+    first = service.run_analysis(dataset, AnalysisRequestDTO("Vegetation", ["NDVI"]))
+    service.discard_result(first)
+    assert not Path(first.output_path).exists()
+    second = service.run_analysis(dataset, AnalysisRequestDTO("Water", ["NDWI"]))
+    folder = Path(second.output_path).parent
+    service.cleanup()
+    assert not folder.exists()
+    with pytest.raises(AnalysisError, match="no longer there"):
+        service.save_result(second, str(tmp_path / "late.tif"))
+
+
+def test_an_explicit_folder_counts_as_saved(service, tmp_path):
+    result = service.run_analysis(service.describe_dataset(s2_file(tmp_path)),
+                                  AnalysisRequestDTO("Vegetation", ["NDVI"], output_dir=str(tmp_path / "out")))
+    assert result.saved and Path(result.output_path).parent == tmp_path / "out"
