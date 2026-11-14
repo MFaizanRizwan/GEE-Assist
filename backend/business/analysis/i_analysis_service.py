@@ -32,3 +32,7 @@ class IAnalysisService(ABC):
 
     @abstractmethod
     def formula_categories(self) -> list[tuple[str, str]]: ...
+
+    @abstractmethod
+    def analysis_groups(self) -> list[tuple[str, str, str, tuple[str, ...]]]:
+        """(analysis, label, what it is for, its sub-types) of the four analyses."""

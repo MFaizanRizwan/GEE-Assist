@@ -1,7 +1,8 @@
 """Class diagram: AnalysisService (-dataFacade: IDataFacade, -analyses: list[IAnalysis]).
 
-Each analysis is configured with its category's formulas from the formula DAO (through
-the data facade). Before every run the compute device is chosen: a dedicated NVIDIA
+There are four analyses, as in the class diagram (water, vegetation, LST, LULC); each
+is configured with its formulas from the formula DAO (through the data facade), which
+are grouped into sub-types (e.g. vegetation: indices, moisture & drought, burn & fire). Before every run the compute device is chosen: a dedicated NVIDIA
 GPU through CuPy when there is one that works, otherwise the CPU.
 """
 
@@ -11,19 +12,12 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 from backend.business.analysis.base_analysis import read_band_names
-from backend.business.analysis.burn_analysis import BurnAnalysis
 from backend.business.analysis.compute_device import ComputeBackend, cached_gpus, select_backend
 from backend.business.analysis.i_analysis import IAnalysis
 from backend.business.analysis.i_analysis_service import IAnalysisService
 from backend.business.analysis.lst_analysis import LSTAnalysis
 from backend.business.analysis.lulc_analysis import LULCAnalysis
-from backend.business.analysis.moisture_analysis import MoistureAnalysis
-from backend.business.analysis.sar_analysis import SARAnalysis
 from backend.business.analysis.sensors import resolve_satellite
-from backend.business.analysis.snow_analysis import SnowAnalysis
-from backend.business.analysis.soil_analysis import SoilAnalysis
-from backend.business.analysis.transformation_analysis import TransformationAnalysis
-from backend.business.analysis.urban_analysis import UrbanAnalysis
 from backend.business.analysis.vegetation_analysis import VegetationAnalysis
 from backend.business.analysis.water_analysis import WaterAnalysis
 from backend.business.download.naming import parse_dataset_name
@@ -42,8 +36,7 @@ from backend.exceptions import AnalysisError
 
 
 def default_analyses() -> list[IAnalysis]:
-    return [VegetationAnalysis(), MoistureAnalysis(), WaterAnalysis(), BurnAnalysis(), SoilAnalysis(),
-            UrbanAnalysis(), SnowAnalysis(), LSTAnalysis(), LULCAnalysis(), TransformationAnalysis(), SARAnalysis()]
+    return [WaterAnalysis(), VegetationAnalysis(), LSTAnalysis(), LULCAnalysis()]
 
 
 class AnalysisService(IAnalysisService):
@@ -58,21 +51,26 @@ class AnalysisService(IAnalysisService):
         self._data_facade = data_facade
         self._find_gpus = find_gpus
         self._select = select
-        self._descriptions = dict(data_facade.formula_categories())
+        self._groups = {major: (label, description, subtypes)
+                        for major, label, description, subtypes in data_facade.analysis_groups()}
         formulas = data_facade.list_formulas()
         self._analyses: list[IAnalysis] = analyses if analyses is not None else default_analyses()
         for analysis in self._analyses:
             category = analysis.get_category()
-            mine = tuple(formula for formula in formulas if formula.category == category)
+            mine = tuple(formula for formula in formulas if formula.analysis == category)
             analysis.configure(AnalysisConfigDTO(category, mine, block_rows=block_rows))
-        order = {category: index for index, category in enumerate(self._descriptions)}
+        order = {category: index for index, category in enumerate(self._groups)}
         self._analyses.sort(key=lambda analysis: order.get(analysis.get_category(), len(order)))
 
     # ------------------------------------------------------------- IAnalysisService
     def get_available_analyses(self, dataset: DatasetDTO) -> list[AnalysisOptionDTO]:
-        return [AnalysisOptionDTO(analysis.get_category(), self._descriptions.get(analysis.get_category(), ""),
-                                  tuple(analysis.process_options(dataset)))
-                for analysis in self._analyses]
+        options = []
+        for analysis in self._analyses:
+            category = analysis.get_category()
+            label, description, subtypes = self._groups.get(category, (category, "", ()))
+            options.append(AnalysisOptionDTO(category, description, tuple(analysis.process_options(dataset)),
+                                             label, subtypes))
+        return options
 
     def run_analysis(self, dataset: DatasetDTO, request: AnalysisRequestDTO,
                      on_progress: Optional[Callable[[float], None]] = None) -> ResultDTO:
@@ -102,6 +100,9 @@ class AnalysisService(IAnalysisService):
 
     def formula_categories(self) -> list[tuple[str, str]]:
         return self._data_facade.formula_categories()
+
+    def analysis_groups(self) -> list[tuple[str, str, str, tuple[str, ...]]]:
+        return self._data_facade.analysis_groups()
 
     # ------------------------------------------------------------- helpers
     def _analysis(self, category: str) -> IAnalysis:
