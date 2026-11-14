@@ -5,8 +5,11 @@ from typing import Optional
 from backend.data.clients.i_gee_client import IGEEClient, ProgressCallback, StopCheck
 from backend.data.clients.i_gemini_client import IGeminiClient
 from backend.data.clients.i_geocoding_client import IGeocodingClient
+from backend.data.dao.formula_dao import FormulaDAO
+from backend.data.dao.i_formula_dao import IFormulaDAO
 from backend.data.i_data_facade import IDataFacade
 from backend.dto import CheckDTO, ChunkDTO, FormDTO, PlaceDTO
+from backend.dto.analysis_dto import FormulaDTO
 from backend.dto.check_dto import CHECK_FAIL
 from backend.exceptions import GEEError, PlaceSearchError
 
@@ -26,14 +29,14 @@ class DataFacade(IDataFacade):
         gee_client: Optional[IGEEClient] = None,
         user_dao=None,
         project_dao=None,
-        formula_dao=None,
+        formula_dao: Optional[IFormulaDAO] = None,
         geocoding_client: Optional[IGeocodingClient] = None,
     ):
         self._gemini_client = gemini_client
         self._gee_client = gee_client
         self._user_dao = user_dao
         self._project_dao = project_dao
-        self._formula_dao = formula_dao
+        self._formula_dao = formula_dao or FormulaDAO()  # built into the app
         self._geocoding_client = geocoding_client
 
     def process_query(self, prompt: str) -> FormDTO:
@@ -70,6 +73,18 @@ class DataFacade(IDataFacade):
     def cancel_gee_sign_in(self) -> None:
         if self._gee_client is not None:
             self._gee_client.cancel_sign_in()
+
+    def list_formulas(self) -> list[FormulaDTO]:
+        return self._formula_dao.find_all()
+
+    def get_formula(self, key: str) -> FormulaDTO | None:
+        return self._formula_dao.find_by_key(key)
+
+    def formula_categories(self) -> list[tuple[str, str]]:
+        return self._formula_dao.categories()
+
+    def analysis_groups(self) -> list[tuple[str, str, str, tuple[str, ...]]]:
+        return self._formula_dao.analyses()
 
     def _gee(self) -> IGEEClient:
         if self._gee_client is None:

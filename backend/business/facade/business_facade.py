@@ -1,14 +1,21 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Callable, Optional
 
+from backend.business.analysis.i_analysis_service import IAnalysisService
 from backend.business.download.i_download_service import IDownloadService
+from backend.business.download.naming import parse_dataset_name
 from backend.business.facade.i_business_facade import IBusinessFacade
 from backend.business.map.i_map_service import IMapService
 from backend.business.request.i_request_service import IRequestService
 from backend.business.user.i_user_service import IUserService
 from backend.dto import CheckDTO, DownloadJobDTO, FormDTO, PlaceDTO, ValidationDTO
-from backend.dto.map_dto import RasterInfoDTO, RasterViewDTO, ViewPresetDTO
+from backend.dto.analysis_dto import AnalysisOptionDTO, AnalysisRequestDTO, ComputeDeviceDTO, FormulaDTO
+from backend.dto.download_dto import JOB_COMPLETED, DatasetDTO
+from backend.dto.map_dto import MapLayerDTO, RasterInfoDTO, RasterViewDTO, ViewPresetDTO
+from backend.dto.result_dto import ResultDTO
+from backend.exceptions import AnalysisError
 from backend.dto.user_dto import (
     GoogleSignInDTO,
     SessionInfoDTO,
@@ -33,11 +40,13 @@ class BusinessFacade(IBusinessFacade):
         request_service: IRequestService,
         download_service: IDownloadService,
         map_service: IMapService,
+        analysis_service: Optional[IAnalysisService] = None,
     ):
         self._user_service = user_service
         self._request_service = request_service
         self._download_service = download_service
         self._map_service = map_service
+        self._analysis_service = analysis_service
 
     # ------------------------------------------------------------- authentication
     def is_server_available(self) -> bool:
@@ -166,3 +175,57 @@ class BusinessFacade(IBusinessFacade):
 
     def raster_values_at(self, info: RasterInfoDTO, lon: float, lat: float) -> dict[str, float | None]:
         return self._map_service.values_at(info, lon, lat)
+
+    # ------------------------------------------------------------- analysis (UC-06)
+    def list_formulas(self) -> list[FormulaDTO]:
+        return self._analysis().list_formulas()
+
+    def formula_categories(self) -> list[tuple[str, str]]:
+        return self._analysis().formula_categories()
+
+    def analysis_groups(self) -> list[tuple[str, str, str, tuple[str, ...]]]:
+        return self._analysis().analysis_groups()
+
+    def list_analysis_datasets(self) -> list[DatasetDTO]:
+        datasets = []
+        jobs = sorted(self._download_service.list_jobs(), key=lambda job: job.finished_at or "", reverse=True)
+        for job in jobs:
+            if job.status != JOB_COMPLETED or job.dataset is None or not Path(job.dataset.path).is_file():
+                continue
+            dataset = job.dataset
+            satellite, start, end = parse_dataset_name(Path(dataset.path).stem)
+            datasets.append(DatasetDTO(
+                id=dataset.id, source=dataset.source, path=dataset.path, data_type=dataset.data_type,
+                bands=list(dataset.bands), time_periods=dataset.time_periods, size_bytes=dataset.size_bytes,
+                name=dataset.name or job.name, satellite=dataset.satellite or satellite,
+                start_date=dataset.start_date or start, end_date=dataset.end_date or end,
+            ))
+        return datasets
+
+    def describe_dataset(self, path: str) -> DatasetDTO:
+        return self._analysis().describe_dataset(path)
+
+    def get_available_analyses(self, dataset: DatasetDTO) -> list[AnalysisOptionDTO]:
+        return self._analysis().get_available_analyses(dataset)
+
+    def run_analysis(self, dataset: DatasetDTO, request: AnalysisRequestDTO,
+                     on_progress: Optional[Callable[[float], None]] = None) -> ResultDTO:
+        return self._analysis().run_analysis(dataset, request, on_progress)
+
+    def save_analysis_result(self, result: ResultDTO, path: str) -> ResultDTO:
+        return self._analysis().save_result(result, path)
+
+    def discard_analysis_result(self, result: ResultDTO) -> None:
+        if self._analysis_service is not None:
+            self._analysis_service.discard_result(result)
+
+    def get_map_layers(self, result: ResultDTO, max_size: int = 1600) -> list[MapLayerDTO]:
+        return self._map_service.build_layers(result, max_size)
+
+    def get_compute_device(self, use_gpu: bool = True) -> ComputeDeviceDTO:
+        return self._analysis().get_compute_device(use_gpu)
+
+    def _analysis(self) -> IAnalysisService:
+        if self._analysis_service is None:
+            raise AnalysisError("Analysis is not set up in this build.")
+        return self._analysis_service

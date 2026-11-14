@@ -52,6 +52,18 @@ class FakeDataFacade(IDataFacade):
     def cancel_gee_sign_in(self) -> None:  # not used here
         pass
 
+    def list_formulas(self):  # not used here
+        return []
+
+    def get_formula(self, key):  # not used here
+        return None
+
+    def formula_categories(self):  # not used here
+        return []
+
+    def analysis_groups(self):  # not used here
+        return []
+
 
 # ------------------------------------------------------------------ submit_query
 RULES_ONLY = QueryEntityExtractor(use_spacy=False, today=TODAY)  # deterministic, no spaCy model needed

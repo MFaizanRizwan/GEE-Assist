@@ -52,3 +52,36 @@ DYNAMIC_WORLD_CLASSES: tuple[tuple[str, str], ...] = (
     ("Bare ground", "#A59B8F"),
     ("Snow and ice", "#B39FE1"),
 )
+
+# MODIS MCD12Q1 LC_Type1 (IGBP): class number 1-17 -> (name, colour), as the GEE catalogue shows them.
+MODIS_IGBP_CLASSES: tuple[tuple[str, str], ...] = (
+    ("Evergreen needleleaf forest", "#05450A"),
+    ("Evergreen broadleaf forest", "#086A10"),
+    ("Deciduous needleleaf forest", "#54A708"),
+    ("Deciduous broadleaf forest", "#78D203"),
+    ("Mixed forest", "#009900"),
+    ("Closed shrubland", "#C6B044"),
+    ("Open shrubland", "#DCD159"),
+    ("Woody savanna", "#DADE48"),
+    ("Savanna", "#FBFF13"),
+    ("Grassland", "#B6FF05"),
+    ("Permanent wetland", "#27FF87"),
+    ("Cropland", "#C24F44"),
+    ("Urban and built-up", "#A5A5A5"),
+    ("Cropland / natural vegetation mosaic", "#FF6D4C"),
+    ("Permanent snow and ice", "#69FFF8"),
+    ("Barren", "#F9FFA4"),
+    ("Water", "#1C0DFF"),
+)
+
+# Class table key -> (number of the first class, classes). Dynamic World starts at 0, MODIS IGBP at 1.
+CLASS_TABLES: dict[str, tuple[int, tuple[tuple[str, str], ...]]] = {
+    "dynamic_world": (0, DYNAMIC_WORLD_CLASSES),
+    "modis_igbp": (1, MODIS_IGBP_CLASSES),
+}
+
+
+def class_name(table: str, number: int) -> str:
+    first, classes = CLASS_TABLES[table]
+    index = number - first
+    return classes[index][0] if 0 <= index < len(classes) else f"Class {number}"

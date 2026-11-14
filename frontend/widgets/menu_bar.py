@@ -83,6 +83,10 @@ class AppMenuBar(QMenuBar):
         self.view_query_input = self._action(self.view_menu, "&Query Input", "Ctrl+2")
         self.view_downloads = self._action(self.view_menu, "Do&wnloads", "Ctrl+3")
         self.view_account = self._action(self.view_menu, "&Account", "Ctrl+4")
+        self.view_analysis = self._action(self.view_menu, "A&nalysis", "Ctrl+5")
+        self.view_menu.addSeparator()
+        # The analysis table (formulas and use cases of every index) is opened only from here.
+        self.view_analysis_table = self._action(self.view_menu, "Show analysis ta&ble", "Ctrl+6")
         self.view_menu.addSeparator()
         self.toggle_side_bar = self._action(self.view_menu, "&Side bar", "Ctrl+B", checkable=True)
         self.toggle_terminal = self._action(self.view_menu, "&Terminal", "Ctrl+`", checkable=True)
