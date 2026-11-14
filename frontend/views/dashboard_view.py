@@ -1,7 +1,7 @@
 """Dashboard shown right after signing in: a greeting and one card per workspace.
 
-"Query Input" and "Download" open their pages; the other cards are placeholders
-for the use cases that are not built yet (analysis, reports).
+"Query Input", "Download" and "Analysis" open their pages; "Reports" is a placeholder
+for a use case that is not built yet.
 """
 
 from __future__ import annotations
@@ -77,10 +77,11 @@ class DashboardTile(QFrame):
 
 
 class DashboardView(QWidget):
-    """Start page after sign-in. Emits ``open_query_input`` / ``open_downloads`` from its cards."""
+    """Start page after sign-in. Emits ``open_query_input`` / ``open_downloads`` / ``open_analysis`` from its cards."""
 
     open_query_input = pyqtSignal()
     open_downloads = pyqtSignal()
+    open_analysis = pyqtSignal()
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
@@ -100,10 +101,16 @@ class DashboardView(QWidget):
             "Fetch requested imagery from Google Earth Engine in chunks; pause, resume or cancel any time.",
             "Open Downloads",
         )
+        self.analysis_tile = DashboardTile(
+            "◔", "Analysis",
+            "Run water, vegetation, land-cover and surface-temperature analyses on your downloads, on the GPU "
+            "when there is one.",
+            "Open Analysis",
+        )
         tiles = (
             self.query_tile,
             self.download_tile,
-            DashboardTile("◔", "Analysis", "Run indices, classification and change detection on your data.", None),
+            self.analysis_tile,
             DashboardTile("☰", "Reports", "Collect maps, charts and explanations into a report.", None),
         )
         grid = QGridLayout()
@@ -133,6 +140,8 @@ class DashboardView(QWidget):
         self.query_tile.button.clicked.connect(self.open_query_input)
         assert self.download_tile.button is not None
         self.download_tile.button.clicked.connect(self.open_downloads)
+        assert self.analysis_tile.button is not None
+        self.analysis_tile.button.clicked.connect(self.open_analysis)
 
     def set_user(self, user: UserDTO) -> None:
         first_name = (user.full_name or "").split(" ")[0] or "there"
