@@ -2,8 +2,8 @@
 
 A menu bar along the top (File, Edit, View, Terminal, Options, Help) over a side bar on the
 left (logo, navigation and the signed-in user) next to the pages: the dashboard (start
-page), the query-input workspace, downloads, the account card and the GeoTIFF viewer
-(opened from a finished download). Clicking the logo slides the side bar open or closed; clicking the user
+page), the query-input workspace, downloads, analysis, the account card, the GeoTIFF viewer
+(opened from a finished download) and the analysis table (View → Show analysis table only). Clicking the logo slides the side bar open or closed; clicking the user
 opens the account menu (account options and "Sign out").
 
 Below the pages is the terminal, gkonsol, as in VS Code: hidden until opened from the
@@ -35,6 +35,8 @@ from backend.config import DEFAULT_DOWNLOAD_DIR
 from backend.dto.user_dto import UserDTO
 from frontend import appearance, theme
 from frontend.views.account_view import AccountView, Avatar, SignupDetailsDialog
+from frontend.views.analysis_table_view import AnalysisTableView
+from frontend.views.analysis_view import AnalysisView
 from frontend.restart import restart_app
 from frontend.views.auth.hero_panel import round_logo
 from frontend.views.dashboard_view import DashboardView
@@ -49,7 +51,7 @@ from frontend.gkonsol.ports import MemoryForm
 from frontend.views.user_admin_view import UserAdminDialog
 from frontend.widgets.menu_bar import AppMenuBar
 from frontend.widgets.side_bar import LOGO_SIZE, SideBar
-from frontend.widgets.side_icons import DownloadIcon, TerminalIcon, WritingIcon
+from frontend.widgets.side_icons import AnalysisIcon, DownloadIcon, TerminalIcon, WritingIcon
 
 PAGE_BACKGROUND = (
     "qlineargradient(x1:0, y1:0, x2:1, y2:1, "
@@ -173,6 +175,8 @@ class HomeWindow(QMainWindow):
         self.back_button.setToolTip("Back to the dashboard")
         self.query_input_button = self.side_bar.add_button("Query Input", "Q", icon=WritingIcon())
         self.downloads_button = self.side_bar.add_button("Downloads", "D", icon=DownloadIcon())
+        self.analysis_button = self.side_bar.add_button("Analysis", "A", icon=AnalysisIcon())
+        self.analysis_button.setToolTip("Analysis: run vegetation, water, burn, ... analyses on a dataset (Ctrl+5)")
         self.terminal_button = self.side_bar.add_button("Terminal", "T", icon=TerminalIcon())
         self.terminal_button.setCheckable(True)  # lit while the terminal is open
         self.terminal_button.setToolTip("Terminal: gkonsol, the GEE-Assist command line (Ctrl+`)")
@@ -203,6 +207,8 @@ class HomeWindow(QMainWindow):
         self.query_input.setWindowFlags(Qt.WindowType.Widget)
         self.downloads = DownloadView(facade)
         self.viewer = RasterViewerView(facade)
+        self.analysis = AnalysisView(facade)
+        self.analysis_table = AnalysisTableView(facade)
 
         self.account = AccountView(facade)
         account_page = QFrame(objectName="HomeContent")
@@ -224,6 +230,8 @@ class HomeWindow(QMainWindow):
         self.pages.addWidget(self.downloads)
         self.pages.addWidget(account_page)
         self.pages.addWidget(self.viewer)
+        self.pages.addWidget(self.analysis)
+        self.pages.addWidget(self.analysis_table)
         self._account_page = account_page
 
         # ---- terminal (gkonsol) under the pages
@@ -255,6 +263,7 @@ class HomeWindow(QMainWindow):
         self.dashboard.open_downloads.connect(self.show_downloads)
         self.query_input_button.clicked.connect(self.show_query_input)
         self.downloads_button.clicked.connect(self.show_downloads)
+        self.analysis_button.clicked.connect(self.show_analysis)
         self.terminal_button.clicked.connect(self.toggle_terminal)
         self.terminal_area.visibility_changed.connect(self._terminal_shown)
         app = QApplication.instance()
@@ -263,6 +272,8 @@ class HomeWindow(QMainWindow):
         self.query_input.download_requested.connect(self.start_download)
         self.downloads.view_requested.connect(self.show_viewer)
         self.viewer.show_on_map_requested.connect(self.show_on_map)
+        self.analysis.show_on_map_requested.connect(self.show_on_map)
+        self.analysis.open_in_viewer_requested.connect(self.show_viewer)
         self._connect_menu_bar()
         self._admin_dialog: UserAdminDialog | None = None
         self._was_maximized = False  # before going full screen
@@ -278,6 +289,15 @@ class HomeWindow(QMainWindow):
 
     def show_downloads(self) -> None:
         self._show_page(self.downloads)
+
+    def show_analysis(self) -> None:
+        if self.analysis.isVisibleTo(self.pages) or self.analysis._loaded:
+            self.analysis.refresh_datasets()  # a download may have finished since (the first visit loads anyway)
+        self._show_page(self.analysis)
+
+    def show_analysis_table(self) -> None:
+        """The cheat sheet of indices: only opened from View → Show analysis table."""
+        self._show_page(self.analysis_table)
 
     def start_download(self, form) -> None:
         """Send a kept request to GEE and show its progress on the Downloads page."""
@@ -354,6 +374,7 @@ class HomeWindow(QMainWindow):
         self.side_bar.show_back(page is not self.dashboard)  # nowhere to go back to on the dashboard
         self.query_input_button.setVisible(page is not self.query_input)
         self.downloads_button.setVisible(page is not self.downloads)
+        self.analysis_button.setVisible(page is not self.analysis)
         self.terminal.refresh_prompt()  # the prompt shows the page: ~/downloads
 
     # ------------------------------------------------------------- terminal
@@ -409,6 +430,8 @@ class HomeWindow(QMainWindow):
         bar.view_query_input.triggered.connect(self.show_query_input)
         bar.view_downloads.triggered.connect(self.show_downloads)
         bar.view_account.triggered.connect(self.show_account)
+        bar.view_analysis.triggered.connect(self.show_analysis)
+        bar.view_analysis_table.triggered.connect(self.show_analysis_table)
         bar.toggle_side_bar.setChecked(self.side_bar.is_expanded())
         bar.toggle_side_bar.triggered.connect(self.side_bar.set_expanded)
         bar.toggle_terminal.triggered.connect(self.set_terminal_visible)
