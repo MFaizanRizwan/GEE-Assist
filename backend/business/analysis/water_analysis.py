@@ -53,7 +53,7 @@ class WaterArea(Accumulator):
     """Area of the water pixels, and their share of the pixels with data."""
 
     def __init__(self, layer_key: str):
-        self.key = layer_key
+        self.key = self.dedupe_key = layer_key
         self.water_km2 = self.valid_km2 = 0.0
 
     def add(self, block, outputs) -> None:

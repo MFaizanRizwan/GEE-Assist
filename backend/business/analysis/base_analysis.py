@@ -153,7 +153,8 @@ class BaseAnalysis(IAnalysis):
                     seen.add(layer.key)
                     layers.append(layer)
             passes += [p for p in new_passes if p.name not in {q.name for q in passes}]
-            accumulators += new_accumulators
+            known = {_identity(a) for a in accumulators}
+            accumulators += [a for a in new_accumulators if _identity(a) not in known]
         with RasterEngine(periods, backend, self.config.block_rows) as engine:
             metrics = engine.run(layers, output, user_params, passes, accumulators, params.get("_on_progress"))
         return metrics, layers
@@ -254,6 +255,11 @@ def scene_pass(name: str) -> ScenePass:
     if name == "thermal":
         return MinMaxPass("thermal", lambda block: block.roles()["thermal"])
     raise ValueError(name)
+
+
+def _identity(accumulator: Accumulator) -> tuple:
+    """Two accumulators of the same kind over the same layer would add the same numbers twice."""
+    return type(accumulator).__name__, getattr(accumulator, "dedupe_key", id(accumulator))
 
 
 def _and(words) -> str:
