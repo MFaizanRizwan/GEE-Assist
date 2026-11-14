@@ -60,9 +60,17 @@ Run the tests with `python -m pytest`.
   lens; a prompt typing). It starts collapsed (icons only); clicking the logo slides it
   open (icons and names) or closed again. **Terminal** opens gkonsol (see below) and stays
   highlighted while it is open.
-- Clicking your name or avatar in the side bar opens the account menu: **Manage account**
-  (coming soon), **View account**, **Sign-up details** and **Sign out**.
-- Administrators get a **Manage users** window (list users, change roles, enable / disable accounts).
+- Clicking your name or avatar in the side bar opens the account menu: **Manage account**,
+  **View account**, **Sign-up details** and **Sign out**.
+- The **account page** shows your details and lets you edit your full name, username and phone
+  number, change your password (not for Google accounts) and add, change or remove a profile photo.
+  Only an administrator can change your email address, role or status.
+- **Profile photos stay on this computer**: they are saved in `workspace/profile_photos/` (one file
+  per user id) and never sent to the server, so they do not follow you to another computer.
+- Administrators get a **Manage users** window: list users page by page, find anyone by email (type
+  it in the search box and press Enter), **add a user**, edit a user's details including their email
+  (a new address must be verified again), change roles, reset passwords, enable / disable and
+  **delete** accounts. Your own account is changed from the account page instead.
 
 ## Analysis
 
@@ -178,7 +186,10 @@ viewer:
 |---|---|
 | HTTP client for the auth server | `backend/data/clients/auth_api_client.py` |
 | Saved session (credential store) | `backend/data/session_store.py` |
-| Business logic (tokens, refresh, flows) | `backend/business/user/user_service.py` |
+| Sign-in tokens shared by the service and DAO | `backend/data/auth_session.py` |
+| Accounts (server) and profile photos (local) | `backend/data/dao/user_dao.py`, reached through `backend/data/data_facade.py` |
+| Business logic (tokens, refresh, flows, managing accounts) | `backend/business/user/user_service.py` |
+| Account page and its dialogs | `frontend/views/account_view.py`, `frontend/views/account_dialogs.py` |
 | Sign-up rules checked in the app | `backend/business/user/signup_validation.py` |
 | UI entry point (`IBusinessFacade`) | `backend/business/facade/` |
 | Intro video | `frontend/views/splash_view.py`, `frontend/views/startup_window.py` |

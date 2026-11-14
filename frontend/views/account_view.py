@@ -1,17 +1,32 @@
-"""Signed-in user's account card (data from /auth/me) and the sign-up details dialog."""
+"""The signed-in user's account page (details, password, profile photo) and the sign-up details dialog."""
 
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import Path
 
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import QDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
+from PyQt6.QtGui import QImage, QPainter, QPainterPath, QPixmap
+from PyQt6.QtWidgets import (
+    QDialog,
+    QFileDialog,
+    QFrame,
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 from backend.auth_exceptions import AuthError, SessionExpiredError
 from backend.business.facade import IBusinessFacade
+from backend.business.user.user_service import PHOTO_FORMATS
 from backend.dto.user_dto import UserDTO
+from backend.dto.validation_dto import ValidationDTO
 from frontend import theme
-from frontend.widgets.form_widgets import Banner, BusyButton, add_soft_shadow
+from frontend.views.account_dialogs import ChangePasswordDialog, EditDetailsDialog
+from frontend.widgets.form_widgets import Banner, BusyButton, add_soft_shadow, link_button
 from frontend.workers.task_worker import run_task
 
 _PROVIDERS = {"local": "Username and password", "google": "Google"}
@@ -33,9 +48,36 @@ def format_provider(user: UserDTO) -> str:
     return _PROVIDERS.get(user.auth_provider, user.auth_provider.title())
 
 
+def round_photo(image: bytes, size: int, pixel_ratio: float = 1.0) -> QPixmap | None:
+    """``image`` cropped to its centre square and cut into a circle ``size`` points wide; None if unreadable."""
+    picture = QImage.fromData(image)
+    if picture.isNull():
+        return None
+    side = min(picture.width(), picture.height())
+    square = picture.copy((picture.width() - side) // 2, (picture.height() - side) // 2, side, side)
+    pixels = max(1, round(size * pixel_ratio))
+    square = square.scaled(pixels, pixels, Qt.AspectRatioMode.IgnoreAspectRatio,
+                           Qt.TransformationMode.SmoothTransformation)
+    result = QPixmap(pixels, pixels)
+    result.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(result)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    clip = QPainterPath()
+    clip.addEllipse(0, 0, pixels, pixels)
+    painter.setClipPath(clip)
+    painter.drawImage(0, 0, square)
+    painter.end()
+    result.setDevicePixelRatio(pixel_ratio)
+    return result
+
+
 class Avatar(QLabel):
+    """The user's profile photo in a circle, or their initials when there is none."""
+
     def __init__(self, size: int = 64, parent: QWidget | None = None):
         super().__init__(parent)
+        self._size = size
+        self.has_photo = False
         self.setFixedSize(size, size)
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setStyleSheet(
@@ -44,21 +86,44 @@ class Avatar(QLabel):
             f"background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {theme.LEAF}, stop:1 {theme.OCEAN});"
         )
 
-    def set_user(self, user: UserDTO) -> None:
-        self.setText(user.initials)
+    def set_user(self, user: UserDTO, photo: bytes | None = None) -> None:
+        pixmap = round_photo(photo, self._size, self.devicePixelRatioF()) if isinstance(photo, bytes) else None
+        self.has_photo = pixmap is not None
+        if pixmap is None:
+            self.clear()
+            self.setText(user.initials)
+        else:
+            self.setPixmap(pixmap)
 
 
 class AccountView(QFrame):
+    """The signed-in user's account: their details and photo, and the actions to change them."""
+
     session_expired = pyqtSignal()
+    user_changed = pyqtSignal(object)  # UserDTO, after details or the photo changed
 
     def __init__(self, facade: IBusinessFacade, parent: QWidget | None = None):
         super().__init__(parent)
         self._facade = facade
+        self._user: UserDTO | None = None
         self.setObjectName("AuthCard")
         self.setFixedWidth(560)
         add_soft_shadow(self)
 
         self.avatar = Avatar(72)
+        self.change_photo = link_button("Change photo")
+        self.change_photo.setToolTip(f"Choose a {PHOTO_FORMATS} image. It is kept on this computer only.")
+        self.remove_photo = link_button("Remove")
+        photo_actions = QHBoxLayout()
+        photo_actions.setSpacing(0)
+        photo_actions.addWidget(self.change_photo)
+        photo_actions.addWidget(self.remove_photo)
+        avatar_column = QVBoxLayout()
+        avatar_column.setSpacing(4)
+        avatar_column.addWidget(self.avatar, 0, Qt.AlignmentFlag.AlignHCenter)
+        avatar_column.addLayout(photo_actions)
+        avatar_column.addStretch(1)
+
         self.greeting = QLabel(objectName="Title")
         self.summary = QLabel(objectName="Subtitle")
         self.summary.setWordWrap(True)
@@ -66,9 +131,10 @@ class AccountView(QFrame):
         head_text.setSpacing(4)
         head_text.addWidget(self.greeting)
         head_text.addWidget(self.summary)
+        head_text.addStretch(1)
         head = QHBoxLayout()
         head.setSpacing(18)
-        head.addWidget(self.avatar, 0, Qt.AlignmentFlag.AlignTop)
+        head.addLayout(avatar_column)
         head.addLayout(head_text, 1)
 
         self.banner = Banner()
@@ -76,8 +142,9 @@ class AccountView(QFrame):
         grid = QGridLayout()
         grid.setHorizontalSpacing(24)
         grid.setVerticalSpacing(12)
-        rows = [("username", "Username"), ("email", "Email"), ("phone", "Phone"), ("role", "Role"),
-                ("provider", "Sign-in method"), ("created", "Member since"), ("last_login", "Last sign-in")]
+        rows = [("full_name", "Full name"), ("username", "Username"), ("email", "Email"), ("phone", "Phone"),
+                ("role", "Role"), ("provider", "Sign-in method"), ("created", "Member since"),
+                ("last_login", "Last sign-in")]
         for row, (key, title) in enumerate(rows):
             label = QLabel(title, objectName="Muted")
             value = QLabel()
@@ -88,8 +155,14 @@ class AccountView(QFrame):
             self._values[key] = value
         grid.setColumnStretch(1, 1)
 
-        self.refresh = BusyButton("Refresh details", "Refreshing…", object_name="SecondaryButton")
-        self.refresh.clicked.connect(self.reload)
+        self.edit_details = QPushButton("Edit details", objectName="PrimaryButton")
+        self.change_password = QPushButton("Change password", objectName="SecondaryButton")
+        self.refresh = BusyButton("Refresh", "Refreshing…", object_name="SecondaryButton")
+        actions = QHBoxLayout()
+        actions.setSpacing(10)
+        for button in (self.edit_details, self.change_password, self.refresh):
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+            actions.addWidget(button)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(40, 36, 40, 34)
@@ -101,13 +174,23 @@ class AccountView(QFrame):
         separator.setStyleSheet(f"background: {theme.BORDER};")
         layout.addWidget(separator)
         layout.addLayout(grid)
-        layout.addWidget(self.refresh)
+        layout.addLayout(actions)
+
+        self.refresh.clicked.connect(self.reload)
+        self.edit_details.clicked.connect(self.open_edit_details)
+        self.change_password.clicked.connect(self.open_change_password)
+        self.change_photo.clicked.connect(self.choose_photo)
+        self.remove_photo.clicked.connect(self.delete_photo)
 
     def set_user(self, user: UserDTO) -> None:
+        self._user = user
         first_name = user.full_name.split()[0] if user.full_name.split() else user.username
-        self.avatar.set_user(user)
+        self.avatar.set_user(user, self._facade.get_profile_photo(user.id))
+        self.remove_photo.setVisible(self.avatar.has_photo)
+        self.change_photo.setText("Change photo" if self.avatar.has_photo else "Add photo")
         self.greeting.setText(f"Welcome, {first_name}!")
-        self.summary.setText("You're signed in to GEE-Assist. Your analysis workspace will open from here.")
+        self.summary.setText("Manage your GEE-Assist account: your details, password and profile photo.")
+        self._values["full_name"].setText(user.full_name)
         self._values["username"].setText(user.username)
         self._values["email"].setText(format_email(user))
         self._values["phone"].setText(user.phone_number or "—")
@@ -115,7 +198,62 @@ class AccountView(QFrame):
         self._values["provider"].setText(format_provider(user))
         self._values["created"].setText(format_date(user.created_at))
         self._values["last_login"].setText(format_date(user.last_login_at))
+        google = user.auth_provider == "google"
+        self.change_password.setEnabled(not google)
+        self.change_password.setToolTip("You sign in with Google, so there is no password to change." if google
+                                        else "Change the password you sign in with")
 
+    # ------------------------------------------------------------- details and password
+    def open_edit_details(self) -> None:
+        if self._user is None:
+            return
+        dialog = EditDetailsDialog(self._facade, self._user, parent=self)
+        dialog.session_expired.connect(self.session_expired)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self._changed(dialog.result_message)
+
+    def open_change_password(self) -> None:
+        if self._user is None:
+            return
+        dialog = ChangePasswordDialog(self._facade, self._user, parent=self)
+        dialog.session_expired.connect(self.session_expired)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.banner.show_success(dialog.result_message)
+
+    def _changed(self, message: str) -> None:
+        user = self._facade.get_current_user() or self._user
+        self.set_user(user)
+        self.banner.show_success(message)
+        self.user_changed.emit(user)
+
+    # ------------------------------------------------------------- photo (kept on this computer)
+    def choose_photo_file(self) -> str:
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Choose a profile photo", str(Path.home()),
+            "Images (*.png *.jpg *.jpeg *.gif *.bmp *.webp);;All files (*)",
+        )
+        return path
+
+    def choose_photo(self) -> None:
+        path = self.choose_photo_file()
+        if not path:
+            return
+        self.banner.clear()
+        run_task(self, self._facade.set_profile_photo, path, on_success=self._on_photo_saved,
+                 on_error=self._on_error)
+
+    def _on_photo_saved(self, result: ValidationDTO) -> None:
+        if not result.is_valid:
+            self.banner.show_error(" ".join(result.errors.values()))
+            return
+        self._changed(result.message)
+
+    def delete_photo(self) -> None:
+        self.banner.clear()
+        run_task(self, self._facade.remove_profile_photo,
+                 on_success=lambda _: self._changed("Your photo was removed."), on_error=self._on_error)
+
+    # ------------------------------------------------------------- refresh
     def reload(self) -> None:
         self.banner.clear()
         self.refresh.set_busy(True)
@@ -124,13 +262,14 @@ class AccountView(QFrame):
     def _on_reloaded(self, user: UserDTO) -> None:
         self.refresh.set_busy(False)
         self.set_user(user)
+        self.user_changed.emit(user)
 
     def _on_error(self, exc: Exception) -> None:
         self.refresh.set_busy(False)
         if isinstance(exc, SessionExpiredError):
             self.session_expired.emit()
         else:
-            self.banner.show_error(str(exc) if isinstance(exc, AuthError) else "Could not load your details.")
+            self.banner.show_error(str(exc) if isinstance(exc, AuthError) else "Something went wrong. Please try again.")
 
 
 class SignupDetailsDialog(QDialog):

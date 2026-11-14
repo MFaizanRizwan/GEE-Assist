@@ -159,6 +159,11 @@ QPushButton#SecondaryButton {{
 QPushButton#SecondaryButton:hover {{ background: {FOAM}; border-color: {BORDER_HOVER}; }}
 QPushButton#SecondaryButton:pressed {{ background: {MINT}; }}
 QPushButton#SecondaryButton:disabled {{ color: {SUBTLE}; border-color: {BORDER}; }}
+QPushButton#DangerButton {{
+    color: {ERROR}; background: {WHITE}; border: 1px solid {ERROR_BORDER};
+}}
+QPushButton#DangerButton:hover {{ background: {ERROR_BG}; }}
+QPushButton#DangerButton:disabled {{ color: {SUBTLE}; border-color: {BORDER}; }}
 QPushButton#LinkButton {{
     color: {OCEAN}; background: transparent; border: none; padding: 2px 4px; font-weight: 600;
 }}
