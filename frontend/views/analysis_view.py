@@ -112,12 +112,18 @@ QHeaderView::section {{
 """
 
 
+def _shrinkable(widget: QWidget) -> QWidget:
+    """May be narrower than its text (clipped), so the fixed-width panel never overflows."""
+    widget.setSizePolicy(QSizePolicy.Policy.Ignored, widget.sizePolicy().verticalPolicy())
+    return widget
+
+
 def _step(number: int, title: str) -> QLabel:
-    return QLabel(f"{number} · {title}", objectName="StepTitle")
+    return _shrinkable(QLabel(f"{number} · {title}", objectName="StepTitle"))
 
 
 def _section(title: str) -> QLabel:
-    return QLabel(title.upper(), objectName="SectionTitle")
+    return _shrinkable(QLabel(title.upper(), objectName="SectionTitle"))
 
 
 def dataset_title(dataset: DatasetDTO) -> str:
@@ -332,6 +338,9 @@ class AnalysisView(QWidget):
         for button in (self.refresh_button, self.browse_button, self.run_button, self.viewer_button,
                        self.map_button, self.folder_button, self.select_all):
             button.setCursor(Qt.CursorShape.PointingHandCursor)
+        for widget in (self.refresh_button, self.browse_button, self.select_all, self.dataset_note,
+                       self.category_note, self.compare_note):
+            _shrinkable(widget)
         self._progress_timer = QTimer(self)
         self._progress_timer.setInterval(PROGRESS_POLL_MS)
         self._progress_timer.timeout.connect(lambda: self.progress.setValue(round(self._progress * 100)))
@@ -564,7 +573,9 @@ class AnalysisView(QWidget):
             box.setDecimals(2)
             box.setValue(values.get(name, default))
             box.setToolTip(tip)
-            self.params_form.addRow(QLabel(label, objectName="Muted"), box)
+            name_label = QLabel(label, objectName="Muted")
+            name_label.setWordWrap(True)
+            self.params_form.addRow(_shrinkable(name_label), box)
             self.param_boxes[name] = box
         self.params_title.setVisible(bool(wanted))
 
