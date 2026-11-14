@@ -23,7 +23,6 @@ from PyQt6.QtWidgets import (
     QLabel,
     QPushButton,
     QSizePolicy,
-    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -32,6 +31,7 @@ from backend.dto.analysis_dto import AnalysisOptionDTO, FormulaDTO, ProcessOptio
 from frontend import theme
 
 ALL = "All"
+CHIP_ROW_WIDTH = 320  # sub-type chips start a new row beyond this (the panel is narrow)
 FORMULA_FONT = "Cambria Math"
 
 # A colour per analysis (tiles, chips, the selected-card border).
@@ -73,10 +73,11 @@ QLabel#CardBadge {{
 }}
 QLabel#GroupTitle {{ color: {theme.MUTED}; font-size: 8.5pt; font-weight: 700; letter-spacing: 0.5px; }}
 QLabel#SectionCan {{ color: {theme.SUCCESS}; font-weight: 700; }}
-QToolButton#SectionCannot {{
+QPushButton#SectionCannot {{
     color: {theme.MUTED}; font-weight: 700; border: none; background: transparent; padding: 2px 0;
+    text-align: left; font-size: 10pt;
 }}
-QToolButton#SectionCannot:hover {{ color: {theme.INK}; }}
+QPushButton#SectionCannot:hover {{ color: {theme.INK}; }}
 QPushButton#SubtypeChip {{
     border: 1px solid {theme.BORDER_STRONG}; border-radius: 12px; padding: 3px 10px; font-size: 8.5pt;
     font-weight: 600; background: {theme.WHITE}; color: {theme.INK};
@@ -242,11 +243,10 @@ class ProcessPicker(QWidget):
         self.can_title = _shrinkable(QLabel(objectName="SectionCan"))
         self.can_area = QVBoxLayout()
         self.can_area.setSpacing(6)
-        self.cannot_toggle = QToolButton(objectName="SectionCannot")
+        self.cannot_toggle = _shrinkable(QPushButton(objectName="SectionCannot"))
         self.cannot_toggle.setCheckable(True)
         self.cannot_toggle.setChecked(False)
         self.cannot_toggle.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.cannot_toggle.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
         self.cannot_box = QWidget()
         self.cannot_area = QVBoxLayout(self.cannot_box)
         self.cannot_area.setContentsMargins(0, 0, 0, 0)
@@ -264,7 +264,7 @@ class ProcessPicker(QWidget):
         layout.addWidget(self.can_title)
         layout.addLayout(self.can_area)
         layout.addSpacing(4)
-        layout.addWidget(self.cannot_toggle, 0, Qt.AlignmentFlag.AlignLeft)
+        layout.addWidget(self.cannot_toggle)
         layout.addWidget(self.cannot_box)
 
         self.select_all_button.clicked.connect(self.select_all)
@@ -341,7 +341,7 @@ class ProcessPicker(QWidget):
             chip.clicked.connect(lambda _=False, name=name: self.show_subtype(name))
             self.chip_group.addButton(chip)
             hint = chip.sizeHint().width() + 4
-            if row is None or width + hint > 360:
+            if row is None or width + hint > CHIP_ROW_WIDTH:
                 row = QHBoxLayout()
                 row.setSpacing(4)
                 self.chips.addLayout(row)
