@@ -10,6 +10,7 @@ from backend.dto.map_dto import MapLayerDTO, RasterInfoDTO, RasterViewDTO, ViewP
 from backend.dto.result_dto import ResultDTO
 from backend.dto.user_dto import (
     GoogleSignInDTO,
+    NewUserDTO,
     SessionInfoDTO,
     SignupDTO,
     SignupResultDTO,
@@ -75,6 +76,35 @@ class IBusinessFacade(ABC):
 
     @abstractmethod
     def set_user_active(self, user_id: str, is_active: bool) -> UserDTO: ...
+
+    @abstractmethod
+    def find_user_by_email(self, email: str) -> UserDTO | None: ...
+
+    @abstractmethod
+    def create_user(self, user: NewUserDTO) -> ValidationDTO: ...
+
+    @abstractmethod
+    def delete_user(self, user_id: str) -> bool: ...
+
+    # ------------------------------------------------------------- manage account
+    @abstractmethod
+    def update_user(self, user: UserDTO) -> ValidationDTO:
+        """Save changed details (your own, or anyone's for an admin); field problems come back in ``errors``."""
+
+    @abstractmethod
+    def change_password(
+        self, user_id: str, new_password: str, confirm_password: str, current_password: str | None = None
+    ) -> ValidationDTO: ...
+
+    @abstractmethod
+    def set_profile_photo(self, file_path: str) -> ValidationDTO:
+        """The signed-in user's photo, kept on this computer only."""
+
+    @abstractmethod
+    def get_profile_photo(self, user_id: str | None = None) -> bytes | None: ...
+
+    @abstractmethod
+    def remove_profile_photo(self) -> bool: ...
 
     # ------------------------------------------------------------- query input
     @abstractmethod
