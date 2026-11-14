@@ -4,10 +4,17 @@ There are four analyses, as in the class diagram (water, vegetation, LST, LULC);
 is configured with its formulas from the formula DAO (through the data facade), which
 are grouped into sub-types (e.g. vegetation: indices, moisture & drought, burn & fire). Before every run the compute device is chosen: a dedicated NVIDIA
 GPU through CuPy when there is one that works, otherwise the CPU.
+
+Results are written to a temporary folder and kept only when the user saves them
+(``save_result``, to a file they choose); the folder is deleted when the app exits.
 """
 
 from __future__ import annotations
 
+import atexit
+import shutil
+import tempfile
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Callable, Optional
 
@@ -50,6 +57,7 @@ class AnalysisService(IAnalysisService):
     ):
         self._data_facade = data_facade
         self._find_gpus = find_gpus
+        self._scratch: Optional[Path] = None  # temporary folder for results not saved yet
         self._select = select
         self._groups = {major: (label, description, subtypes)
                         for major, label, description, subtypes in data_facade.analysis_groups()}
@@ -78,9 +86,53 @@ class AnalysisService(IAnalysisService):
         backend = self._backend(request.use_gpu)
         params: dict[str, Any] = dict(request.params)
         params.update(_compare_with=list(request.compare_with), _backend=backend, _on_progress=on_progress)
-        if request.output_dir and hasattr(analysis, "default_output"):
-            params["_output_path"] = str(Path(request.output_dir) / analysis.default_output(dataset).name)
-        return analysis.run(list(request.processes), dataset, params)
+        folder = Path(request.output_dir) if request.output_dir else self._scratch_folder()
+        name = analysis.default_output(dataset).name if hasattr(analysis, "default_output") else "result.tif"
+        params["_output_path"] = str(folder / name)
+        result = analysis.run(list(request.processes), dataset, params)
+        result.saved = bool(request.output_dir)  # an explicit folder is the user's choice
+        return result
+
+    # ------------------------------------------------------------- saving
+    def save_result(self, result: ResultDTO, path: str) -> ResultDTO:
+        source, target = Path(result.output_path), Path(path)
+        if target.suffix.lower() not in (".tif", ".tiff"):
+            target = target.with_suffix(".tif")
+        if not source.is_file():
+            raise AnalysisError("The result is no longer there: run the analysis again to save it.")
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if source.resolve() != target.resolve():
+                shutil.copyfile(source, target)
+                summary = source.with_suffix(".json")
+                if summary.is_file():
+                    shutil.copyfile(summary, target.with_suffix(".json"))
+        except OSError as exc:
+            raise AnalysisError(f"Could not save to {target}: {exc.strerror or exc}") from exc
+        self.discard_result(result)  # the temporary copy is not needed any more
+        return replace(result, output_path=str(target), saved=True)
+
+    def discard_result(self, result: ResultDTO) -> None:
+        """Delete an unsaved result's files; saved results and files outside the temporary folder stay."""
+        if result.saved or self._scratch is None:
+            return
+        path = Path(result.output_path)
+        if self._scratch not in path.parents:
+            return
+        for file in (path, path.with_suffix(".json")):
+            file.unlink(missing_ok=True)
+
+    def cleanup(self) -> None:
+        """Delete every unsaved result (called when the app exits)."""
+        if self._scratch is not None:
+            shutil.rmtree(self._scratch, ignore_errors=True)
+            self._scratch = None
+
+    def _scratch_folder(self) -> Path:
+        if self._scratch is None or not self._scratch.is_dir():
+            self._scratch = Path(tempfile.mkdtemp(prefix="gee-assist-analysis-"))
+            atexit.register(self.cleanup)
+        return self._scratch
 
     def describe_dataset(self, path: str) -> DatasetDTO:
         file = Path(path)

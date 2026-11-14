@@ -20,6 +20,14 @@ class IAnalysisService(ABC):
         """Every analysis category with its processes, and which this dataset can run."""
 
     @abstractmethod
+    def save_result(self, result: ResultDTO, path: str) -> ResultDTO:
+        """Keep a result: copy its GeoTIFF (and the .json of its numbers and settings) to ``path``."""
+
+    @abstractmethod
+    def discard_result(self, result: ResultDTO) -> None:
+        """Delete a result that was not saved (its temporary files)."""
+
+    @abstractmethod
     def describe_dataset(self, path: str) -> DatasetDTO:
         """A GeoTIFF on disk as a dataset to analyse (its bands, satellite and dates)."""
 
