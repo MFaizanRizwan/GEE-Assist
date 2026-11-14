@@ -179,7 +179,7 @@ class RequestService(IRequestService):
             result.add_error("crs", "Projection must be an EPSG code such as EPSG:4326.")
         output_dir = (form.output_dir or "").strip()
         if not output_dir:
-            result.add_error("output_dir", "Choose a folder to save the download in.")
+            result.add_error("output_dir", "Create or open a project: downloads are saved in its downloads folder.")
         elif Path(output_dir).exists() and not Path(output_dir).is_dir():
             result.add_error("output_dir", "The output location is a file, not a folder.")
         elif not Path(output_dir).is_absolute():

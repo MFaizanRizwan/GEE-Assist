@@ -95,6 +95,9 @@ def _segment_button(text: str, position: str) -> QPushButton:
     return button
 
 
+NO_PROJECT_FOLDER = "Create or open a project: downloads are saved in its downloads folder"
+
+
 class ParameterFormView(QWidget):
     """Collects every parameter GEE needs to fetch data, validates and keeps it."""
 
@@ -103,6 +106,7 @@ class ParameterFormView(QWidget):
     def __init__(self, facade: IBusinessFacade, parent=None):
         super().__init__(parent)
         self._facade = facade
+        self._project_downloads = ""  # the open project's downloads folder: every download goes there
         self._imported_aoi: str = ""
         self._imported_name: str = ""
         self._drawn_aoi: str = ""  # GeoJSON of the rectangle / circle / polygon on the map
@@ -401,10 +405,12 @@ class ParameterFormView(QWidget):
 
         self.output_dir_edit = QLineEdit()
         self.output_dir_edit.setObjectName("PathField")
-        self.output_dir_edit.setPlaceholderText("Folder for the downloaded files")
+        self.output_dir_edit.setPlaceholderText(NO_PROJECT_FOLDER)
+        self.output_dir_edit.setReadOnly(True)  # always the open project's downloads folder
         self.browse_button = QPushButton("Browse…")
         self.browse_button.setObjectName("SecondaryButton")
         self.browse_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.browse_button.hide()  # downloads cannot go elsewhere than the project
         folder_row = QHBoxLayout()
         folder_row.setSpacing(8)
         folder_row.addWidget(self.output_dir_edit, 1)
@@ -460,7 +466,7 @@ class ParameterFormView(QWidget):
         self._on_aoi_mode_changed(AOI_FILE)
 
         self.crs_combo.setCurrentIndex(0)
-        self.output_dir_edit.setText(str(DEFAULT_DOWNLOAD_DIR))
+        self.output_dir_edit.setText(self._project_downloads)
         self.analysis_combo.setCurrentIndex(0)  # None: download only
 
         self._show_validation(ValidationDTO())
@@ -856,6 +862,16 @@ class ParameterFormView(QWidget):
         if index < 0:
             raise ValueError(f"Unknown projection {code!r}")
         self.crs_combo.setCurrentIndex(index)
+
+    def set_project(self, project) -> None:
+        """Downloads go into ``project``'s downloads folder (a ProjectDTO, or None when no project is open)."""
+        self._project_downloads = project.downloads_dir if project is not None else ""
+        self.output_dir_edit.setText(self._project_downloads)
+        self.output_dir_edit.setToolTip(
+            "Downloads are saved in the open project's downloads folder." if project is not None
+            else NO_PROJECT_FOLDER
+        )
+        self._set_field_error("output_dir", "")
 
     def set_output_dir(self, folder: str) -> None:
         self.output_dir_edit.setText(folder)

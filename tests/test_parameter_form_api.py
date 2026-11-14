@@ -215,3 +215,18 @@ def test_a_query_s_area_is_drawn_as_its_outline(view):
     assert "area (Sahiwal)" in filled and json.loads(form.aoi) == outline
     assert ("shape", json.dumps(outline)) in view.map_widget.calls
     assert not any(call[0] == "bbox" for call in view.map_widget.calls)
+
+
+def test_downloads_go_into_the_open_projects_folder(view):
+    from backend.dto.project_dto import ProjectDTO
+
+    form = view
+    assert form.output_dir_edit.isReadOnly() and form.browse_button.isHidden()
+    assert "Create or open a project" in form.output_dir_edit.placeholderText()
+    project = ProjectDTO(id="p1", name="MyProject", folder="C:/work/MyProject")
+    form.set_project(project)
+    assert form.output_dir_edit.text() == project.downloads_dir
+    form.reset()
+    assert form.output_dir_edit.text() == project.downloads_dir  # a new form still downloads into the project
+    form.set_project(None)
+    assert form.output_dir_edit.text() == ""
