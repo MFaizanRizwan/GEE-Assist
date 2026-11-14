@@ -48,12 +48,21 @@ TERMINAL_COMMANDS: tuple[tuple[tuple[str, str], ...], ...] = (
 class AppMenuBar(QMenuBar):
     theme_chosen = pyqtSignal(str)  # a theme other than the current one, e.g. "dark-green"
     terminal_command = pyqtSignal(str)  # a gkonsol command to run in the terminal, e.g. "gee verify"
+    recent_project_chosen = pyqtSignal(str)  # the folder of a project in File > Recent projects
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self.setStyleSheet(STYLESHEET)
 
         self.file_menu = self._menu("&File")
+        self.new_project = self._action(self.file_menu, "New &project…", "Ctrl+Shift+N")
+        self.open_project = self._action(self.file_menu, "Open pro&ject…", "Ctrl+Shift+O")
+        self.recent_projects_menu = self.file_menu.addMenu("Recen&t projects")
+        self.recent_projects_menu.setStyleSheet(theme.MENU_STYLE)
+        self.rename_project = self._action(self.file_menu, "Rena&me project…")
+        self.move_project = self._action(self.file_menu, "Mo&ve project…")
+        self.close_project = self._action(self.file_menu, "C&lose project")
+        self.file_menu.addSeparator()
         self.new_request = self._action(self.file_menu, "&New request", "Ctrl+N")
         self.open_geotiff = self._action(self.file_menu, "&Open GeoTIFF…", "Ctrl+O")
         self.file_menu.addSeparator()
@@ -180,6 +189,18 @@ class AppMenuBar(QMenuBar):
     def _enable_edit_items(self) -> None:
         for action in self._edit_commands:
             action.setEnabled(True)
+
+    def set_projects(self, current, recent: list) -> None:
+        """The open project (a ProjectDTO or None) and the recent ones (File > Recent projects)."""
+        for action in (self.rename_project, self.move_project, self.close_project):
+            action.setEnabled(current is not None)
+        self.recent_projects_menu.clear()
+        for project in recent:
+            action = self.recent_projects_menu.addAction(f"{project.name}  —  {project.location}")
+            action.setToolTip(project.folder)
+            action.triggered.connect(lambda _=False, folder=project.folder: self.recent_project_chosen.emit(folder))
+        if not recent:
+            self.recent_projects_menu.addAction("No recent projects").setEnabled(False)
 
     def _menu(self, title: str) -> QMenu:
         menu = self.addMenu(title)
