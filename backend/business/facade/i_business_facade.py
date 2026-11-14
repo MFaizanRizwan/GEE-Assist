@@ -189,6 +189,14 @@ class IBusinessFacade(ABC):
                      on_progress: Optional[Callable[[float], None]] = None) -> ResultDTO: ...
 
     @abstractmethod
+    def save_analysis_result(self, result: ResultDTO, path: str) -> ResultDTO:
+        """Keep a result where the user chose (only saved results stay on disk); returns it at its new place."""
+
+    @abstractmethod
+    def discard_analysis_result(self, result: ResultDTO) -> None:
+        """Delete a result the user did not save."""
+
+    @abstractmethod
     def get_map_layers(self, result: ResultDTO, max_size: int = 1600) -> list[MapLayerDTO]:
         """Each layer of an analysis result drawn and ready to show."""
 
