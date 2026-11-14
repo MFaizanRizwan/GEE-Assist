@@ -5,9 +5,10 @@ is read, scaled to physical units (``sensors.scaling``), moved to the compute de
 (GPU or CPU, see ``compute_device``), turned into the requested layers, summarised,
 brought back and written to the result GeoTIFF.
 
-Several datasets (time periods) can take part. They are ordered by date, oldest
-first; the latest is "now" and the oldest "before". The first dataset given sets the
-grid: the others are resampled onto it (nearest neighbour) when theirs differs.
+Several datasets (time periods) can take part, ordered by date, oldest first
+(``order_periods``); the latest is "now" and the oldest "before". The dataset the
+user chose sets the grid: the others are resampled onto it (nearest neighbour) when
+theirs differs.
 
 Two passes are made when a layer needs the whole dataset first (e.g. VCI needs the
 lowest and highest NDVI, PCA the band covariance): the first pass only feeds the
@@ -17,7 +18,7 @@ lowest and highest NDVI, PCA the band covariance): the first pass only feeds the
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Optional
 
@@ -196,16 +197,22 @@ class _LazyRoles(dict):
         return value
 
 
+def order_periods(chosen: Period, others: list[Period]) -> list[Period]:
+    """Oldest first, by start date; without dates for all, the others as given and the chosen one last."""
+    periods = [chosen] + list(others)
+    if all(period.date for period in periods):
+        return [period for _, period in sorted(enumerate(periods), key=lambda item: (item[1].date, item[0]))]
+    return list(others) + [chosen]
+
+
 class RasterEngine:
-    def __init__(self, periods: list[Period], backend: ComputeBackend, block_rows: int = DEFAULT_BLOCK_ROWS):
+    def __init__(self, periods: list[Period], backend: ComputeBackend, block_rows: int = DEFAULT_BLOCK_ROWS,
+                 reference: Optional[Period] = None):
+        """``periods`` oldest first (see ``order_periods``); ``reference`` sets the grid (default: the latest)."""
         if not periods:
             raise AnalysisError("Choose a dataset to analyse.")
-        self.reference = periods[0]
-        dated = sorted(enumerate(periods), key=lambda item: (item[1].date or "9999", item[0]))
-        if all(period.date for period in periods):
-            self.periods = [period for _, period in dated]
-        else:  # without dates: as given, with the chosen dataset as the latest
-            self.periods = periods[1:] + periods[:1]
+        self.periods = list(periods)
+        self.reference = reference or periods[-1]
         self.backend = backend
         self.block_rows = max(16, block_rows)
         self._sources: list[Any] = []
