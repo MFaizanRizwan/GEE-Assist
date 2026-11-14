@@ -24,6 +24,7 @@ from PyQt6.QtWidgets import (
     QMainWindow,
     QMenu,
     QMessageBox,
+    QScrollArea,
     QSizePolicy,
     QStackedWidget,
     QVBoxLayout,
@@ -211,16 +212,22 @@ class HomeWindow(QMainWindow):
         self.analysis_table = AnalysisTableView(facade)
 
         self.account = AccountView(facade)
-        account_page = QFrame(objectName="HomeContent")
-        account_page.setStyleSheet(f"#HomeContent {{ background: {PAGE_BACKGROUND}; }}")
-        centre = QVBoxLayout(account_page)
-        centre.addStretch(1)
+        # The account card uses the page's width (up to its maximum) and scrolls in a short window.
+        account_content = QFrame(objectName="HomeContent")
+        account_content.setStyleSheet(f"#HomeContent {{ background: {PAGE_BACKGROUND}; }}")
+        page_layout = QVBoxLayout(account_content)
+        page_layout.setContentsMargins(36, 32, 36, 32)
         row = QHBoxLayout()
         row.addStretch(1)
-        row.addWidget(self.account)
+        row.addWidget(self.account, 100)
         row.addStretch(1)
-        centre.addLayout(row)
-        centre.addStretch(1)
+        page_layout.addLayout(row)
+        page_layout.addStretch(1)
+        account_page = QScrollArea(objectName="AccountPage")
+        account_page.setWidgetResizable(True)
+        account_page.setFrameShape(QFrame.Shape.NoFrame)
+        account_page.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        account_page.setWidget(account_content)
 
         self.pages = QStackedWidget(objectName="HomePages")
         self.pages.setStyleSheet(f"#HomePages, #DashboardPage {{ background: {PAGE_BACKGROUND}; }}")
@@ -466,9 +473,8 @@ class HomeWindow(QMainWindow):
         self._admin_dialog.activateWindow()
 
     def manage_account(self) -> None:
-        """The account page, with the details form open."""
+        """The account page: click a detail to change it, the photo to change or remove it."""
         self.show_account()
-        self.account.open_edit_details()
 
     def set_user(self, user: UserDTO) -> None:
         self._user = user
