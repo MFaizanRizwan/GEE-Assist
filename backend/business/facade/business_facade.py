@@ -212,6 +212,13 @@ class BusinessFacade(IBusinessFacade):
                      on_progress: Optional[Callable[[float], None]] = None) -> ResultDTO:
         return self._analysis().run_analysis(dataset, request, on_progress)
 
+    def save_analysis_result(self, result: ResultDTO, path: str) -> ResultDTO:
+        return self._analysis().save_result(result, path)
+
+    def discard_analysis_result(self, result: ResultDTO) -> None:
+        if self._analysis_service is not None:
+            self._analysis_service.discard_result(result)
+
     def get_map_layers(self, result: ResultDTO, max_size: int = 1600) -> list[MapLayerDTO]:
         return self._map_service.build_layers(result, max_size)
 
