@@ -104,8 +104,8 @@ As in other desktop apps, you work inside a project. A project is a folder:
   `downloads` folder. Starting a download without a project asks you to create or open one first.
 - **Analyses run inside the open project**: each run is recorded in `analysis_results.json` (what
   ran, when, its numbers, and the GeoTIFF if you saved it; paths inside the project are stored
-  relative to it, so moving the project keeps them valid). **Save result…** suggests the project's
-  `analysis` folder.
+  relative to it, so moving the project keeps them valid). **Save result** puts the GeoTIFF in the
+  project's `analysis` folder.
 - The **dashboard** shows the open project, the **last 3 projects** (name and the folder they are
   in; click one to open it) and the **latest analysis results of those 3 projects**.
 - Where your projects are is remembered on this computer in `workspace/projects.json` (per user).
@@ -129,8 +129,9 @@ As in other desktop apps, you work inside a project. A project is a folder:
 - Before / after processes (dNBR, RdNBR, RBR, land-cover change, LST change) need a dataset of the
   same place from another date, ticked under **Compare with**.
 - Results are **not saved** unless you ask: they are shown (each layer with its legend, and the
-  numbers) from a temporary file. **Save result…** asks where to keep the GeoTIFF (one band per layer)
-  and writes its numbers and settings next to it as `.json`. An unsaved result is deleted when the next
+  numbers) from a temporary file. **Save result** saves the GeoTIFF (one band per layer) in the open
+  project's `analysis` folder, without asking, and writes its numbers and settings next to it as
+  `.json`; an earlier result with the same name is kept (the new one gets `_2`, `_3`, ...). An unsaved result is deleted when the next
   one replaces it or the app closes. A result can also be opened in the viewer or laid over the map.
 - Raw download values are scaled to reflectance / kelvin per satellite before any index is computed.
 - **GPU**: the app lists the computer's graphics cards. With a dedicated NVIDIA GPU and CuPy installed
