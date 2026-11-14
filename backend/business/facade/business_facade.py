@@ -284,11 +284,18 @@ class BusinessFacade(IBusinessFacade):
         return self._analysis().analysis_groups()
 
     def list_analysis_datasets(self) -> list[DatasetDTO]:
+        """The open project's finished downloads; none when no project is open."""
+        project = self._request_service.get_current_project()
+        if project is None:
+            return []
+        folder = Path(project.folder).resolve()
         datasets = []
         jobs = sorted(self._download_service.list_jobs(), key=lambda job: job.finished_at or "", reverse=True)
         for job in jobs:
             if job.status != JOB_COMPLETED or job.dataset is None or not Path(job.dataset.path).is_file():
                 continue
+            if folder not in Path(job.dataset.path).resolve().parents:
+                continue  # another project's download
             dataset = job.dataset
             satellite, start, end = parse_dataset_name(Path(dataset.path).stem)
             datasets.append(DatasetDTO(

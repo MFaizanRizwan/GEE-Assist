@@ -299,6 +299,7 @@ class HomeWindow(QMainWindow):
         self._admin_dialog: UserAdminDialog | None = None
         self._was_maximized = False  # before going full screen
         self.set_user(user)
+        self._project_shown: str | None = "none yet"
         self.refresh_projects()
         self.show_dashboard()
 
@@ -317,6 +318,9 @@ class HomeWindow(QMainWindow):
         form_view = getattr(self.query_input, "form_view", None)
         if form_view is not None and hasattr(form_view, "set_project"):
             form_view.set_project(project)
+        if self._project_shown != (project.id if project is not None else None):
+            self._project_shown = project.id if project is not None else None
+            self.analysis.project_changed()  # only that project's datasets
 
     def ensure_project(self) -> bool:
         """True once a project is open; asks the user to create or open one when none is."""

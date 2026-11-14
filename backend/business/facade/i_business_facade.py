@@ -244,7 +244,8 @@ class IBusinessFacade(ABC):
 
     @abstractmethod
     def list_analysis_datasets(self) -> list[DatasetDTO]:
-        """Finished downloads whose GeoTIFF is still on disk, newest first."""
+        """The open project's finished downloads whose GeoTIFF is still on disk, newest first
+        (none when no project is open)."""
 
     @abstractmethod
     def describe_dataset(self, path: str) -> DatasetDTO:

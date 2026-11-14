@@ -133,6 +133,9 @@ def device_text(device: ComputeDeviceDTO) -> str:
     return f"⚡ Runs on the GPU: {device.device_name}" if device.uses_gpu else "Runs on the CPU"
 
 
+NO_PROJECT = ("Create or open a project: the datasets downloaded into it are listed here, and its "
+              "analysis results are saved in it.")
+
 class AnalysisView(QWidget):
     open_in_viewer_requested = pyqtSignal(str)               # result GeoTIFF
     show_on_map_requested = pyqtSignal(bytes, object, str)   # PNG, (west, south, east, north), title
@@ -363,7 +366,15 @@ class AnalysisView(QWidget):
             self.find_device()
 
     def refresh_datasets(self) -> None:
-        """Finished downloads (newest first), then GeoTIFFs opened from disk."""
+        """The open project's finished downloads (newest first), then GeoTIFFs opened from disk."""
+        has_project = current_project(self._facade) is not None
+        for widget in (self.refresh_button, self.browse_button):
+            widget.setEnabled(has_project)
+        if not has_project:
+            self.opened = []
+            self.set_datasets([])
+            self.dataset_note.setText(NO_PROJECT)
+            return
         try:
             downloads = list(self._facade.list_analysis_datasets())
         except GeeAssistError as exc:
@@ -587,8 +598,15 @@ class AnalysisView(QWidget):
         self.use_gpu.setEnabled(True)  # the GPU worked once: it can be switched back on
 
     # ------------------------------------------------------------- running
+    def project_changed(self) -> None:
+        """Another project was opened, or it was closed: show its datasets (files opened from disk are dropped)."""
+        self.opened = []
+        if self._loaded:
+            self.refresh_datasets()
+
     def _update_run_button(self) -> None:
-        ready = self.dataset is not None and bool(self.chosen_processes()) and not self.running
+        ready = (self.dataset is not None and bool(self.chosen_processes()) and not self.running
+                 and current_project(self._facade) is not None)
         self.run_button.setEnabled(ready)
         self.run_button.setText("Running…" if self.running else "Run analysis")
 

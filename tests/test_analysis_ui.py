@@ -26,6 +26,7 @@ from backend.dto.analysis_dto import (  # noqa: E402
 )
 from backend.dto.download_dto import DatasetDTO  # noqa: E402
 from backend.dto.map_dto import LegendDTO, MapLayerDTO  # noqa: E402
+from backend.dto.project_dto import ProjectDTO  # noqa: E402
 from backend.dto.result_dto import ResultDTO, ResultLayerDTO  # noqa: E402
 from backend.dto.user_dto import UserDTO  # noqa: E402
 from frontend.widgets.side_icons import AnalysisIcon  # noqa: E402
@@ -77,6 +78,7 @@ def _facade():
     facade.formula_categories.return_value = DAO.categories()
     facade.analysis_groups.return_value = DAO.analyses()
     facade.list_analysis_datasets.return_value = [AFTER, BEFORE]
+    facade.get_current_project.return_value = ProjectDTO(id="p1", name="MyProject", folder="C:/work/MyProject")
     facade.get_available_analyses.return_value = OPTIONS
     facade.get_compute_device.return_value = CPU
     facade.list_downloads.return_value = []
@@ -391,8 +393,24 @@ def test_save_result_saves_in_the_projects_analysis_folder_without_asking(page, 
 
 def test_save_result_needs_an_open_project(page):
     view, facade = page
-    facade.get_current_project.return_value = None
     view.run()
     _wait(lambda: view.layers)
+    facade.get_current_project.return_value = None  # closed after the run
     view.save_button.click()
     assert "Open a project" in view.banner.text() and not facade.save_analysis_result.called
+
+
+def test_without_a_project_there_is_nothing_to_analyse(page):
+    from frontend.views.analysis_view import NO_PROJECT
+
+    view, facade = page
+    facade.get_current_project.return_value = None
+    view.project_changed()
+    assert view.dataset_list.count() == 0 and view.dataset is None
+    assert view.dataset_note.text() == NO_PROJECT
+    assert not view.browse_button.isEnabled() and not view.refresh_button.isEnabled()
+    assert not view.run_button.isEnabled()
+
+    facade.get_current_project.return_value = ProjectDTO(id="p1", name="MyProject", folder="C:/work/MyProject")
+    view.project_changed()
+    assert view.dataset_list.count() == 2 and view.browse_button.isEnabled()
