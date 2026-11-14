@@ -1,3 +1,5 @@
+import json
+
 import httpx
 import pytest
 
@@ -113,3 +115,72 @@ def test_unreachable_server():
     with pytest.raises(errors.ServerUnavailableError):
         _client(handler).login("a", "b")
     assert _client(handler).health() is False
+
+
+# ------------------------------------------------------------- account management
+def _recording(status=200, body=None):
+    seen = {}
+
+    def handler(request: httpx.Request):
+        seen.update(method=request.method, path=request.url.path, query=dict(request.url.params),
+                    body=json.loads(request.content) if request.content else None,
+                    auth=request.headers.get("Authorization"))
+        return httpx.Response(status, json=body) if status != 204 else httpx.Response(204)
+
+    return handler, seen
+
+
+def test_update_user_patches_the_fields():
+    handler, seen = _recording(body={"id": "u1"})
+    assert _client(handler).update_user("tok", "u1", {"full_name": "A B"}) == {"id": "u1"}
+    assert seen == {"method": "PATCH", "path": "/users/u1", "query": {}, "body": {"full_name": "A B"},
+                    "auth": "Bearer tok"}
+
+
+def test_change_own_password_sends_the_current_one():
+    handler, seen = _recording(body={"message": "Password changed"})
+    _client(handler).change_password("tok", "u1", "NewPass123", current_password="OldPass123")
+    assert (seen["method"], seen["path"]) == ("PUT", "/users/u1/password")
+    assert seen["body"] == {"new_password": "NewPass123", "current_password": "OldPass123"}
+
+
+def test_admin_password_reset_sends_no_current_password():
+    handler, seen = _recording(body={"message": "Password changed"})
+    _client(handler).change_password("tok", "u2", "NewPass123")
+    assert seen["body"] == {"new_password": "NewPass123"}
+
+
+def test_wrong_current_password_is_a_field_error():
+    detail = [{"loc": ["body", "current_password"], "msg": "Current password is incorrect", "type": "value_error"}]
+    with pytest.raises(errors.FieldValidationError) as caught:
+        _client(_respond(422, {"detail": detail})).change_password("tok", "u1", "NewPass123", "bad")
+    assert caught.value.field_errors == {"current_password": "Current password is incorrect"}
+
+
+def test_create_user_posts_to_admin_users():
+    handler, seen = _recording(status=201, body={"id": "u9"})
+    assert _client(handler).create_user("tok", {"username": "carol"}) == {"id": "u9"}
+    assert (seen["method"], seen["path"], seen["body"]) == ("POST", "/admin/users", {"username": "carol"})
+
+
+def test_find_user_by_email_passes_the_address_as_a_query():
+    handler, seen = _recording(body={"id": "u3"})
+    _client(handler).find_user_by_email("tok", "a@example.com")
+    assert (seen["path"], seen["query"]) == ("/admin/users/by-email", {"email": "a@example.com"})
+
+
+def test_delete_user_accepts_an_empty_204():
+    handler, seen = _recording(status=204)
+    assert _client(handler).delete_user("tok", "u3") is None
+    assert (seen["method"], seen["path"]) == ("DELETE", "/admin/users/u3")
+
+
+def test_deleting_yourself_is_an_invalid_request():
+    with pytest.raises(errors.InvalidRequestError, match="your own account"):
+        _client(_respond(400, {"detail": "You cannot delete your own account"})).delete_user("tok", "me")
+
+
+def test_duplicate_username_on_update_names_the_field():
+    with pytest.raises(errors.ConflictError) as caught:
+        _client(_respond(409, {"detail": "Username is already taken"})).update_user("tok", "u1", {"username": "x"})
+    assert caught.value.field == "username"
