@@ -62,3 +62,39 @@ def test_account_card_shows_the_same_details(app):
     assert card._values["email"].text() == "ayesha@example.com  ✓ verified"
     assert card._values["provider"].text() == "Username and password"
     card.deleteLater()
+
+
+def _png(width=40, height=20) -> bytes:
+    from PyQt6.QtCore import QBuffer, QIODevice
+    from PyQt6.QtGui import QColor, QImage
+
+    image = QImage(width, height, QImage.Format.Format_ARGB32)
+    image.fill(QColor("red"))
+    buffer = QBuffer()
+    buffer.open(QIODevice.OpenModeFlag.WriteOnly)
+    image.save(buffer, "PNG")
+    return bytes(buffer.data())
+
+
+def test_avatar_shows_the_photo_in_a_circle(app):
+    from frontend.views.account_view import Avatar, round_photo
+
+    avatar = Avatar(48)
+    avatar.set_user(_user(), _png())
+    assert avatar.has_photo and avatar.text() == ""
+    circle = round_photo(_png(), 48).toImage()
+    assert circle.width() == circle.height() == 48
+    assert circle.pixelColor(24, 24).red() == 255 and circle.pixelColor(0, 0).alpha() == 0  # corners cut away
+    avatar.deleteLater()
+
+
+def test_avatar_falls_back_to_initials(app):
+    from frontend.views.account_view import Avatar
+
+    avatar = Avatar(48)
+    avatar.set_user(_user(), _png())
+    avatar.set_user(_user(), None)  # photo removed
+    assert not avatar.has_photo and avatar.text() == "AK"
+    avatar.set_user(_user(), b"not an image")
+    assert not avatar.has_photo and avatar.text() == "AK"
+    avatar.deleteLater()

@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QImage, QPainter, QPainterPath, QPixmap
 from PyQt6.QtWidgets import QDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from backend.auth_exceptions import AuthError, SessionExpiredError
@@ -33,9 +34,36 @@ def format_provider(user: UserDTO) -> str:
     return _PROVIDERS.get(user.auth_provider, user.auth_provider.title())
 
 
+def round_photo(image: bytes, size: int, pixel_ratio: float = 1.0) -> QPixmap | None:
+    """``image`` cropped to its centre square and cut into a circle ``size`` points wide; None if unreadable."""
+    picture = QImage.fromData(image)
+    if picture.isNull():
+        return None
+    side = min(picture.width(), picture.height())
+    square = picture.copy((picture.width() - side) // 2, (picture.height() - side) // 2, side, side)
+    pixels = max(1, round(size * pixel_ratio))
+    square = square.scaled(pixels, pixels, Qt.AspectRatioMode.IgnoreAspectRatio,
+                           Qt.TransformationMode.SmoothTransformation)
+    result = QPixmap(pixels, pixels)
+    result.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(result)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    clip = QPainterPath()
+    clip.addEllipse(0, 0, pixels, pixels)
+    painter.setClipPath(clip)
+    painter.drawImage(0, 0, square)
+    painter.end()
+    result.setDevicePixelRatio(pixel_ratio)
+    return result
+
+
 class Avatar(QLabel):
+    """The user's profile photo in a circle, or their initials when there is none."""
+
     def __init__(self, size: int = 64, parent: QWidget | None = None):
         super().__init__(parent)
+        self._size = size
+        self.has_photo = False
         self.setFixedSize(size, size)
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setStyleSheet(
@@ -44,8 +72,14 @@ class Avatar(QLabel):
             f"background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {theme.LEAF}, stop:1 {theme.OCEAN});"
         )
 
-    def set_user(self, user: UserDTO) -> None:
-        self.setText(user.initials)
+    def set_user(self, user: UserDTO, photo: bytes | None = None) -> None:
+        pixmap = round_photo(photo, self._size, self.devicePixelRatioF()) if isinstance(photo, bytes) else None
+        self.has_photo = pixmap is not None
+        if pixmap is None:
+            self.clear()
+            self.setText(user.initials)
+        else:
+            self.setPixmap(pixmap)
 
 
 class AccountView(QFrame):
