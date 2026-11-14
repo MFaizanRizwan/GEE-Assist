@@ -9,7 +9,7 @@ View → Show analysis table.
 
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtWidgets import (
     QAbstractItemView,
@@ -274,8 +274,19 @@ class AnalysisTableView(QWidget):
         layout.addLayout(self.chips_row)
         layout.addLayout(body, 1)
 
+        # Wrapped rows are measured again once the columns have their widths (and whenever they change).
+        self._fit_rows = QTimer(self)
+        self._fit_rows.setSingleShot(True)
+        self._fit_rows.setInterval(30)
+        self._fit_rows.timeout.connect(self.table.resizeRowsToContents)
+        header.sectionResized.connect(lambda *_: self._fit_rows.start())
+
         self.search.textChanged.connect(self.refresh_rows)
         self.table.itemSelectionChanged.connect(self._on_selected)
+
+    def resizeEvent(self, event) -> None:  # noqa: N802 (Qt API)
+        super().resizeEvent(event)
+        self._fit_rows.start()
 
     # ------------------------------------------------------------- loading
     def showEvent(self, event) -> None:  # noqa: N802 (Qt API)
@@ -335,6 +346,7 @@ class AnalysisTableView(QWidget):
                 self._add_group_row(current)
             self._add_row(formula)
         self.table.resizeRowsToContents()
+        self._fit_rows.start()
         self.count.setText(f"{len(shown)} of {len(self.formulas)} shown")
         self.detail.show_formula(shown[0] if len(shown) == 1 else None)
 
