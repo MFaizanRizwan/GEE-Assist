@@ -71,5 +71,14 @@ class IDownloadService(ABC):
         """Stop waiting for the Earth Engine browser sign-in."""
 
     @abstractmethod
+    def is_busy_in(self, folder: str) -> bool:
+        """True while a download into ``folder`` (or a folder inside it) is running or waiting to run."""
+
+    @abstractmethod
+    def relocate(self, old_folder: str, new_folder: str) -> None:
+        """The files under ``old_folder`` are now under ``new_folder`` (a project was renamed or moved):
+        update the saved jobs so they still find their files."""
+
+    @abstractmethod
     def shutdown(self, timeout: float = 5.0) -> None:
         """Pause the active download so it resumes next time, and stop the worker."""

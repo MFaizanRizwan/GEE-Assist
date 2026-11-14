@@ -466,3 +466,55 @@ def test_folder_name_ends_with_the_request_dates(tmp_path):
 ])
 def test_download_names_are_read_back(name, parsed):
     assert parse_dataset_name(name) == parsed
+
+
+# ------------------------------------------------------------------ projects renamed or moved
+def test_a_running_download_keeps_its_project_busy(env):
+    make, data, tmp_path = env
+    data.gate = threading.Event()
+    service = make()
+    job = service.start_download(_form(tmp_path, output_dir=str(tmp_path / "Project" / "downloads")))
+    assert service.is_busy_in(str(tmp_path / "Project"))
+    assert not service.is_busy_in(str(tmp_path / "Other"))
+    service.pause(job)
+    _wait(service, job, JOB_PAUSED)
+    assert not service.is_busy_in(str(tmp_path / "Project"))  # paused: the folder may move
+    data.gate.set()
+
+
+def test_relocated_jobs_find_their_files_and_survive_a_restart(env):
+    import shutil
+
+    make, data, tmp_path = env
+    service = make()
+    job = _wait(service, service.start_download(_form(tmp_path, output_dir=str(tmp_path / "Old" / "downloads"))),
+                JOB_COMPLETED)
+    shutil.move(str(tmp_path / "Old"), str(tmp_path / "New"))
+    service.relocate(str(tmp_path / "Old"), str(tmp_path / "New"))
+
+    moved = service.get_progress(job)
+    expected = (tmp_path / "New" / "downloads").resolve()
+    assert Path(moved.folder).parent == expected and Path(moved.dataset.path).exists()
+    assert moved.request.output_dir == str(expected)
+    service.shutdown(timeout=2)
+
+    again = make()  # the next launch reads the saved jobs
+    assert [Path(j.dataset.path).exists() for j in again.list_jobs()] == [True]
+
+
+def test_relocating_a_paused_download_lets_it_resume(env):
+    import shutil
+
+    make, data, tmp_path = env
+    data.gate = threading.Event()
+    service = make()
+    job = service.start_download(_form(tmp_path, output_dir=str(tmp_path / "Old" / "downloads")))
+    service.pause(job)
+    _wait(service, job, JOB_PAUSED)
+    shutil.move(str(tmp_path / "Old"), str(tmp_path / "New"))
+    service.relocate(str(tmp_path / "Old"), str(tmp_path / "New"))
+    data.gate.set()
+    service.resume(job)
+    done = _wait(service, job, JOB_COMPLETED)
+    assert Path(done.dataset.path).exists() and "New" in Path(done.dataset.path).parts
+    assert _strip_values(done) == [1, 2]
