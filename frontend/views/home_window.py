@@ -91,8 +91,8 @@ class ProfileButton(QFrame):
         self._row.addWidget(self.avatar)
         self._row.addWidget(self.details, 1)
 
-    def set_user(self, user: UserDTO) -> None:
-        self.avatar.set_user(user)
+    def set_user(self, user: UserDTO, photo: bytes | None = None) -> None:
+        self.avatar.set_user(user, photo)
         self.name.setText(user.full_name)
         self.role.setText("Administrator" if user.is_admin else "User")
 
@@ -188,8 +188,8 @@ class HomeWindow(QMainWindow):
         # ---- account menu
         self.account_menu = QMenu(self)
         self.account_menu.setStyleSheet(theme.MENU_STYLE)
-        self.manage_account_action = QAction("Manage account  (coming soon)", self)
-        self.manage_account_action.setEnabled(False)
+        self.manage_account_action = QAction("Manage account", self)
+        self.manage_account_action.setToolTip("Edit your details, change your password or profile photo")
         self.view_account_action = QAction("View account", self)
         self.signup_details_action = QAction("Sign-up details", self)
         self.sign_out_action = QAction("Sign out", self)
@@ -258,6 +258,8 @@ class HomeWindow(QMainWindow):
         self.back_button.clicked.connect(self.show_dashboard)
         self.profile.clicked.connect(self.show_account_menu)
         self.view_account_action.triggered.connect(self.show_account)
+        self.manage_account_action.triggered.connect(self.manage_account)
+        self.account.user_changed.connect(self.set_user)  # e.g. a new name or photo shows in the side bar
         self.signup_details_action.triggered.connect(self.show_signup_details)
         self.dashboard.open_query_input.connect(self.show_query_input)
         self.dashboard.open_downloads.connect(self.show_downloads)
@@ -463,9 +465,14 @@ class HomeWindow(QMainWindow):
         self._admin_dialog.raise_()
         self._admin_dialog.activateWindow()
 
+    def manage_account(self) -> None:
+        """The account page, with the details form open."""
+        self.show_account()
+        self.account.open_edit_details()
+
     def set_user(self, user: UserDTO) -> None:
         self._user = user
-        self.profile.set_user(user)
+        self.profile.set_user(user, self._facade.get_profile_photo(user.id))
         self.manage_users.setVisible(user.is_admin)
         self.menu_bar.manage_users.setVisible(user.is_admin)
         self.account.set_user(user)

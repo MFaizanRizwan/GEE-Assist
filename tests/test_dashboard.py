@@ -132,8 +132,20 @@ def test_profile_menu_offers_the_account_options(home, monkeypatch):
 
     assert len(shown) == 1
     names = [action.text() for action in home.account_menu.actions() if not action.isSeparator()]
-    assert names == ["Manage account  (coming soon)", "View account", "Sign-up details", "Sign out"]
-    assert not home.manage_account_action.isEnabled()
+    assert names == ["Manage account", "View account", "Sign-up details", "Sign out"]
+    assert home.manage_account_action.isEnabled()
+
+
+def test_manage_account_opens_the_details_form_on_the_account_page(home, monkeypatch):
+    opened = []
+    monkeypatch.setattr(home.account, "open_edit_details", lambda: opened.append(True))
+    home.manage_account_action.trigger()
+    assert home.current_page() is home._account_page and opened
+
+
+def test_a_changed_account_shows_in_the_side_bar(home):
+    home.account.user_changed.emit(UserDTO(id="1", username="ayesha", full_name="Ayesha Kiran Khan", role="user"))
+    assert home.profile.name.text() == "Ayesha Kiran Khan"
 
 
 def test_sign_out_is_in_the_account_menu(home):
