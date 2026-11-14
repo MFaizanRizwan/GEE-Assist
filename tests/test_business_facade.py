@@ -42,3 +42,19 @@ def test_earth_engine_checks_and_sign_in_go_to_the_download_service(facade, serv
     download.complete_gee_sign_in.assert_called_once_with(stop)
     facade.cancel_gee_sign_in()
     download.cancel_gee_sign_in.assert_called_once_with()
+
+
+@pytest.mark.parametrize(("method", "args"), [
+    ("update_user", ("user",)),
+    ("change_password", ("u1", "NewPass123", "NewPass123", "OldPass123")),
+    ("set_profile_photo", ("photo.png",)),
+    ("get_profile_photo", ("u1",)),
+    ("remove_profile_photo", ()),
+    ("create_user", ("new user",)),
+    ("delete_user", ("u2",)),
+    ("find_user_by_email", ("a@example.com",)),
+])
+def test_account_management_goes_to_the_user_service(facade, services, method, args):
+    user, _, _ = services
+    assert getattr(facade, method)(*args) is getattr(user, method).return_value
+    getattr(user, method).assert_called_once_with(*args)

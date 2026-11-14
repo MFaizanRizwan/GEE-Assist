@@ -18,6 +18,7 @@ from backend.dto.result_dto import ResultDTO
 from backend.exceptions import AnalysisError
 from backend.dto.user_dto import (
     GoogleSignInDTO,
+    NewUserDTO,
     SessionInfoDTO,
     SignupDTO,
     SignupResultDTO,
@@ -97,6 +98,33 @@ class BusinessFacade(IBusinessFacade):
 
     def set_user_active(self, user_id: str, is_active: bool) -> UserDTO:
         return self._user_service.set_user_active(user_id, is_active)
+
+    def find_user_by_email(self, email: str) -> UserDTO | None:
+        return self._user_service.find_user_by_email(email)
+
+    def create_user(self, user: NewUserDTO) -> ValidationDTO:
+        return self._user_service.create_user(user)
+
+    def delete_user(self, user_id: str) -> bool:
+        return self._user_service.delete_user(user_id)
+
+    # ------------------------------------------------------------- manage account
+    def update_user(self, user: UserDTO) -> ValidationDTO:
+        return self._user_service.update_user(user)
+
+    def change_password(
+        self, user_id: str, new_password: str, confirm_password: str, current_password: str | None = None
+    ) -> ValidationDTO:
+        return self._user_service.change_password(user_id, new_password, confirm_password, current_password)
+
+    def set_profile_photo(self, file_path: str) -> ValidationDTO:
+        return self._user_service.set_profile_photo(file_path)
+
+    def get_profile_photo(self, user_id: str | None = None) -> bytes | None:
+        return self._user_service.get_profile_photo(user_id)
+
+    def remove_profile_photo(self) -> bool:
+        return self._user_service.remove_profile_photo()
 
     # ------------------------------------------------------------- query input
     def submit_query(self, text: str) -> FormDTO:
