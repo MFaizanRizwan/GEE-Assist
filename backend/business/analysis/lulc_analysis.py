@@ -1,4 +1,7 @@
-"""Class diagram: LULCAnalysis. Land-cover change between two maps of the same place (FR-08).
+"""Class diagram: LULCAnalysis (FR-08). Sub-types: land-cover change, built-up & urban, soil &
+salinity, transformations (Tasseled Cap, PCA; see ``transformations``) and radar (``sar_layers``).
+
+Land-cover change compares two maps of the same place.
 
 Works on Dynamic World (``label``, classes 0-8) and MODIS MCD12Q1 (``LC_Type1``, IGBP
 classes 1-17). The earliest dataset is "before", the latest "after".
@@ -12,6 +15,7 @@ classes 1-17). The earliest dataset is "before", the latest "after".
 
 from __future__ import annotations
 
+from backend.business.analysis import sar_layers, transformations
 from backend.business.analysis.base_analysis import BaseAnalysis
 from backend.business.analysis.raster_engine import Accumulator, LayerSpec, Period
 from backend.business.analysis.sensors import class_band
@@ -61,9 +65,11 @@ class Transitions(Accumulator):
 
 
 class LULCAnalysis(BaseAnalysis):
-    CATEGORY = "Land cover"
+    CATEGORY = "LULC"
 
     def _special_check(self, formula, period: Period):
+        if formula.key in transformations.KEYS:
+            return transformations.special_check(formula, period)
         if formula.key not in ("LULCChangeDetection", "LULCTransition"):
             return ""
         if class_band(period.satellite, period.band_names) is None:
@@ -71,6 +77,10 @@ class LULCAnalysis(BaseAnalysis):
         return None
 
     def _special_layers(self, key, periods, params, notes):
+        other = transformations.special_layers(key, periods) if key in transformations.KEYS else \
+            sar_layers.special_layers(key, periods)
+        if other is not None:
+            return other
         if key not in ("LULCChangeDetection", "LULCTransition"):
             return None
         found = [class_band(period.satellite, period.band_names) for period in periods]

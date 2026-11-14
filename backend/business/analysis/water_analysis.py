@@ -1,5 +1,5 @@
-"""Class diagram: WaterAnalysis. NDWI, MNDWI, AWEI, WRI, turbidity, chlorophyll, floating algae,
-water-body detection and water-area estimation (FR-06).
+"""Class diagram: WaterAnalysis (FR-06). Sub-types: water indices (NDWI, MNDWI, AWEI, WRI), water
+quality (turbidity, chlorophyll, floating algae), water bodies & area, and snow & ice (NDSI, NDGI, S3).
 
 The water mask comes from the best source the dataset has:
 
