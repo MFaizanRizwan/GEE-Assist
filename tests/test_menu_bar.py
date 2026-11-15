@@ -41,7 +41,7 @@ def test_menus_hold_the_expected_items(bar):
                                      "Show analysis ta&ble", "&Side bar", "&Terminal", "&Full screen", "&Theme"]
     assert _items(bar.terminal_menu)[:4] == ["&Show terminal	Ctrl+`", "&Maximise terminal", "&Clear terminal",
                                              "S&top running command"]
-    assert _items(bar.options_menu) == ["Download &chunk size…", "&Manage users…"]
+    assert _items(bar.options_menu) == ["&Settings…", "Download &chunk size…", "&Manage users…"]
     assert _items(bar.help_menu) == ["&About GEE-Assist"]
 
 
