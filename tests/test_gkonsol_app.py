@@ -7,6 +7,7 @@ import pytest
 from backend.auth_exceptions import SessionExpiredError
 from backend.config.download_settings import DownloadSettings
 from backend.dto import CheckDTO
+from backend.dto.settings_dto import AppSettingsDTO
 from frontend.gkonsol.commands import app as app_commands
 from tests.gkonsol_fakes import terminal, user
 
@@ -23,6 +24,7 @@ def term(monkeypatch, tmp_path):
     # The free space of this computer's drives does not matter here.
     monkeypatch.setattr(app_commands.shutil, "disk_usage", lambda path: SimpleNamespace(free=500_000_000_000))
     term = terminal()
+    term.facade.get_app_settings.return_value = AppSettingsDTO("my-project", True, "…tkey", 7 * 86400)
     term.form.set_output_dir(str(tmp_path / "downloads"))
     return term
 
@@ -76,7 +78,7 @@ def test_panel_size(term):
 def test_config_shows_the_settings(term):
     printed = term.type("config")
     assert "http://localhost:8000  (AUTH_API_URL)" in printed and "my-project" in printed
-    assert "7 d 0 h  (SESSION_DURATION)" in printed and "gemini-x" in printed and "set" in printed
+    assert "7 d 0 h" in printed and "gemini-x" in printed and "set  (…tkey)" in printed
     assert "500 MB" in printed and ".env" in printed
 
 
@@ -91,7 +93,7 @@ def test_doctor_when_everything_works(term):
 
 
 def test_doctor_reports_problems(term, monkeypatch):
-    monkeypatch.setattr(app_commands, "load_llm_settings", lambda: SimpleNamespace(api_key="", model="m"))
+    term.facade.get_app_settings.return_value = AppSettingsDTO("my-project", False)  # no Gemini key
     term.facade.is_server_available.return_value = True
     term.facade.reload_current_user.side_effect = SessionExpiredError("Your session has expired.", 401)
     term.facade.check_gee_setup.return_value = [CheckDTO("Connection", "fail", "Not signed in.")]

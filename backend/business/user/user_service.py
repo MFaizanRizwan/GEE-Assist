@@ -43,7 +43,7 @@ from backend.dto.user_dto import (
 )
 from backend.dto.validation_dto import ValidationDTO
 
-# Default length of a "Keep me signed in" session (SESSION_DURATION in .env).
+# Default length of a "Keep me signed in" session (Options > Settings, or SESSION_DURATION in .env).
 DEFAULT_SESSION_DURATION = 7 * 24 * 3600
 
 ROLES = ("user", "admin")
