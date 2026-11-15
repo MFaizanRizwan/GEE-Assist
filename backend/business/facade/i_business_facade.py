@@ -8,6 +8,7 @@ from backend.dto.analysis_dto import AnalysisOptionDTO, AnalysisRequestDTO, Comp
 from backend.dto.download_dto import DatasetDTO
 from backend.dto.map_dto import MapLayerDTO, RasterInfoDTO, RasterViewDTO, ViewPresetDTO
 from backend.dto.project_dto import AnalysisRecordDTO, ProjectDTO
+from backend.dto.settings_dto import AppSettingsDTO, AppSettingsUpdateDTO
 from backend.dto.result_dto import ResultDTO
 from backend.dto.user_dto import (
     GoogleSignInDTO,
@@ -49,6 +50,15 @@ class IBusinessFacade(ABC):
 
     @abstractmethod
     def log_out(self) -> None: ...
+
+    # ------------------------------------------------------------- app settings
+    @abstractmethod
+    def get_app_settings(self) -> AppSettingsDTO:
+        """The Earth Engine project, whether a Gemini key is set, and the "Keep me signed in" length."""
+
+    @abstractmethod
+    def save_app_settings(self, update: AppSettingsUpdateDTO) -> ValidationDTO:
+        """Save them on this computer and use them at once; field problems come back in ``errors``."""
 
     @abstractmethod
     def sign_up(self, data: SignupDTO) -> SignupResultDTO: ...

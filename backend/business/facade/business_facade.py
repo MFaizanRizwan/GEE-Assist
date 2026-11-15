@@ -11,12 +11,14 @@ from backend.business.download.naming import parse_dataset_name
 from backend.business.facade.i_business_facade import IBusinessFacade
 from backend.business.map.i_map_service import IMapService
 from backend.business.request.i_request_service import IRequestService
+from backend.business.settings.i_settings_service import ISettingsService
 from backend.business.user.i_user_service import IUserService
 from backend.dto import CheckDTO, DownloadJobDTO, FormDTO, PlaceDTO, ValidationDTO
 from backend.dto.analysis_dto import AnalysisOptionDTO, AnalysisRequestDTO, ComputeDeviceDTO, FormulaDTO
 from backend.dto.download_dto import JOB_COMPLETED, DatasetDTO
 from backend.dto.map_dto import MapLayerDTO, RasterInfoDTO, RasterViewDTO, ViewPresetDTO
 from backend.dto.project_dto import AnalysisRecordDTO, ProjectDTO
+from backend.dto.settings_dto import AppSettingsDTO, AppSettingsUpdateDTO
 from backend.dto.result_dto import ResultDTO
 from backend.exceptions import AnalysisError, GeeAssistError, ProjectError
 from backend.dto.user_dto import (
@@ -47,12 +49,14 @@ class BusinessFacade(IBusinessFacade):
         download_service: IDownloadService,
         map_service: IMapService,
         analysis_service: Optional[IAnalysisService] = None,
+        settings_service: ISettingsService | None = None,
     ):
         self._user_service = user_service
         self._request_service = request_service
         self._download_service = download_service
         self._map_service = map_service
         self._analysis_service = analysis_service
+        self._settings_service = settings_service
 
     # ------------------------------------------------------------- authentication
     def is_server_available(self) -> bool:
@@ -76,6 +80,18 @@ class BusinessFacade(IBusinessFacade):
     def log_out(self) -> None:
         self._user_service.log_out()
         self._request_service.close_project()  # the next user starts without one
+
+    # ------------------------------------------------------------- app settings
+    def get_app_settings(self) -> AppSettingsDTO:
+        return self._settings().get_settings()
+
+    def save_app_settings(self, update: AppSettingsUpdateDTO) -> ValidationDTO:
+        return self._settings().save_settings(update)
+
+    def _settings(self) -> ISettingsService:
+        if self._settings_service is None:
+            raise GeeAssistError("Settings are not set up in this build.")
+        return self._settings_service
 
     def sign_up(self, data: SignupDTO) -> SignupResultDTO:
         return self._user_service.sign_up(data)

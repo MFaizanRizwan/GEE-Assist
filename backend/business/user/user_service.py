@@ -150,6 +150,9 @@ class UserService(IUserService):
             has_refresh_token=self._session.has_refresh_token,
         )
 
+    def set_session_duration(self, seconds: float) -> None:
+        self._session_duration = float(seconds)
+
     def log_out(self) -> None:
         self._user = None
         self._session.clear()
