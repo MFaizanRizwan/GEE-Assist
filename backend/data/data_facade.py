@@ -64,6 +64,14 @@ class DataFacade(IDataFacade):
     ) -> bool:
         return self._gee().fetch_chunk(chunk, path, on_progress, should_stop)
 
+    def configure_gee_project(self, project: str) -> None:
+        if self._gee_client is not None:
+            self._gee_client.set_project(project)
+
+    def configure_gemini_key(self, api_key: str) -> None:
+        if self._gemini_client is not None:
+            self._gemini_client.set_api_key(api_key)
+
     def validate_access(self) -> bool:
         return self._gee_client is not None and self._gee_client.validate_access()
 

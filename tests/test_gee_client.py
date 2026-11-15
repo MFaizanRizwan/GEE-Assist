@@ -357,7 +357,7 @@ def test_signing_in_connects_again_with_the_new_credentials(fake_ee):
 
 # ------------------------------------------------------------------ access and errors
 def test_missing_project_is_reported():
-    with pytest.raises(GEESetupError, match="GEE_PROJECT"):
+    with pytest.raises(GEESetupError, match="Options → Settings"):
         GEEClient(project="")._initialize()
     assert GEEClient(project="").validate_access() is False
 

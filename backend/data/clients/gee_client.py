@@ -77,6 +77,13 @@ class GEEClient(IGEEClient):
         self._splits: dict[str, int] = {}  # request -> times its tiles had to be split
         self._sessions = threading.local()  # one HTTP session per download thread
 
+    def set_project(self, project: str) -> None:
+        with self._lock:
+            project = project.strip()
+            if project != self._project:
+                self._project = project
+                self._initialized = False  # connect again, with the new project
+
     # ------------------------------------------------------------- set-up checks
     def diagnose(self) -> list[CheckDTO]:
         """Check the Earth Engine set-up step by step (``validate_access`` does it in one go)."""
@@ -162,8 +169,8 @@ class GEEClient(IGEEClient):
                 return
             if not self._project:
                 raise GEESetupError(
-                    "Earth Engine is not configured: set GEE_PROJECT in .env to a Google Cloud "
-                    "project registered for Earth Engine."
+                    "Earth Engine is not configured: enter your Google Cloud project registered for "
+                    "Earth Engine in Options → Settings…"
                 )
             try:
                 self._ee().Initialize(project=self._project)
