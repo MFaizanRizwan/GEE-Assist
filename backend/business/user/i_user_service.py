@@ -48,6 +48,10 @@ class IUserService(ABC):
     @abstractmethod
     def log_out(self) -> None: ...
 
+    @abstractmethod
+    def set_session_duration(self, seconds: float) -> None:
+        """How long "Keep me signed in" lasts from the next sign-in on."""
+
     # ------------------------------------------------------------- sign-up / verification
     @abstractmethod
     def sign_up(self, data: SignupDTO) -> SignupResultDTO: ...

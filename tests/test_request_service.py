@@ -40,6 +40,12 @@ class FakeDataFacade(IDataFacade):
     def validate_access(self) -> bool:
         return False
 
+    def configure_gee_project(self, project):  # not used here
+        pass
+
+    def configure_gemini_key(self, api_key):  # not used here
+        pass
+
     def diagnose_gee(self):  # not used here
         return []
 
