@@ -416,7 +416,7 @@ answers, and how long it took. If it does not, it says how to start it. Alias:
 ### 4.3 Earth Engine
 
 Downloads come from Google Earth Engine. It needs a Google Cloud project registered for
-Earth Engine (`GEE_PROJECT` in `.env`) and a sign-in on this computer.
+Earth Engine (**Options → Settings…**) and a sign-in on this computer.
 
 #### `gee`, `gee status`
 
@@ -439,7 +439,7 @@ how to fix it:
 | Step | What is checked |
 |---|---|
 | Earth Engine library | `earthengine-api` is installed (its version is shown) |
-| Cloud project (GEE_PROJECT) | `GEE_PROJECT` is set in `.env` |
+| Cloud project | An Earth Engine project is set in **Options → Settings…** |
 | Sign-in on this computer | A saved Earth Engine sign-in exists (`~/.config/earthengine/credentials`), or a service account key in `GOOGLE_APPLICATION_CREDENTIALS` |
 | Connection | Earth Engine accepts the sign-in and the project (with the time it took) |
 | Test request | Earth Engine computes a small request (with the time it took) |
@@ -451,7 +451,7 @@ Each step is marked `✓` (passed), `!` (works, but look at it), `✗` (failed) 
 ayesha@gkonsol ~ $ gee verify
 Checking the Earth Engine set-up step by step…
 ✓ Earth Engine library         earthengine-api 1.7.48
-✓ Cloud project (GEE_PROJECT)  my-gee-project
+✓ Cloud project  my-gee-project
 ! Sign-in on this computer     No saved Earth Engine sign-in at C:\Users\you\.config\earthengine\credentials; other Google credentials are tried.
   → Sign in to Earth Engine on this computer (earthengine authenticate).
   → Sign in from here: gee login
@@ -486,8 +486,8 @@ The terminal waits up to 5 minutes for the browser. **Ctrl+C** cancels. Alias: `
 gee project
 ```
 
-Shows the Cloud project Earth Engine uses (`GEE_PROJECT` in `.env`), or how to set one
-if it is missing. To use another project, change `.env` and restart GEE-Assist.
+Shows the Cloud project Earth Engine uses (set in **Options → Settings…**), or how to set one
+if it is missing. A new project entered there is used at once.
 
 #### `datasets`, `datasets list`
 
@@ -1018,11 +1018,11 @@ ayesha@gkonsol ~ $ doctor
 GEE-Assist check-up
 ✓ Authentication server  http://localhost:8000 answered.  (23 ms)
 ✓ Session                Signed in as ayesha.  (41 ms)
-✓ Gemini                 GEMINI_API_KEY is set.
+✓ Gemini                 The Gemini API key is set.
 ✓ Download folder        D:\Projects\FYP\GEE-Assist\workspace\downloads  (182.4 GB free)
 Earth Engine
 ✓ Earth Engine library         earthengine-api 1.7.48
-✓ Cloud project (GEE_PROJECT)  my-gee-project
+✓ Cloud project  my-gee-project
 ✓ Sign-in on this computer     Saved sign-in: C:\Users\you\.config\earthengine\credentials
 ✓ Connection                   Connected with project 'my-gee-project'.  (812 ms)
 ✓ Test request                 Earth Engine answered in 230 ms.  (230 ms)
@@ -1140,7 +1140,7 @@ Commands with subcommands run a default when typed alone: `user` → `user info`
 |---|---|
 | `workspace/gkonsol.json` | The command history (last 500) and the terminal's height. Delete it to start afresh. Like the rest of `workspace/`, it is not committed to git |
 | `~/.config/earthengine/credentials` | The Earth Engine sign-in saved by `gee login` (or `earthengine authenticate`) |
-| `.env` | The settings `config` shows (`AUTH_API_URL`, `GEE_PROJECT`, `GEMINI_API_KEY` …) |
+| `.env` | Server settings (`AUTH_API_URL` …); `GEE_PROJECT`, `GEMINI_API_KEY` only until they are entered in Options → Settings… |
 | `workspace/download_settings.json` | Chunk size and retries, changed by `download chunk-size` |
 
 ## 8. Messages and what to do
@@ -1153,7 +1153,7 @@ Commands with subcommands run a default when typed alone: `user` → `user info`
 | `'users …' is for administrators only.` | Ask an administrator |
 | `Cannot reach the authentication server at …` | Start GEE-Assist-Backend (`uvicorn app.main:app`), or set `AUTH_API_URL` in `.env` |
 | `Your session has expired.` | `signout`, then sign in again |
-| `GEE_PROJECT is not set in .env.` | Register a Cloud project at https://code.earthengine.google.com/register, set `GEE_PROJECT=your-project-id` in `.env`, restart GEE-Assist |
+| `No Earth Engine project is set.` | Register a Cloud project at https://code.earthengine.google.com/register and enter its ID in Options → Settings… |
 | `Earth Engine is not signed in on this computer.` | `gee login` |
 | `The Earth Engine API is not enabled for project …` | Open the link in the message, enable the API, wait a few minutes, `gee verify` |
 | `Google did not sign you in to Earth Engine (access_denied).` | Run `gee login` again and allow access |
