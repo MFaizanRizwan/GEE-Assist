@@ -161,7 +161,7 @@ RETRY_ROUNDS = 2
 RETRY_WAIT_SEC = 2.0
 
 USER_MESSAGES = {
-    "key": "Gemini didn't accept the API key. Check GEMINI_API_KEY in the .env file.",
+    "key": "Gemini didn't accept the API key. Check it in Options → Settings…",
     "quota": "The Gemini usage limit has been reached. Please wait a minute and try again.",
     "busy": "Gemini is busy right now. Please try again in a moment.",
     "model": "The Gemini model is no longer available. Set a current model in GEMINI_MODEL in the .env file.",

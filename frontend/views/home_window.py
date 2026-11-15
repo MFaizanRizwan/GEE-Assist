@@ -13,7 +13,7 @@ as the user drags it. The Terminal menu also runs common commands in it.
 
 from __future__ import annotations
 
-from PyQt6.QtCore import QPoint, Qt, QUrl, pyqtSignal
+from PyQt6.QtCore import QPoint, Qt, QTimer, QUrl, pyqtSignal
 from PyQt6.QtGui import QAction, QCloseEvent, QDesktopServices, QMouseEvent
 from PyQt6.QtWidgets import (
     QApplication,
@@ -39,6 +39,7 @@ from frontend import appearance, theme
 from frontend.project_paths import current_project, downloads_folder
 from frontend.views.account_view import AccountView, Avatar, SignupDetailsDialog
 from frontend.views.project_dialogs import ProjectActions
+from frontend.views.settings_dialog import SettingsDialog, settings_needed
 from frontend.views.analysis_table_view import AnalysisTableView
 from frontend.views.analysis_view import AnalysisView
 from frontend.restart import restart_app
@@ -302,6 +303,23 @@ class HomeWindow(QMainWindow):
         self._project_shown: str | None = "none yet"
         self.refresh_projects()
         self.show_dashboard()
+        # A new copy of the app: ask for the Earth Engine project and Gemini key once the window is up.
+        QTimer.singleShot(0, self.check_first_run)
+
+    # ------------------------------------------------------------- app settings
+    def check_first_run(self) -> None:
+        """The Earth Engine project and Gemini key must be entered before the app is used."""
+        if settings_needed(self._facade):
+            self.exec_settings(first_run=True)
+
+    def open_settings(self) -> None:
+        """Options > Settings…: change the Earth Engine project, Gemini key or session length."""
+        self.exec_settings(first_run=False)
+
+    def exec_settings(self, first_run: bool) -> bool:
+        dialog = SettingsDialog(self._facade, first_run=first_run, parent=self)
+        dialog.sign_out_requested.connect(self.sign_out)
+        return dialog.exec() == SettingsDialog.DialogCode.Accepted
 
     # ------------------------------------------------------------- projects
     def refresh_projects(self) -> None:
@@ -519,6 +537,7 @@ class HomeWindow(QMainWindow):
         bar.command_reference.triggered.connect(self.open_command_reference)
         bar.full_screen.triggered.connect(self.set_full_screen)
         bar.chunk_size.triggered.connect(self.downloads.change_chunk_size)
+        bar.app_settings.triggered.connect(self.open_settings)
         bar.manage_users.triggered.connect(self.open_user_admin)
         bar.about.triggered.connect(self.show_about)
         bar.theme_chosen.connect(self.change_theme)

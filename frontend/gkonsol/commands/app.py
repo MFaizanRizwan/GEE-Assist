@@ -14,6 +14,7 @@ from backend.config.settings import PROJECT_ROOT, get_settings
 from backend.dto import CheckDTO
 from backend.dto.check_dto import CHECK_FAIL, CHECK_OK, CHECK_WARN
 from frontend import appearance, palette
+from frontend.app_settings import SETTINGS_PLACE, current_settings
 from frontend.download_format import format_size
 from frontend.gkonsol import text
 from frontend.gkonsol.command import Command, Registry
@@ -106,16 +107,18 @@ def _panel_height(ctx: Context, args: Args) -> None:
 def _config(ctx: Context, args: Args) -> None:
     settings = get_settings()
     llm = load_llm_settings()
+    mine = current_settings(ctx.facade)  # what the user entered (Options > Settings), else .env
     downloads = DownloadSettingsStore().load()
     project = current_project(ctx.facade)
     ctx.out.heading("Settings")
     ctx.out.pairs([
         ("Auth server", f"{settings.auth_api_url}  (AUTH_API_URL)"),
         ("Server timeout", f"{settings.auth_api_timeout:g} s  (AUTH_API_TIMEOUT)"),
-        ("Keep signed in for", f"{duration(settings.session_duration)}  (SESSION_DURATION)"),
-        ("Earth Engine project", settings.gee_project or Span("not set  (GEE_PROJECT)", text.WARNING)),
+        ("Keep signed in for", duration(mine.session_duration)),
+        ("Earth Engine project", mine.gee_project or Span(f"not set  ({SETTINGS_PLACE})", text.WARNING)),
         ("Gemini model", f"{llm.model}  (GEMINI_MODEL)"),
-        ("Gemini API key", Span("set", text.SUCCESS) if llm.api_key else Span("not set  (GEMINI_API_KEY)", text.WARNING)),
+        ("Gemini API key", Span(f"set  ({mine.gemini_key_hint})" if mine.gemini_key_hint else "set", text.SUCCESS)
+         if mine.gemini_key_set else Span(f"not set  ({SETTINGS_PLACE})", text.WARNING)),
         ("Project", project.folder if project is not None else Span("none open  (File > New project)", text.WARNING)),
         ("Download folder", downloads_folder(ctx.facade)),
         ("Chunk size", f"{downloads.chunk_size_mb} MB"),
@@ -142,8 +145,8 @@ def _doctor(ctx: Context, args: Args) -> Generator:
             checks.append(CheckDTO("Session", CHECK_OK, f"Signed in as {user.username}.", duration_ms=elapsed))
         except AuthError as exc:
             checks.append(CheckDTO("Session", CHECK_FAIL, str(exc), "Sign in again: signout"))
-    checks.append(CheckDTO("Gemini", CHECK_OK, "GEMINI_API_KEY is set.") if load_llm_settings().api_key
-                  else CheckDTO("Gemini", CHECK_WARN, "GEMINI_API_KEY is not set: 'ask' fills the form only from "
+    checks.append(CheckDTO("Gemini", CHECK_OK, "The Gemini API key is set.") if current_settings(ctx.facade).gemini_key_set
+                  else CheckDTO("Gemini", CHECK_WARN, f"No Gemini API key ({SETTINGS_PLACE}): 'ask' fills the form only from "
                                 "what it recognises itself.", "Create a key at https://aistudio.google.com/apikey"))
     checks.append(_folder_check(Path(downloads_folder(ctx.facade))))
     print_checks(ctx, checks)

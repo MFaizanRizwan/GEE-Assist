@@ -134,6 +134,8 @@ class AppMenuBar(QMenuBar):
         self.command_reference.setToolTip("Every gkonsol command, with examples (docs/GKONSOL.md)")
 
         self.options_menu = self._menu("&Options")
+        self.app_settings = self._action(self.options_menu, "&Settings…", "Ctrl+,")
+        self.app_settings.setToolTip("Earth Engine project, Gemini API key, how long you stay signed in")
         self.chunk_size = self._action(self.options_menu, "Download &chunk size…")
         self.manage_users = self._action(self.options_menu, "&Manage users…")
 

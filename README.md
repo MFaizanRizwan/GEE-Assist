@@ -19,13 +19,34 @@ Desktop app (PyQt6) for querying and analysing Google Earth Engine data.
    python -m venv .venv
    .venv\Scripts\activate
    pip install -r requirements.txt
-   copy .env.example .env      # set GEMINI_API_KEY; AUTH_API_URL if the server is not on localhost:8000
+   copy .env.example .env      # optional: AUTH_API_URL if the server is not on localhost:8000
    python main.py
    ```
 
 Run the tests with `python -m pytest`.
 
 ## Start-up and sign-in
+
+### Your own Earth Engine project and Gemini key
+
+Every user enters their own **Earth Engine project ID** and **Gemini API key**. A new copy of the
+app asks for both at the first sign-in (the **Set up GEE-Assist** window cannot be skipped, only
+signed out of) and shows the steps to get them:
+
+- **Earth Engine project ID**: create a project in the
+  [Google Cloud console](https://console.cloud.google.com/projectcreate) and note its *Project ID*;
+  register it at <https://code.earthengine.google.com/register> (unpaid usage); enable the
+  [Earth Engine API](https://console.cloud.google.com/apis/library/earthengine.googleapis.com);
+  enter the ID, then sign this computer in once with **Terminal → Sign in to Earth Engine…**.
+- **Gemini API key**: in [Google AI Studio](https://aistudio.google.com/apikey) press **Create API
+  key** and paste it.
+
+Change them, and how long **Keep me signed in** lasts, any time in **Options → Settings…**
+(Ctrl+,); changes are used at once, without restarting. The key is kept in Windows Credential
+Manager (never in a file); the project ID and session length in `workspace/app_settings.json`.
+While developing, `GEE_PROJECT`, `GEMINI_API_KEY` and `SESSION_DURATION` in `.env` are used for
+whatever was never entered in the app.
+
 
 - On the very first start-up the app asks for a theme: **Light** (the default), **Dark – blue-green**
   or **Dark – grey**. Change it later in **View → Theme**; the app restarts to apply it. The choice
@@ -38,7 +59,7 @@ Run the tests with `python -m pytest`.
   change email) and signs the user in as soon as the link is opened.
 - **Keep me signed in** (ticked by default) stores the refresh token in the Windows Credential
   Manager (via `keyring`), so the next launch goes straight to the dashboard. The saved session
-  lasts `SESSION_DURATION` from `.env` (e.g. `7d`, `12h`, `2m`), counted from signing in; after that
+  lasts as long as chosen in **Options → Settings…** (7 days unless changed), counted from signing in; after that
   the app asks to sign in again.
 - After signing in the app opens on the **dashboard**. Its **Query Input** card opens the parameter
   form (with the "Chat with Gemini" assistant); the back arrow (**←**) at the top of the side bar
@@ -176,7 +197,7 @@ GEE-Assist: they are not Windows, PowerShell or cmd commands. Every command is d
 One-time setup:
 
 1. Register a Google Cloud project for Earth Engine at <https://code.earthengine.google.com/register>.
-2. Put its ID in `.env`: `GEE_PROJECT=your-project-id`.
+2. Enter its Project ID in **Options → Settings…** (asked for at the first sign-in).
 3. Sign in once on this computer: type `gee login` in gkonsol, or run `earthengine authenticate`
    in a command prompt (with the venv active). `gee verify` checks the whole set-up.
 
