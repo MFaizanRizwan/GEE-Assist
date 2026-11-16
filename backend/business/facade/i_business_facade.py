@@ -4,10 +4,12 @@ from abc import ABC, abstractmethod
 from typing import Callable, Optional
 
 from backend.dto import CheckDTO, DownloadJobDTO, FormDTO, PlaceDTO, ValidationDTO
+from backend.dto.version_dto import AppVersionDTO
 from backend.dto.analysis_dto import AnalysisOptionDTO, AnalysisRequestDTO, ComputeDeviceDTO, FormulaDTO
 from backend.dto.download_dto import DatasetDTO
 from backend.dto.map_dto import MapLayerDTO, RasterInfoDTO, RasterViewDTO, ViewPresetDTO
 from backend.dto.project_dto import AnalysisRecordDTO, ProjectDTO
+from backend.dto.settings_dto import AppSettingsDTO, AppSettingsUpdateDTO
 from backend.dto.result_dto import ResultDTO
 from backend.dto.user_dto import (
     GoogleSignInDTO,
@@ -33,6 +35,9 @@ class IBusinessFacade(ABC):
     def is_server_available(self) -> bool: ...
 
     @abstractmethod
+    def check_app_version(self) -> AppVersionDTO | None: ...
+
+    @abstractmethod
     def get_current_user(self) -> UserDTO | None: ...
 
     @abstractmethod
@@ -49,6 +54,15 @@ class IBusinessFacade(ABC):
 
     @abstractmethod
     def log_out(self) -> None: ...
+
+    # ------------------------------------------------------------- app settings
+    @abstractmethod
+    def get_app_settings(self) -> AppSettingsDTO:
+        """The Earth Engine project, whether a Gemini key is set, and the "Keep me signed in" length."""
+
+    @abstractmethod
+    def save_app_settings(self, update: AppSettingsUpdateDTO) -> ValidationDTO:
+        """Save them on this computer and use them at once; field problems come back in ``errors``."""
 
     @abstractmethod
     def sign_up(self, data: SignupDTO) -> SignupResultDTO: ...

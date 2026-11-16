@@ -9,6 +9,10 @@ class IGeminiClient(ABC):
     """Class diagram: IGeminiClient. Gateway to the Gemini LLM."""
 
     @abstractmethod
+    def set_api_key(self, api_key: str) -> None:
+        """Use another Gemini API key from now on."""
+
+    @abstractmethod
     def process_query(self, prompt: str) -> FormDTO:
         """Interpret Query (LLM): turn a natural-language request into a FormDTO.
 

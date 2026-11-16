@@ -7,19 +7,20 @@ import pytest
 from backend.data.clients.gee_sign_in import GEESignInCancelled
 from backend.dto import CheckDTO
 from backend.exceptions import GEESetupError
+from backend.dto.settings_dto import AppSettingsDTO
 from frontend.gkonsol.commands import earth_engine
 from tests.gkonsol_fakes import terminal
 
 ALL_GOOD = [
     CheckDTO("Earth Engine library", "ok", "earthengine-api 1.7.48"),
-    CheckDTO("Cloud project (GEE_PROJECT)", "ok", "my-project"),
+    CheckDTO("Cloud project", "ok", "my-project"),
     CheckDTO("Sign-in on this computer", "ok", "Saved sign-in: C:/Users/me/.config/earthengine/credentials"),
     CheckDTO("Connection", "ok", "Connected with project 'my-project'.", duration_ms=812),
     CheckDTO("Test request", "ok", "Earth Engine answered in 230 ms.", duration_ms=230),
 ]
 NOT_SIGNED_IN = [
     CheckDTO("Earth Engine library", "ok", "earthengine-api 1.7.48"),
-    CheckDTO("Cloud project (GEE_PROJECT)", "ok", "my-project"),
+    CheckDTO("Cloud project", "ok", "my-project"),
     CheckDTO("Sign-in on this computer", "warn", "No saved Earth Engine sign-in.",
              "Sign in to Earth Engine on this computer (earthengine authenticate)."),
     CheckDTO("Connection", "fail", "Earth Engine is not signed in on this computer. Run `earthengine authenticate` once."),
@@ -29,8 +30,9 @@ NOT_SIGNED_IN = [
 
 @pytest.fixture
 def term(monkeypatch):
-    monkeypatch.setattr(earth_engine, "get_settings", lambda: SimpleNamespace(gee_project="my-project"))
-    return terminal()
+    term = terminal()
+    term.facade.get_app_settings.return_value = AppSettingsDTO("my-project", True, "…tkey")
+    return term
 
 
 # ------------------------------------------------------------------ verify
@@ -100,11 +102,12 @@ def test_a_failed_sign_in_is_reported(term):
     assert "✗ Google did not sign you in to Earth Engine (access_denied)." in term.type("gee login")
 
 
-def test_project(term, monkeypatch):
-    assert "my-project" in term.type("gee project")
-    monkeypatch.setattr(earth_engine, "get_settings", lambda: SimpleNamespace(gee_project=""))
+def test_project(term):
     printed = term.type("gee project")
-    assert "GEE_PROJECT in .env is empty" in printed and earth_engine.REGISTER_URL in printed
+    assert "my-project" in printed and "Options → Settings…" in printed
+    term.facade.get_app_settings.return_value = AppSettingsDTO("", True, "…tkey")
+    printed = term.type("gee project")
+    assert "No Cloud project is set" in printed and earth_engine.REGISTER_URL in printed
 
 
 # ------------------------------------------------------------------ datasets

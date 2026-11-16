@@ -13,6 +13,7 @@ from backend.dto.user_dto import (
     VerificationStatusDTO,
 )
 from backend.dto.validation_dto import ValidationDTO
+from backend.dto.version_dto import AppVersionDTO
 
 
 class IUserService(ABC):
@@ -25,6 +26,9 @@ class IUserService(ABC):
     # ------------------------------------------------------------- server
     @abstractmethod
     def is_server_available(self) -> bool: ...
+
+    @abstractmethod
+    def check_app_version(self) -> AppVersionDTO | None: ...
 
     # ------------------------------------------------------------- session
     @property
@@ -47,6 +51,10 @@ class IUserService(ABC):
 
     @abstractmethod
     def log_out(self) -> None: ...
+
+    @abstractmethod
+    def set_session_duration(self, seconds: float) -> None:
+        """How long "Keep me signed in" lasts from the next sign-in on."""
 
     # ------------------------------------------------------------- sign-up / verification
     @abstractmethod

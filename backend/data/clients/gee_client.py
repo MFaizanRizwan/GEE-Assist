@@ -14,7 +14,8 @@ Responses are read as they stream in, so progress and speed are reported while a
 tile arrives, not only once it is complete (see ``_ChunkReporter``).
 
 Earth Engine must be signed in once on the computer (``earthengine authenticate``)
-and ``GEE_PROJECT`` in .env must name a Cloud project registered for Earth Engine.
+and the Earth Engine project (Options > Settings, or GEE_PROJECT in .env) must be a Cloud project
+registered for Earth Engine.
 """
 
 from __future__ import annotations
@@ -54,7 +55,7 @@ NODATA = -9999.0           # value of pixels outside the AOI or without imagery
 
 # The steps of ``GEEClient.diagnose``, in order.
 CHECK_LIBRARY = "Earth Engine library"
-CHECK_PROJECT = "Cloud project (GEE_PROJECT)"
+CHECK_PROJECT = "Cloud project"
 CHECK_SIGN_IN = "Sign-in on this computer"
 CHECK_CONNECTION = "Connection"
 CHECK_REQUEST = "Test request"
@@ -77,6 +78,13 @@ class GEEClient(IGEEClient):
         self._splits: dict[str, int] = {}  # request -> times its tiles had to be split
         self._sessions = threading.local()  # one HTTP session per download thread
 
+    def set_project(self, project: str) -> None:
+        with self._lock:
+            project = project.strip()
+            if project != self._project:
+                self._project = project
+                self._initialized = False  # connect again, with the new project
+
     # ------------------------------------------------------------- set-up checks
     def diagnose(self) -> list[CheckDTO]:
         """Check the Earth Engine set-up step by step (``validate_access`` does it in one go)."""
@@ -97,7 +105,7 @@ class GEEClient(IGEEClient):
             _sign_in_check(ee),
         ]
         if not self._project:
-            return checks + [CheckDTO(CHECK_CONNECTION, CHECK_SKIP, "Needs GEE_PROJECT."),
+            return checks + [CheckDTO(CHECK_CONNECTION, CHECK_SKIP, "Needs the Earth Engine project."),
                              CheckDTO(CHECK_REQUEST, CHECK_SKIP, "Needs a connection.")]
 
         started = time.perf_counter()
@@ -125,9 +133,9 @@ class GEEClient(IGEEClient):
         if self._project:
             return CheckDTO(CHECK_PROJECT, CHECK_OK, self._project)
         return CheckDTO(
-            CHECK_PROJECT, CHECK_FAIL, "GEE_PROJECT is not set in .env.",
-            "Set GEE_PROJECT in .env to a Google Cloud project registered for Earth Engine "
-            "(https://code.earthengine.google.com/register), then restart GEE-Assist.",
+            CHECK_PROJECT, CHECK_FAIL, "No Earth Engine project is set.",
+            "Enter a Google Cloud project registered for Earth Engine in Options → Settings… "
+            "(register one at https://code.earthengine.google.com/register); it is used at once.",
         )
 
     # ------------------------------------------------------------- browser sign-in
@@ -162,8 +170,8 @@ class GEEClient(IGEEClient):
                 return
             if not self._project:
                 raise GEESetupError(
-                    "Earth Engine is not configured: set GEE_PROJECT in .env to a Google Cloud "
-                    "project registered for Earth Engine."
+                    "Earth Engine is not configured: enter your Google Cloud project registered for "
+                    "Earth Engine in Options → Settings…"
                 )
             try:
                 self._ee().Initialize(project=self._project)
@@ -605,7 +613,7 @@ def _explain(exc: Exception, project: str) -> str:
     if "not registered" in lowered or "permission" in lowered or ("not found" in lowered and "project" in lowered):
         return (
             f"The Cloud project '{project}' cannot use Earth Engine. Register it at "
-            "https://code.earthengine.google.com/register or set GEE_PROJECT to another project."
+            "https://code.earthengine.google.com/register or choose another project in Options → Settings…"
         )
     if _is_too_heavy(text):
         return (

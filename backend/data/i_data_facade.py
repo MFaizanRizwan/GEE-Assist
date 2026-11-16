@@ -42,6 +42,14 @@ class IDataFacade(ABC):
         """UC-05: download one chunk from GEE to ``path`` (delegates to IGEEClient)."""
 
     @abstractmethod
+    def configure_gee_project(self, project: str) -> None:
+        """Use this Google Cloud project for Earth Engine from now on (delegates to IGEEClient)."""
+
+    @abstractmethod
+    def configure_gemini_key(self, api_key: str) -> None:
+        """Use this Gemini API key from now on (delegates to IGeminiClient)."""
+
+    @abstractmethod
     def validate_access(self) -> bool:
         """True if Google Earth Engine can be used (delegates to IGEEClient)."""
 

@@ -6,9 +6,9 @@ import threading
 from typing import Generator, Sequence
 
 from backend.config import ANALYSIS_CATEGORIES, DATASETS, DatasetInfo
-from backend.config.settings import get_settings
 from backend.dto import CheckDTO
 from backend.dto.check_dto import CHECK_FAIL, CHECK_OK, CHECK_SKIP, CHECK_WARN
+from frontend.app_settings import SETTINGS_PLACE, current_settings
 from frontend.gkonsol import text
 from frontend.gkonsol.command import Command, Registry
 from frontend.gkonsol.commands.common import find_dataset, timed
@@ -70,7 +70,7 @@ def _verify(ctx: Context, args: Args) -> Generator:
 def _status(ctx: Context, args: Args) -> Generator:
     available, elapsed = yield task(timed, ctx.facade.is_gee_available, label="Contacting Earth Engine")
     ctx.out.pairs([
-        ("Project", get_settings().gee_project or Span("not set (GEE_PROJECT in .env)", text.ERROR)),
+        ("Project", current_settings(ctx.facade).gee_project or Span(f"not set ({SETTINGS_PLACE})", text.ERROR)),
         ("Connection", Span(f"active  ({elapsed:.0f} ms)", text.SUCCESS) if available
          else Span("not available", text.ERROR)),
     ])
@@ -103,14 +103,14 @@ def _login(ctx: Context, args: Args) -> Generator:
 
 
 def _project(ctx: Context, args: Args) -> None:
-    project = get_settings().gee_project
+    project = current_settings(ctx.facade).gee_project
     if project:
-        ctx.out.pairs([("Project", Span(project, text.ACCENT)), ("Set in", "GEE_PROJECT in .env")])
-        ctx.out.hint("To use another project, change GEE_PROJECT in .env and restart GEE-Assist.")
+        ctx.out.pairs([("Project", Span(project, text.ACCENT)), ("Set in", SETTINGS_PLACE)])
+        ctx.out.hint(f"To use another project, change it in {SETTINGS_PLACE}: it is used at once.")
     else:
-        ctx.out.error("No Cloud project is set: GEE_PROJECT in .env is empty.")
-        ctx.out.hint(f"Register a project for Earth Engine at {REGISTER_URL}, put its id in .env as "
-                     "GEE_PROJECT=your-project-id and restart GEE-Assist.")
+        ctx.out.error("No Cloud project is set.")
+        ctx.out.hint(f"Register a project for Earth Engine at {REGISTER_URL}, then enter its ID in "
+                     f"{SETTINGS_PLACE}.")
 
 
 # ----------------------------------------------------------------------------- datasets

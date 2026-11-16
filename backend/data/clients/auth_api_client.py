@@ -54,6 +54,16 @@ class AuthApiClient(IAuthApiClient):
             return False
         return response.status_code == 200
 
+    def check_app_version(self, current_version: str | None = None) -> dict[str, Any] | None:
+        params = {"current_version": current_version} if current_version else {}
+        try:
+            response = self._http.get("/app/version", params=params, timeout=5)
+            if response.status_code == 200:
+                return response.json()
+        except httpx.HTTPError:
+            return None
+        return None
+
     def signup(self, payload: dict[str, str]) -> dict[str, Any]:
         return self._request("POST", "/auth/signup", json=payload)
 

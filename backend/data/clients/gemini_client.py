@@ -83,6 +83,12 @@ class GeminiClient(IGeminiClient):
         self._client = client
         self._sleep = sleep
 
+    def set_api_key(self, api_key: str) -> None:
+        api_key = api_key.strip()
+        if api_key != self._api_key:
+            self._api_key = api_key
+            self._client = None  # the next request makes a client with the new key
+
     def process_query(self, prompt: str) -> FormDTO:
         raw = self._generate(prompt, build_query_system_prompt())
         try:
@@ -100,7 +106,7 @@ class GeminiClient(IGeminiClient):
         if self._client is not None:
             return self._client
         if not self._api_key:
-            raise LLMServiceError("Gemini isn't set up yet. Add your API key as GEMINI_API_KEY in the .env file.")
+            raise LLMServiceError("Gemini isn't set up yet. Enter your Gemini API key in Options → Settings…")
         try:
             from google import genai
         except ImportError as exc:
@@ -155,7 +161,7 @@ RETRY_ROUNDS = 2
 RETRY_WAIT_SEC = 2.0
 
 USER_MESSAGES = {
-    "key": "Gemini didn't accept the API key. Check GEMINI_API_KEY in the .env file.",
+    "key": "Gemini didn't accept the API key. Check it in Options → Settings…",
     "quota": "The Gemini usage limit has been reached. Please wait a minute and try again.",
     "busy": "Gemini is busy right now. Please try again in a moment.",
     "model": "The Gemini model is no longer available. Set a current model in GEMINI_MODEL in the .env file.",
