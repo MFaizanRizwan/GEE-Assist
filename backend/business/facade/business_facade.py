@@ -14,6 +14,7 @@ from backend.business.request.i_request_service import IRequestService
 from backend.business.settings.i_settings_service import ISettingsService
 from backend.business.user.i_user_service import IUserService
 from backend.dto import CheckDTO, DownloadJobDTO, FormDTO, PlaceDTO, ValidationDTO
+from backend.dto.version_dto import AppVersionDTO
 from backend.dto.analysis_dto import AnalysisOptionDTO, AnalysisRequestDTO, ComputeDeviceDTO, FormulaDTO
 from backend.dto.download_dto import JOB_COMPLETED, DatasetDTO
 from backend.dto.map_dto import MapLayerDTO, RasterInfoDTO, RasterViewDTO, ViewPresetDTO
@@ -61,6 +62,9 @@ class BusinessFacade(IBusinessFacade):
     # ------------------------------------------------------------- authentication
     def is_server_available(self) -> bool:
         return self._user_service.is_server_available()
+
+    def check_app_version(self) -> AppVersionDTO | None:
+        return self._user_service.check_app_version()
 
     def get_current_user(self) -> UserDTO | None:
         return self._user_service.current_user

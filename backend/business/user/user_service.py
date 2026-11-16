@@ -42,6 +42,7 @@ from backend.dto.user_dto import (
     VerificationStatusDTO,
 )
 from backend.dto.validation_dto import ValidationDTO
+from backend.dto.version_dto import AppVersionDTO
 
 # Default length of a "Keep me signed in" session (Options > Settings, or SESSION_DURATION in .env).
 DEFAULT_SESSION_DURATION = 7 * 24 * 3600
@@ -92,6 +93,25 @@ class UserService(IUserService):
     # ------------------------------------------------------------- server
     def is_server_available(self) -> bool:
         return self._api.health()
+
+    def check_app_version(self) -> AppVersionDTO | None:
+        from backend.config.version import APP_VERSION
+
+        try:
+            data = self._api.check_app_version(current_version=APP_VERSION)
+        except Exception:
+            return None
+        if not data:
+            return None
+        return AppVersionDTO(
+            latest_version=data.get("latest_version", APP_VERSION),
+            minimum_supported_version=data.get("minimum_supported_version", APP_VERSION),
+            download_url=data.get("download_url"),
+            release_notes=data.get("release_notes"),
+            force_update=bool(data.get("force_update", False)),
+            update_available=bool(data.get("update_available", False)),
+            published_at=data.get("published_at"),
+        )
 
     # ------------------------------------------------------------- session
     @property

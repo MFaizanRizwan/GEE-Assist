@@ -168,3 +168,28 @@ def test_project_items_follow_the_open_project(bar):
     bar.recent_project_chosen.connect(chosen.append)
     bar.recent_projects_menu.actions()[0].trigger()
     assert chosen == ["D:/work/MyProject"]
+
+
+def test_update_badge_visibility_and_text(bar):
+    from backend.dto.version_dto import AppVersionDTO
+
+    # Hidden by default
+    assert bar.update_button.isHidden()
+
+    # Show badge when update is available
+    info = AppVersionDTO(
+        latest_version="1.2.0",
+        minimum_supported_version="1.0.0",
+        download_url="https://example.com/download",
+        release_notes="Bug fixes",
+        force_update=False,
+        update_available=True,
+    )
+    bar.set_update_info(info)
+    assert not bar.update_button.isHidden()
+    assert "1.2.0" in bar.update_button.text()
+
+    # Clear/hide badge when up to date
+    bar.clear_update_info()
+    assert bar.update_button.isHidden()
+

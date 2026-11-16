@@ -17,6 +17,10 @@ class IAuthApiClient(ABC):
         """GET /health - True if the server answers."""
 
     @abstractmethod
+    def check_app_version(self, current_version: str | None = None) -> dict[str, Any] | None:
+        """GET /app/version - check latest app version and release info."""
+
+    @abstractmethod
     def signup(self, payload: dict[str, str]) -> dict[str, Any]:
         """POST /auth/signup"""
 

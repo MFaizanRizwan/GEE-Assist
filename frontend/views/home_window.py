@@ -34,6 +34,7 @@ from PyQt6.QtWidgets import (
 from backend.business.facade import IBusinessFacade
 from backend.dto.project_dto import ProjectDTO
 from backend.dto.user_dto import UserDTO
+from backend.dto.version_dto import AppVersionDTO
 from backend.exceptions import GeeAssistError
 from frontend import appearance, theme
 from frontend.project_paths import current_project, downloads_folder
@@ -43,6 +44,7 @@ from frontend.views.settings_dialog import SettingsDialog, settings_needed
 from frontend.views.analysis_table_view import AnalysisTableView
 from frontend.views.analysis_view import AnalysisView
 from frontend.restart import restart_app
+from frontend.workers.task_worker import run_task
 from frontend.views.auth.hero_panel import round_logo
 from frontend.views.dashboard_view import DashboardView
 from frontend.views.download_view import DownloadView
@@ -305,6 +307,17 @@ class HomeWindow(QMainWindow):
         self.show_dashboard()
         # A new copy of the app: ask for the Earth Engine project and Gemini key once the window is up.
         QTimer.singleShot(0, self.check_first_run)
+        # Check if a new version of the app is available (runs in background off UI thread)
+        QTimer.singleShot(500, self.check_for_updates)
+
+    def check_for_updates(self) -> None:
+        run_task(self, self._facade.check_app_version, on_success=self._on_version_checked)
+
+    def _on_version_checked(self, info: AppVersionDTO | None) -> None:
+        if info is not None and info.update_available:
+            self.menu_bar.set_update_info(info)
+        else:
+            self.menu_bar.clear_update_info()
 
     # ------------------------------------------------------------- app settings
     def check_first_run(self) -> None:

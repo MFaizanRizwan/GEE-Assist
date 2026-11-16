@@ -9,10 +9,21 @@ are given their meaning by the window the menu bar belongs to (see ``HomeWindow`
 
 from __future__ import annotations
 
-from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QAction, QActionGroup, QKeySequence
-from PyQt6.QtWidgets import QApplication, QComboBox, QLineEdit, QMenu, QMenuBar, QPlainTextEdit, QTextEdit, QWidget
+from PyQt6.QtWidgets import (
+    QApplication,
+    QComboBox,
+    QLineEdit,
+    QMenu,
+    QMenuBar,
+    QPlainTextEdit,
+    QPushButton,
+    QTextEdit,
+    QWidget,
+)
 
+from backend.dto.version_dto import AppVersionDTO
 from frontend import appearance, palette, theme
 
 STYLESHEET = f"""
@@ -23,6 +34,24 @@ QMenuBar {{
 QMenuBar::item {{ background: transparent; padding: 5px 12px; border-radius: 4px; }}
 QMenuBar::item:selected {{ background: {theme.FOAM}; }}
 QMenuBar::item:pressed {{ background: {theme.MINT}; }}
+QPushButton#UpdateBadge {{
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #E05638, stop:1 #D35400);
+    color: #FFFFFF;
+    font-size: 11px;
+    font-weight: 600;
+    border: none;
+    border-radius: 11px;
+    padding: 3px 12px;
+    margin-top: 2px;
+    margin-bottom: 2px;
+    margin-right: 8px;
+}}
+QPushButton#UpdateBadge:hover {{
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #D35400, stop:1 #BA4A00);
+}}
+QPushButton#UpdateBadge:pressed {{
+    background: #A04000;
+}}
 """ + theme.MENU_STYLE
 
 
@@ -141,6 +170,35 @@ class AppMenuBar(QMenuBar):
 
         self.help_menu = self._menu("&Help")
         self.about = self._action(self.help_menu, "&About GEE-Assist")
+
+        # ---- update available badge (shown on the right side of the navbar if an update is available)
+        self._update_info: AppVersionDTO | None = None
+        self.update_button = QPushButton("Update Available", self)
+        self.update_button.setObjectName("UpdateBadge")
+        self.update_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.update_button.clicked.connect(self._show_update_dialog)
+        self.update_button.hide()
+        self.setCornerWidget(self.update_button, Qt.Corner.TopRightCorner)
+
+    # ------------------------------------------------------------- Update Available
+    def set_update_info(self, info: AppVersionDTO) -> None:
+        self._update_info = info
+        self.update_button.setText(f"● Update Available (v{info.latest_version})")
+        self.update_button.setToolTip(
+            f"A newer version (v{info.latest_version}) of GEE-Assist is available!\nClick to view release details."
+        )
+        self.update_button.show()
+
+    def clear_update_info(self) -> None:
+        self._update_info = None
+        self.update_button.hide()
+
+    def _show_update_dialog(self) -> None:
+        if self._update_info is not None:
+            from frontend.views.update_dialog import UpdateDialog
+
+            dialog = UpdateDialog(self._update_info, parent=self.window())
+            dialog.exec()
 
     # ------------------------------------------------------------- Theme
     def _choose_theme(self, name: str) -> None:

@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from typing import Callable, Optional
 
 from backend.dto import CheckDTO, DownloadJobDTO, FormDTO, PlaceDTO, ValidationDTO
+from backend.dto.version_dto import AppVersionDTO
 from backend.dto.analysis_dto import AnalysisOptionDTO, AnalysisRequestDTO, ComputeDeviceDTO, FormulaDTO
 from backend.dto.download_dto import DatasetDTO
 from backend.dto.map_dto import MapLayerDTO, RasterInfoDTO, RasterViewDTO, ViewPresetDTO
@@ -32,6 +33,9 @@ class IBusinessFacade(ABC):
     # ------------------------------------------------------------- authentication
     @abstractmethod
     def is_server_available(self) -> bool: ...
+
+    @abstractmethod
+    def check_app_version(self) -> AppVersionDTO | None: ...
 
     @abstractmethod
     def get_current_user(self) -> UserDTO | None: ...
