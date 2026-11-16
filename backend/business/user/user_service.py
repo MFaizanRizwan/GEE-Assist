@@ -256,6 +256,34 @@ class UserService(IUserService):
             raise InvalidRequestError("You cannot delete your own account.", 400)
         return self._data().delete_user(user_id)
 
+    # ------------------------------------------------------------- forgot password
+    def start_forgot_password(self, identifier: str) -> dict[str, Any]:
+        identifier = identifier.strip().lower()
+        if not identifier:
+            raise AuthError("Enter your username or email address.")
+        return self._api.forgot_password_start(identifier)
+
+    def poll_forgot_password(self, session_id: str) -> bool:
+        result = self._api.forgot_password_poll(session_id)
+        return result is not None and result.get("status") == "verified"
+
+    def complete_forgot_password(
+        self, session_id: str, new_password: str, confirm_password: str
+    ) -> ValidationDTO:
+        result = ValidationDTO()
+        if message := password_error(new_password):
+            result.add_error("new_password", message)
+        elif confirm_password != new_password:
+            result.add_error("confirm_password", "Passwords do not match")
+        if not result.is_valid:
+            return result
+        try:
+            res = self._api.forgot_password_complete(session_id, new_password)
+            result.message = res.get("message", "Your password has been reset.")
+        except AuthError as exc:
+            result.add_error("form", str(exc))
+        return result
+
     # ------------------------------------------------------------- manage account
     def update_user(self, user: UserDTO) -> ValidationDTO:
         current = self._require_user()
@@ -269,6 +297,8 @@ class UserService(IUserService):
                                ("username", username_error(user.username))):
             if message:
                 result.add_error(field, message)
+        if user.username != before.username:
+            result.add_error("username", "Username cannot be changed once set")
         phone = normalize_phone_number(user.phone_number or "")
         if phone and (message := phone_number_error(phone)):
             result.add_error("phone_number", message)

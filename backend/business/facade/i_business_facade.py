@@ -101,6 +101,18 @@ class IBusinessFacade(ABC):
     @abstractmethod
     def delete_user(self, user_id: str) -> bool: ...
 
+    # ------------------------------------------------------------- forgot password
+    @abstractmethod
+    def start_forgot_password(self, identifier: str) -> dict[str, Any]: ...
+
+    @abstractmethod
+    def poll_forgot_password(self, session_id: str) -> bool: ...
+
+    @abstractmethod
+    def complete_forgot_password(
+        self, session_id: str, new_password: str, confirm_password: str
+    ) -> ValidationDTO: ...
+
     # ------------------------------------------------------------- manage account
     @abstractmethod
     def update_user(self, user: UserDTO) -> ValidationDTO:

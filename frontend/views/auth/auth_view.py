@@ -16,6 +16,7 @@ from backend.auth_exceptions import AuthError
 from backend.business.facade import IBusinessFacade
 from backend.dto.user_dto import SignupResultDTO, UserDTO
 from frontend import theme
+from frontend.views.auth.forgot_password_page import ForgotPasswordPage
 from frontend.views.auth.google_page import GooglePage
 from frontend.views.auth.hero_panel import HeroPanel, brand_row
 from frontend.views.auth.login_page import LoginPage
@@ -49,9 +50,10 @@ class AuthView(QWidget):
         self.login_page = LoginPage(facade)
         self.signup_page = SignupPage(facade)
         self.verification_page = VerificationPage(facade)
+        self.forgot_password_page = ForgotPasswordPage(facade)
         self.google_page = GooglePage(facade)
         self.pages = FitStack()
-        for page in (self.login_page, self.signup_page, self.verification_page, self.google_page):
+        for page in (self.login_page, self.signup_page, self.verification_page, self.forgot_password_page, self.google_page):
             self.pages.addWidget(page)
 
         # ---- card
@@ -120,12 +122,14 @@ class AuthView(QWidget):
         # ---- wiring
         self.login_page.logged_in.connect(self._finish)
         self.login_page.create_account_requested.connect(self.show_signup)
+        self.login_page.forgot_password_requested.connect(self.show_forgot_password)
         self.login_page.verification_required.connect(self._on_verification_required)
         self.login_page.google_requested.connect(self._start_google)
         self.signup_page.sign_in_requested.connect(lambda: self.show_login())
         self.signup_page.signed_up.connect(self._on_signed_up)
         self.verification_page.logged_in.connect(self._finish)
         self.verification_page.back_to_login.connect(self._back_from_verification)
+        self.forgot_password_page.back_to_login.connect(self._back_from_forgot_password)
         self.google_page.logged_in.connect(self._finish)
         self.google_page.cancelled.connect(self._back_from_google)
         self.server_retry.clicked.connect(self.check_server)
@@ -180,9 +184,15 @@ class AuthView(QWidget):
         self._switch(self.signup_page)
         self.signup_page.focus_first_field()
 
+    def show_forgot_password(self) -> None:
+        self.forgot_password_page.reset()
+        self._switch(self.forgot_password_page)
+        self.forgot_password_page.focus_first_field()
+
     def reset(self, message: str = "") -> None:
         """Back to an empty sign-in form (e.g. after signing out)."""
         self.verification_page.stop()
+        self.forgot_password_page.reset()
         self.google_page.stop()
         self.login_page.reset(keep_username=True)
         self.show_login(message, success=bool(message))
@@ -227,8 +237,12 @@ class AuthView(QWidget):
     def _back_from_google(self, message: str) -> None:
         self.show_login(message)
 
+    def _back_from_forgot_password(self, message: str, username: str) -> None:
+        self.show_login(message, username, success=bool(message))
+
     def _finish(self, user: UserDTO) -> None:
         self.verification_page.stop()
+        self.forgot_password_page.reset()
         self.google_page.stop()
         self.authenticated.emit(user)
 

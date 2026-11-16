@@ -134,6 +134,18 @@ class BusinessFacade(IBusinessFacade):
     def delete_user(self, user_id: str) -> bool:
         return self._user_service.delete_user(user_id)
 
+    # ------------------------------------------------------------- forgot password
+    def start_forgot_password(self, identifier: str) -> dict[str, Any]:
+        return self._user_service.start_forgot_password(identifier)
+
+    def poll_forgot_password(self, session_id: str) -> bool:
+        return self._user_service.poll_forgot_password(session_id)
+
+    def complete_forgot_password(
+        self, session_id: str, new_password: str, confirm_password: str
+    ) -> ValidationDTO:
+        return self._user_service.complete_forgot_password(session_id, new_password, confirm_password)
+
     # ------------------------------------------------------------- manage account
     def update_user(self, user: UserDTO) -> ValidationDTO:
         return self._user_service.update_user(user)

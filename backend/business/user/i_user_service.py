@@ -98,6 +98,21 @@ class IUserService(ABC):
     def delete_user(self, user_id: str) -> bool:
         """Admins: delete someone else's account. False if it no longer existed."""
 
+    # ------------------------------------------------------------- forgot password
+    @abstractmethod
+    def start_forgot_password(self, identifier: str) -> dict[str, Any]:
+        """Request a password reset link sent to email."""
+
+    @abstractmethod
+    def poll_forgot_password(self, session_id: str) -> bool:
+        """Poll if email link was verified in browser. Returns True when verified."""
+
+    @abstractmethod
+    def complete_forgot_password(
+        self, session_id: str, new_password: str, confirm_password: str
+    ) -> ValidationDTO:
+        """Set new password after email verification."""
+
     # ------------------------------------------------------------- manage account
     @abstractmethod
     def update_user(self, user: UserDTO) -> ValidationDTO:

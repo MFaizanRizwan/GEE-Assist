@@ -139,7 +139,9 @@ class EditDetailsDialog(AccountDialog):
         )
         self._user = user
         self.add_field("full_name", FormField("Full name", "Your full name"), user.full_name)
-        self.add_field("username", FormField("Username", "username", USERNAME_HINT), user.username)
+        username_field = self.add_field("username", FormField("Username", "username", "Username cannot be changed once set"), user.username)
+        username_field.input.setEnabled(False)
+        username_field.setToolTip("Username cannot be changed once set.")
         if allow_email:
             self.add_field("email", FormField("Email", "name@example.com"), user.email or "")
         self.add_field("phone_number", FormField("Phone number", "+923001234567", PHONE_HINT),

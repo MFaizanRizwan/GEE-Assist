@@ -117,7 +117,6 @@ class PhotoButton(Avatar):
 # (key, title, hint) of the details you can change by clicking them. Keys are UserDTO fields.
 _EDITABLE = {
     "full_name": "Click to change your name",
-    "username": "Click to change your username",
     "phone_number": "Click to change your phone number",
 }
 _ROWS = (("full_name", "Full name"), ("username", "Username"), ("email", "Email"), ("phone_number", "Phone"),
@@ -270,8 +269,9 @@ class AccountView(QFrame):
         self.change_photo_action.setText("Change photo…" if self.photo.has_photo else "Add photo…")
         self.remove_photo_action.setVisible(self.photo.has_photo)
         self.editors["full_name"].set_value(user.full_name)
-        self.editors["username"].set_value(user.username)
         self.editors["phone_number"].set_value(user.phone_number)
+        self._values["username"].setText(f"@{user.username}")
+        self._values["username"].setToolTip("Username cannot be changed once set.")
         self._values["email"].setText(format_email(user))
         self._values["email"].setToolTip("Only an administrator can change your email address.")
         self._values["role"].setText("Administrator" if user.is_admin else "User")

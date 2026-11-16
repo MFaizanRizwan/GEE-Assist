@@ -102,6 +102,23 @@ class AuthApiClient(IAuthApiClient):
         return response.json()
 
     # ----------------------------------------------------------------- account
+    def forgot_password_start(self, identifier: str) -> dict[str, Any]:
+        return self._request("POST", "/auth/forgot-password/start", json={"identifier": identifier})
+
+    def forgot_password_poll(self, session_id: str) -> dict[str, Any] | None:
+        response = self._send("POST", "/auth/forgot-password/poll", json={"session_id": session_id})
+        if response.status_code == 202:
+            return None
+        _raise_for_status(response, unauthorized=AuthError)
+        return response.json()
+
+    def forgot_password_complete(self, session_id: str, new_password: str) -> dict[str, Any]:
+        return self._request(
+            "POST",
+            "/auth/forgot-password/complete",
+            json={"session_id": session_id, "new_password": new_password},
+        )
+
     def update_user(self, access_token: str, user_id: str, fields: dict[str, Any]) -> dict[str, Any]:
         return self._request("PATCH", f"/users/{user_id}", token=access_token, json=fields)
 

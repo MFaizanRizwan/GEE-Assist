@@ -56,6 +56,18 @@ class IAuthApiClient(ABC):
 
     # ----------------------------------------------------------------- account
     @abstractmethod
+    def forgot_password_start(self, identifier: str) -> dict[str, Any]:
+        """POST /auth/forgot-password/start - send a reset link to email."""
+
+    @abstractmethod
+    def forgot_password_poll(self, session_id: str) -> dict[str, Any] | None:
+        """POST /auth/forgot-password/poll - check if email reset link was verified (None if 202)."""
+
+    @abstractmethod
+    def forgot_password_complete(self, session_id: str, new_password: str) -> dict[str, Any]:
+        """POST /auth/forgot-password/complete - set new password."""
+
+    @abstractmethod
     def update_user(self, access_token: str, user_id: str, fields: dict[str, Any]) -> dict[str, Any]:
         """PATCH /users/{user_id} - your own details, or anyone's for an admin. Unchanged fields are ignored."""
 
