@@ -36,20 +36,6 @@ def test_no_project_no_explanations(facade, services):
     services[1].list_explanations.assert_not_called()
 
 
-def test_a_report_is_built_and_kept_in_the_open_project(facade, services):
-    assert facade.build_report("x_explanation.md") is services[1].build_report.return_value
-    services[1].build_report.assert_called_once_with("x_explanation.md", PROJECT)
-    assert facade.save_report("report", b"%PDF") is services[1].save_report.return_value
-    services[1].save_report.assert_called_once_with("report", b"%PDF", PROJECT)
-
-
-@pytest.mark.parametrize(("method", "args"), [("build_report", ("x.md",)), ("save_report", ("report", b"%PDF"))])
-def test_reports_need_an_open_project(facade, services, method, args):
-    services[0].get_current_project.return_value = None
-    with pytest.raises(ProjectError, match="Create or open a project"):
-        getattr(facade, method)(*args)
-
-
 def test_exporting_goes_to_the_report_service(facade, services):
     assert facade.export_report("a.pdf", "D:/b.pdf") is services[1].export_report.return_value
     services[1].export_report.assert_called_once_with("a.pdf", "D:/b.pdf")
@@ -59,7 +45,7 @@ def test_a_build_without_reports_says_so(services):
     facade = BusinessFacade(user_service=MagicMock(), request_service=services[0], download_service=MagicMock(),
                             map_service=MagicMock())
     with pytest.raises(ReportError, match="not set up"):
-        facade.build_report("x.md")
+        facade.create_report("x.md")
 
 
 def test_a_report_is_created_in_the_open_project(facade, services):

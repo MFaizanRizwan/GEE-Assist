@@ -22,7 +22,7 @@ from backend.dto.download_dto import JOB_COMPLETED, DatasetDTO
 from backend.dto.explanation_dto import ExplanationDTO, ExplanationRequestDTO
 from backend.dto.map_dto import MapLayerDTO, RasterInfoDTO, RasterViewDTO, ViewPresetDTO
 from backend.dto.project_dto import AnalysisRecordDTO, ProjectDTO
-from backend.dto.report_dto import ExplanationFileDTO, ReportDTO
+from backend.dto.report_dto import ExplanationFileDTO
 from backend.dto.settings_dto import AppSettingsDTO, AppSettingsUpdateDTO
 from backend.dto.result_dto import ResultDTO
 from backend.exceptions import AnalysisError, ExplanationError, GeeAssistError, ProjectError, ReportError
@@ -406,14 +406,6 @@ class BusinessFacade(IBusinessFacade):
     def create_report(self, explanation_path: str) -> str:
         project = self._require_project("reports are made from the project's explanations.")
         return self._reports().create_report(explanation_path, project)
-
-    def build_report(self, explanation_path: str) -> ReportDTO:
-        project = self._require_project("reports are made from the project's explanations.")
-        return self._reports().build_report(explanation_path, project)
-
-    def save_report(self, report: ReportDTO, pdf: bytes) -> str:
-        project = self._require_project("reports are kept in the project's reports folder.")
-        return self._reports().save_report(report, pdf, project)
 
     def export_report(self, pdf_path: str, destination: str) -> str:
         return self._reports().export_report(pdf_path, destination)

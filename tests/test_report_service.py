@@ -138,18 +138,25 @@ def test_no_explanation_folder_lists_nothing(service, tmp_path):
     assert service.list_explanations(ProjectDTO("p2", "Empty", str(tmp_path / "Empty"))) == []
 
 
-def test_the_pdf_is_kept_in_the_reports_folder_and_replaced_when_made_again(service, project, tmp_path):
-    report = service.build_report(explanation_path(project), project)
-    saved = service.save_report(report, b"%PDF-1.4 first", project)
+def writing(*pdfs: bytes) -> ReportService:
+    """A service whose PDF writer gives ``pdfs`` one after the other (no markdown-pdf needed)."""
+    queue = list(pdfs)
+    return ReportService(MapService(), image_size=64, write_pdf=lambda report: queue.pop(0))
+
+
+def test_the_pdf_is_kept_in_the_reports_folder_and_replaced_when_made_again(project, tmp_path):
+    service = writing(b"%PDF-1.4 first", b"%PDF-1.4 second")
+    saved = service.create_report(explanation_path(project), project)
     assert saved == str(tmp_path / "Project 1" / "reports" / f"{RESULT}_explanation.pdf")
-    assert service.save_report(report, b"%PDF-1.4 second", project) == saved
+    assert service.create_report(explanation_path(project), project) == saved
     assert open(saved, "rb").read() == b"%PDF-1.4 second"
     assert service.list_explanations(project)[0].report_path == saved
+    assert not list((tmp_path / "Project 1" / "reports").glob("*.tmp"))  # nothing half-written left
 
 
-def test_a_report_can_be_exported_anywhere(service, project, tmp_path):
-    report = service.build_report(explanation_path(project), project)
-    saved = service.save_report(report, b"%PDF-1.4 report", project)
+def test_a_report_can_be_exported_anywhere(project, tmp_path):
+    service = writing(b"%PDF-1.4 report")
+    saved = service.create_report(explanation_path(project), project)
     exported = service.export_report(saved, str(tmp_path / "usb" / "My report"))
     assert exported == str(tmp_path / "usb" / "My report.pdf")
     assert open(exported, "rb").read() == b"%PDF-1.4 report"

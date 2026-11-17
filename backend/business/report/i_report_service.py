@@ -35,15 +35,6 @@ class IReportService(ABC):
         """Where the explanation's PDF is kept: ``<project>/reports/<explanation>.pdf``."""
 
     @abstractmethod
-    def save_report(self, report: ReportDTO, pdf: bytes, project: ProjectDTO) -> str:
-        """Keep the PDF in the project's reports folder (replacing an earlier one of the same
-        explanation); returns its path.
-
-        Raises:
-            ReportError: the file cannot be written.
-        """
-
-    @abstractmethod
     def export_report(self, pdf_path: str, destination: str) -> str:
         """Copy a report's PDF to ``destination`` (a file the user chose); returns where it went.
 

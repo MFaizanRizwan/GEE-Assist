@@ -82,12 +82,13 @@ class ReportService(IReportService):
 
     def create_report(self, explanation_path: str, project: ProjectDTO) -> str:
         report = self.build_report(explanation_path, project)
-        return self.save_report(report, self._write_pdf(report), project)
+        return self._save(report, self._write_pdf(report), project)
 
     def report_path(self, explanation_path: str, project: ProjectDTO) -> str:
         return str(Path(project.reports_dir) / (Path(explanation_path).stem + ".pdf"))
 
-    def save_report(self, report: ReportDTO, pdf: bytes, project: ProjectDTO) -> str:
+    def _save(self, report: ReportDTO, pdf: bytes, project: ProjectDTO) -> str:
+        """Keep the PDF in the project's reports folder, replacing an earlier one of the same explanation."""
         target = Path(self.report_path(report.explanation_path, project))
         temporary = target.with_name(target.name + ".tmp")
         try:
