@@ -5,6 +5,7 @@
         downloads/            datasets downloaded while the project is open
         analysis/             analysis results saved in the project
             analysis_results.json   every analysis run in the project (metrics, settings, file)
+        explanation/          AI explanations of the analysis results (Markdown)
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ from typing import Any
 PROJECT_FILE = "project.json"
 DOWNLOADS_FOLDER = "downloads"
 ANALYSIS_FOLDER = "analysis"
+EXPLANATION_FOLDER = "explanation"
 ANALYSIS_RESULTS_FILE = "analysis_results.json"
 
 
@@ -40,6 +42,10 @@ class ProjectDTO:
     @property
     def analysis_dir(self) -> str:
         return str(Path(self.folder) / ANALYSIS_FOLDER)
+
+    @property
+    def explanation_dir(self) -> str:
+        return str(Path(self.folder) / EXPLANATION_FOLDER)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
