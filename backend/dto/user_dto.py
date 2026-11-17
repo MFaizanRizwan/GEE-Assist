@@ -31,6 +31,7 @@ class UserDTO:
     auth_provider: str = "local"
     created_at: datetime | None = None
     last_login_at: datetime | None = None
+    app_version: str | None = None
 
     @property
     def is_admin(self) -> bool:
@@ -56,6 +57,7 @@ class UserDTO:
             auth_provider=data.get("auth_provider") or "local",
             created_at=_parse_datetime(data.get("created_at")),
             last_login_at=_parse_datetime(data.get("last_login_at")),
+            app_version=data.get("app_version"),
         )
 
     def to_api(self) -> dict[str, Any]:
@@ -67,6 +69,7 @@ class UserDTO:
             "phone_number": self.phone_number,
             "role": self.role,
             "is_active": self.is_active,
+            "app_version": self.app_version,
         }
         return {key: value for key, value in fields.items() if value is not None}
 

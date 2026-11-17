@@ -39,6 +39,11 @@ class AuthSession:
         return self._access_token is not None
 
     @property
+    def access_token(self) -> str | None:
+        """The currently held raw access token, or None if signed out."""
+        return self._access_token
+
+    @property
     def remembered(self) -> bool:
         return self._remember
 

@@ -97,8 +97,9 @@ class UserService(IUserService):
     def check_app_version(self) -> AppVersionDTO | None:
         from backend.config.version import APP_VERSION
 
+        token = self._session.access_token if self._session.active else None
         try:
-            data = self._api.check_app_version(current_version=APP_VERSION)
+            data = self._api.check_app_version(current_version=APP_VERSION, token=token)
         except Exception:
             return None
         if not data:
@@ -120,10 +121,14 @@ class UserService(IUserService):
         return self._user if self._session.active else None
 
     def log_in(self, username: str, password: str, remember: bool = False) -> UserDTO:
+        from backend.config.version import APP_VERSION
+
         username = username.strip().lower()
         if not username or not password:
             raise AuthError("Enter your username and password.")
-        return self._start_session(self._api.login(username, password), remember)
+        return self._start_session(
+            self._api.login(username, password, app_version=APP_VERSION), remember
+        )
 
     def restore_session(self) -> UserDTO | None:
         refresh_token = self._store.load_refresh_token()

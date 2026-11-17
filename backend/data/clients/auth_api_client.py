@@ -54,10 +54,13 @@ class AuthApiClient(IAuthApiClient):
             return False
         return response.status_code == 200
 
-    def check_app_version(self, current_version: str | None = None) -> dict[str, Any] | None:
+    def check_app_version(
+        self, current_version: str | None = None, token: str | None = None
+    ) -> dict[str, Any] | None:
         params = {"current_version": current_version} if current_version else {}
+        headers = {"Authorization": f"Bearer {token}"} if token else {}
         try:
-            response = self._http.get("/app/version", params=params, timeout=5)
+            response = self._http.get("/app/version", params=params, headers=headers, timeout=5)
             if response.status_code == 200:
                 return response.json()
         except httpx.HTTPError:
@@ -67,11 +70,16 @@ class AuthApiClient(IAuthApiClient):
     def signup(self, payload: dict[str, str]) -> dict[str, Any]:
         return self._request("POST", "/auth/signup", json=payload)
 
-    def login(self, username: str, password: str) -> dict[str, Any]:
+    def login(
+        self, username: str, password: str, app_version: str | None = None
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {"username": username, "password": password}
+        if app_version:
+            payload["app_version"] = app_version
         return self._request(
             "POST",
             "/auth/login",
-            json={"username": username, "password": password},
+            json=payload,
             unauthorized=InvalidCredentialsError,
         )
 

@@ -17,7 +17,9 @@ class IAuthApiClient(ABC):
         """GET /health - True if the server answers."""
 
     @abstractmethod
-    def check_app_version(self, current_version: str | None = None) -> dict[str, Any] | None:
+    def check_app_version(
+        self, current_version: str | None = None, token: str | None = None
+    ) -> dict[str, Any] | None:
         """GET /app/version - check latest app version and release info."""
 
     @abstractmethod
@@ -25,7 +27,9 @@ class IAuthApiClient(ABC):
         """POST /auth/signup"""
 
     @abstractmethod
-    def login(self, username: str, password: str) -> dict[str, Any]:
+    def login(
+        self, username: str, password: str, app_version: str | None = None
+    ) -> dict[str, Any]:
         """POST /auth/login"""
 
     @abstractmethod
