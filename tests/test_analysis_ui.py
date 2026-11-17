@@ -414,3 +414,40 @@ def test_without_a_project_there_is_nothing_to_analyse(page):
     facade.get_current_project.return_value = ProjectDTO(id="p1", name="MyProject", folder="C:/work/MyProject")
     view.project_changed()
     assert view.dataset_list.count() == 2 and view.browse_button.isEnabled()
+
+
+# ------------------------------------------------------------------ AI explanation
+def test_explain_with_ai_asks_for_the_explanation_of_the_result(page):
+    view, _ = page
+    assert not view.explain_button.isEnabled()  # nothing to explain yet
+    asked = []
+    view.explain_requested.connect(asked.append)
+    view.run()
+    _wait(lambda: view.layers)
+    assert view.explain_button.isEnabled()
+    view.explain_button.click()
+    assert asked == [view.result] and not view.result.saved  # the explanation page saves it
+
+
+def test_explaining_needs_an_open_project(page):
+    view, facade = page
+    view.run()
+    _wait(lambda: view.layers)
+    facade.get_current_project.return_value = None
+    asked = []
+    view.explain_requested.connect(asked.append)
+    view.explain_button.click()
+    assert asked == [] and "Open a project to explain" in view.banner.text()
+
+
+def test_a_result_saved_for_the_explanation_shows_as_saved(page):
+    from dataclasses import replace
+
+    view, _ = page
+    view.run()
+    _wait(lambda: view.layers)
+    view.set_saved_result(replace(view.result, id="another", saved=True))
+    assert not view.result.saved  # not the result shown
+    view.set_saved_result(replace(view.result, output_path="C:/work/MyProject/analysis/result.tif", saved=True))
+    assert view.result.saved and view.save_state.text() == "✓ Saved: result.tif"
+    assert view.folder_button.isEnabled()

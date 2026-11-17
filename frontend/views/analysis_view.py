@@ -10,7 +10,8 @@ the GPU when the computer has a dedicated NVIDIA card with CuPy, else the CPU.
 
 The right panel shows the result: each layer drawn with its legend, the numbers
 (means, areas, transitions), and buttons to save it, open it in the viewer or show it
-on the map. A result is temporary until the user saves it (“Save result”, into the project's analysis folder
+on the map. "Explain with AI" saves it in the project and opens the AI explanation page
+(see ``ExplanationView``). A result is temporary until the user saves it (“Save result”, into the project's analysis folder
 they choose); an unsaved one is deleted when the next one replaces it or the app
 closes. Analyses run in the background with a progress bar.
 """
@@ -139,6 +140,7 @@ NO_PROJECT = ("Create or open a project: the datasets downloaded into it are lis
 class AnalysisView(QWidget):
     open_in_viewer_requested = pyqtSignal(str)               # result GeoTIFF
     show_on_map_requested = pyqtSignal(bytes, object, str)   # PNG, (west, south, east, north), title
+    explain_requested = pyqtSignal(object)                   # ResultDTO to explain with Gemini
 
     def __init__(self, facade: IBusinessFacade, parent: QWidget | None = None):
         super().__init__(parent)
@@ -288,6 +290,9 @@ class AnalysisView(QWidget):
         self.viewer_button = QPushButton("Open in viewer", objectName="SecondaryButton")
         self.map_button = QPushButton("Show on map", objectName="SecondaryButton")
         self.folder_button = QPushButton("Open folder", objectName="SecondaryButton")
+        self.explain_button = QPushButton("✦ Explain with AI", objectName="SecondaryButton")
+        self.explain_button.setToolTip("Save the result in the project and ask Gemini to explain it, from its "
+                                       "GeoTIFF and the metadata before and after the analysis")
 
         card = QFrame(objectName="ResultCard")
         result_layout = QVBoxLayout(card)
@@ -315,7 +320,8 @@ class AnalysisView(QWidget):
         result_layout.addWidget(self.metrics_table)
         buttons = QHBoxLayout()
         buttons.addWidget(_shrinkable(self.save_state), 1)
-        for button in (self.save_button, self.viewer_button, self.map_button, self.folder_button):
+        for button in (self.save_button, self.explain_button, self.viewer_button, self.map_button,
+                       self.folder_button):
             buttons.addWidget(button)
         result_layout.addLayout(buttons)
 
@@ -332,7 +338,7 @@ class AnalysisView(QWidget):
         layout.addLayout(body, 1)
 
         for button in (self.refresh_button, self.browse_button, self.run_button, self.viewer_button,
-                       self.map_button, self.folder_button, self.save_button):
+                       self.map_button, self.folder_button, self.save_button, self.explain_button):
             button.setCursor(Qt.CursorShape.PointingHandCursor)
         for widget in (self.refresh_button, self.browse_button, self.dataset_note, self.category_note,
                        self.compare_note):
@@ -352,6 +358,7 @@ class AnalysisView(QWidget):
         self.viewer_button.clicked.connect(self._open_in_viewer)
         self.map_button.clicked.connect(self.show_on_map)
         self.folder_button.clicked.connect(self.open_folder)
+        self.explain_button.clicked.connect(self.explain)
         self._show_processes(None)
         self._set_result_buttons(False)
         self._show_save_state()
@@ -699,7 +706,7 @@ class AnalysisView(QWidget):
             self.metrics_table.setItem(row, 1, item)
 
     def _set_result_buttons(self, ready: bool) -> None:
-        for button in (self.viewer_button, self.map_button, self.save_button):
+        for button in (self.viewer_button, self.map_button, self.save_button, self.explain_button):
             button.setEnabled(ready)
         self.layer_box.setEnabled(ready)
         self.folder_button.setEnabled(ready and self.result is not None and self.result.saved)
@@ -762,7 +769,25 @@ class AnalysisView(QWidget):
         if self.result is not None and not self.result.saved:
             self._facade.discard_analysis_result(self.result)
 
+    def set_saved_result(self, result: ResultDTO) -> None:
+        """The result shown was saved elsewhere (e.g. before it was sent to Gemini): show it as saved."""
+        if self.result is None or self.result.id != result.id or not result.saved:
+            return
+        self.result = result
+        self.folder_button.setEnabled(True)
+        self._show_save_state()
+
     # ------------------------------------------------------------- result actions
+    def explain(self) -> None:
+        """Ask for an AI explanation of the result (it is saved in the project first)."""
+        if self.result is None:
+            return
+        if current_project(self._facade) is None:
+            self.banner.show_error("Open a project to explain the result: it is saved in the project's analysis "
+                                   "folder before it is sent to Gemini.")
+            return
+        self.explain_requested.emit(self.result)
+
     def _open_in_viewer(self) -> None:
         if self.result is not None:
             self.open_in_viewer_requested.emit(self.result.output_path)
