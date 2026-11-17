@@ -316,7 +316,7 @@ access token is renewed.
 ```
 ayesha@gkonsol ~ $ session
   Signed in as    ayesha (Ayesha Khan)
-  Server          http://localhost:8000
+  Server          https://gee-assist-backend.vercel.app
   Kept signed in  Yes, until 17 Nov 2026, 19:20 (in 6 d 23 h)
   Access token    renews in 28 min
   Refresh token   held
@@ -1016,7 +1016,7 @@ Alias: `checkup`.
 ```
 ayesha@gkonsol ~ $ doctor
 GEE-Assist check-up
-✓ Authentication server  http://localhost:8000 answered.  (23 ms)
+✓ Authentication server  https://gee-assist-backend.vercel.app answered.  (230 ms)
 ✓ Session                Signed in as ayesha.  (41 ms)
 ✓ Gemini                 The Gemini API key is set.
 ✓ Download folder        D:\Projects\FYP\GEE-Assist\workspace\downloads  (182.4 GB free)
@@ -1151,7 +1151,7 @@ Commands with subcommands run a default when typed alone: `user` → `user info`
 | `Unknown option --…` / `Too many arguments` | See the usage line printed under it, or `help <command>` |
 | `A command is still running. Press Ctrl+C to stop it.` | Wait for it, or press **Ctrl+C** |
 | `'users …' is for administrators only.` | Ask an administrator |
-| `Cannot reach the authentication server at …` | Start GEE-Assist-Backend (`uvicorn app.main:app`), or set `AUTH_API_URL` in `.env` |
+| `Cannot reach the authentication server at …` | Check the internet connection, or the server address (`AUTH_API_URL` in `.env`; a local GEE-Assist-Backend runs with `uvicorn app.main:app`) |
 | `Your session has expired.` | `signout`, then sign in again |
 | `No Earth Engine project is set.` | Register a Cloud project at https://code.earthengine.google.com/register and enter its ID in Options → Settings… |
 | `Earth Engine is not signed in on this computer.` | `gee login` |

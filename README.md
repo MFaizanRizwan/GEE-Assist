@@ -4,8 +4,10 @@ Desktop app (PyQt6) for querying and analysing Google Earth Engine data.
 
 ## Running the app
 
-1. Start the authentication server ([GEE-Assist-Backend](https://github.com/Abdullah2265Habib/GEE-Assist-Backend)),
-   by default on `http://localhost:8000`:
+1. The authentication server ([GEE-Assist-Backend](https://github.com/Abdullah2265Habib/GEE-Assist-Backend))
+   is deployed at <https://gee-assist-backend.vercel.app>, which the app uses by default: there is
+   nothing to start. To use a server run on this computer instead, start it and set
+   `AUTH_API_URL=http://localhost:8000` in `.env`:
 
    ```bash
    cd GEE-Assist-Backend
@@ -19,7 +21,7 @@ Desktop app (PyQt6) for querying and analysing Google Earth Engine data.
    python -m venv .venv
    .venv\Scripts\activate
    pip install -r requirements.txt
-   copy .env.example .env      # optional: AUTH_API_URL if the server is not on localhost:8000
+   copy .env.example .env      # optional: e.g. AUTH_API_URL for a server on this computer
    python main.py
    ```
 
