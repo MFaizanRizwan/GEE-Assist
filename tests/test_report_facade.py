@@ -60,3 +60,15 @@ def test_a_build_without_reports_says_so(services):
                             map_service=MagicMock())
     with pytest.raises(ReportError, match="not set up"):
         facade.build_report("x.md")
+
+
+def test_a_report_is_created_in_the_open_project(facade, services):
+    assert facade.create_report("x_explanation.md") is services[1].create_report.return_value
+    services[1].create_report.assert_called_once_with("x_explanation.md", PROJECT)
+
+
+def test_creating_a_report_needs_an_open_project(facade, services):
+    services[0].get_current_project.return_value = None
+    with pytest.raises(ProjectError, match="Create or open a project"):
+        facade.create_report("x_explanation.md")
+    services[1].create_report.assert_not_called()

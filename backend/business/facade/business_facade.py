@@ -403,6 +403,10 @@ class BusinessFacade(IBusinessFacade):
         project = self._request_service.get_current_project()
         return self._reports().list_explanations(project) if project is not None else []
 
+    def create_report(self, explanation_path: str) -> str:
+        project = self._require_project("reports are made from the project's explanations.")
+        return self._reports().create_report(explanation_path, project)
+
     def build_report(self, explanation_path: str) -> ReportDTO:
         project = self._require_project("reports are made from the project's explanations.")
         return self._reports().build_report(explanation_path, project)

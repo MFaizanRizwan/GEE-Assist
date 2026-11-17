@@ -325,6 +325,11 @@ class IBusinessFacade(ABC):
         """The AI explanations saved in the open project, newest first; none when no project is open."""
 
     @abstractmethod
+    def create_report(self, explanation_path: str) -> str:
+        """Write a saved explanation's PDF report (the analysis pictures, then the explanation) in the
+        open project's reports folder; returns its path."""
+
+    @abstractmethod
     def build_report(self, explanation_path: str) -> ReportDTO:
         """What the PDF report of a saved explanation holds: the analysis pictures, then the explanation."""
 
