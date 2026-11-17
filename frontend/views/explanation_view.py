@@ -232,11 +232,12 @@ def sent_text(explanation: ExplanationDTO) -> str:
     request = explanation.request
     name = Path(request.tif_path).name if request else "the result"
     count = len(request.previews) if request else 0
-    previews = f"{count} layer preview{'s' if count != 1 else ''} and the metadata"
+    previews = (f"{count} layer preview{'s' if count != 1 else ''} and the metadata"
+                if explanation.previews_attached and count else "the metadata only")
     model = f"  ·  {explanation.model}" if explanation.model else ""
     if explanation.tif_attached:
         return f"Sent to Gemini: {name} (saved in the project), {previews}{model}"
-    return f"Saved in the project: {name}. Gemini does not read GeoTIFFs, so it was sent {previews}{model}"
+    return f"Saved in the project: {name}. Gemini refused the GeoTIFF, so it was sent {previews}{model}"
 
 
 def metadata_html(request: ExplanationRequestDTO) -> str:

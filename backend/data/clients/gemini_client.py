@@ -108,8 +108,9 @@ class GeminiClient(IGeminiClient):
     def generate_explanation(self, request: ExplanationRequestDTO) -> ExplanationDTO:
         """Send the saved result GeoTIFF, a PNG preview of each layer and the prompt to Gemini.
 
-        Gemini may not accept GeoTIFFs: then the request is sent again without it, so the
-        explanation is made from the previews and the metadata in the prompt.
+        Gemini may refuse an attachment (it does not read GeoTIFFs, and often answers only
+        "400 INVALID_ARGUMENT"). Then the request is sent again with less: without the GeoTIFF,
+        then without the previews, so the explanation is at least made from the metadata.
         """
         sdk = self._sdk()
         from google.genai import types
@@ -117,17 +118,26 @@ class GeminiClient(IGeminiClient):
         prompt = build_explanation_prompt(request)
         previews = [types.Part.from_bytes(data=png, mime_type="image/png") for png in request.previews]
         uploaded = self._upload_geotiff(sdk, request.tif_path)
+        # (contents, GeoTIFF sent, previews sent), from the most to the least attached
+        attempts = []
+        if uploaded is not None:
+            attempts.append(([uploaded, *previews, prompt], True, bool(previews)))
+        if previews:
+            attempts.append(([*previews, prompt + NO_GEOTIFF_NOTE], False, True))
+        attempts.append(([prompt + NO_ATTACHMENTS_NOTE], False, False))
         try:
-            if uploaded is not None:
+            for contents, tif_sent, previews_sent in attempts:
+                attached = len(contents) > 1
                 try:
-                    text = self._generate([uploaded, *previews, prompt], EXPLANATION_SYSTEM_PROMPT,
+                    text = self._generate(contents, EXPLANATION_SYSTEM_PROMPT, attachments=attached,
                                           temperature=EXPLANATION_TEMPERATURE)
-                    return ExplanationDTO(text=text, model=self._models[0], tif_attached=True, request=request)
                 except _UnsupportedFile:
-                    log.warning("Gemini did not accept %s; explaining from the previews", request.tif_path)
-            text = self._generate([*previews, prompt + NO_GEOTIFF_NOTE], EXPLANATION_SYSTEM_PROMPT,
-                                  temperature=EXPLANATION_TEMPERATURE)
-            return ExplanationDTO(text=text, model=self._models[0], tif_attached=False, request=request)
+                    log.warning("Gemini refused the attachments (GeoTIFF: %s, previews: %s); sending less",
+                                tif_sent, previews_sent)
+                    continue
+                return ExplanationDTO(text=text, model=self._models[0], tif_attached=tif_sent,
+                                      previews_attached=previews_sent, request=request)
+            raise LLMServiceError(USER_MESSAGES["other"])  # unreachable: the last attempt has no attachments
         finally:
             if uploaded is not None:
                 self._delete_upload(sdk, uploaded)
@@ -184,9 +194,12 @@ class GeminiClient(IGeminiClient):
         except Exception:  # noqa: BLE001
             log.info("Could not delete the uploaded file %s", getattr(uploaded, "name", ""), exc_info=True)
 
-    def _generate(self, contents, system_instruction: str, **settings) -> str:
+    def _generate(self, contents, system_instruction: str, attachments: bool = False, **settings) -> str:
         """Call Gemini. A busy or retired model is skipped for the next one; if all are
-        busy, wait briefly and try once more. Only a short, plain message reaches the user."""
+        busy, wait briefly and try once more. Only a short, plain message reaches the user.
+
+        With ``attachments`` (files or images in ``contents``), an invalid-argument answer means
+        Gemini refused one of them: ``_UnsupportedFile`` is raised so the caller can send less."""
         sdk = self._sdk()
         from google.genai import types
 
@@ -206,8 +219,8 @@ class GeminiClient(IGeminiClient):
                         continue
                     if last_kind in ("busy", "quota"):
                         continue  # overloaded, or this model's limit is used up: try the next one
-                    if last_kind == "file":
-                        raise _UnsupportedFile(USER_MESSAGES[last_kind]) from exc
+                    if last_kind == "file" or (attachments and _is_invalid_argument(exc)):
+                        raise _UnsupportedFile(USER_MESSAGES["file"]) from exc
                     raise LLMServiceError(USER_MESSAGES[last_kind]) from exc
 
                 text = (getattr(response, "text", None) or "").strip()
@@ -230,6 +243,16 @@ UPLOAD_POLL_SEC = 1.0                           # while Gemini is still processi
 UPLOAD_WAIT_SEC = 30.0
 NO_GEOTIFF_NOTE = ("\n\nNote: the result GeoTIFF could not be attached (Gemini does not accept this file "
                    "type); explain from the previews and the metadata above.")
+
+
+NO_ATTACHMENTS_NOTE = ("\n\nNote: Gemini could not take the attached GeoTIFF or previews; explain from the "
+                       "metadata and numbers above, and say that the spatial patterns could not be seen.")
+
+
+def _is_invalid_argument(exc: Exception) -> bool:
+    """A 400 INVALID_ARGUMENT answer (Gemini often gives no other detail for a file it refuses)."""
+    status = str(getattr(exc, "status", "") or "").upper()
+    return getattr(exc, "code", None) == 400 or status == "INVALID_ARGUMENT"
 
 
 def _state(uploaded) -> str:

@@ -192,7 +192,8 @@ def explanation_markdown(explanation: ExplanationDTO) -> str:
              f"- Result: {Path(result.output_path).name}",
              f"- Explained: {explanation.created_at}" + (f" by {explanation.model}" if explanation.model else ""),
              "- Sent to Gemini: " + ("the result GeoTIFF, " if explanation.tif_attached else "") +
-             f"{len(request.previews)} layer preview(s) and the metadata below", ""]
+             (f"{len(request.previews)} layer preview(s) and " if explanation.previews_attached and request.previews
+              else "") + "the metadata below", ""]
 
     def table(title: str, metadata: RasterMetadataDTO | None) -> None:
         if metadata is None:

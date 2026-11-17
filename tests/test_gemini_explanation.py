@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pytest
 from google.genai import errors as genai_errors
 
-from backend.data.clients.gemini_client import NO_GEOTIFF_NOTE, GeminiClient
+from backend.data.clients.gemini_client import NO_ATTACHMENTS_NOTE, NO_GEOTIFF_NOTE, GeminiClient
 from backend.data.clients.prompts import EXPLANATION_SYSTEM_PROMPT
 from backend.data.data_facade import DataFacade
 from backend.dto.explanation_dto import ExplanationRequestDTO, LayerInfoDTO
@@ -143,3 +143,44 @@ def test_a_missing_geotiff_is_reported(request_for):
 def test_data_facade_delegates_explanations_to_gemini(request_for):
     client, _, _ = make_client()
     assert DataFacade(gemini_client=client).generate_explanation(request_for()).text.startswith("## Summary")
+
+
+def invalid_argument() -> Exception:
+    """What Gemini really answered for an attached GeoTIFF: no word about the file type."""
+    message = "Request contains an invalid argument."
+    return genai_errors.ClientError(400, {"error": {"code": 400, "message": message, "status": "INVALID_ARGUMENT"}})
+
+
+def test_a_bare_invalid_argument_with_the_geotiff_falls_back_to_the_previews(request_for):
+    client, files, models = make_client(models=FakeModels(errors=[invalid_argument()]))
+    explanation = client.generate_explanation(request_for())
+
+    assert len(models.calls) == 2
+    retry = models.calls[1]["contents"]
+    assert len(retry) == 3 and retry[-1].endswith(NO_GEOTIFF_NOTE)  # two previews and the prompt
+    assert not explanation.tif_attached and explanation.previews_attached
+    assert files.deleted == ["files/abc"]
+
+
+def test_if_the_previews_are_refused_too_the_metadata_alone_is_explained(request_for):
+    client, _, models = make_client(models=FakeModels(errors=[invalid_argument(), invalid_argument()]))
+    explanation = client.generate_explanation(request_for())
+
+    assert len(models.calls) == 3
+    only_text = models.calls[2]["contents"]
+    assert len(only_text) == 1 and only_text[0].endswith(NO_ATTACHMENTS_NOTE)
+    assert explanation.text and not explanation.tif_attached and not explanation.previews_attached
+
+
+def test_an_invalid_argument_without_attachments_reaches_the_user(request_for):
+    client, _, models = make_client(models=FakeModels(errors=[invalid_argument()] * 3))
+    with pytest.raises(LLMServiceError, match="couldn't process"):
+        client.generate_explanation(request_for())
+    assert len(models.calls) == 3
+
+
+def test_a_query_with_an_invalid_argument_is_not_retried():
+    client, _, models = make_client(models=FakeModels(errors=[invalid_argument()]))
+    with pytest.raises(LLMServiceError):
+        client.process_query("NDVI for Lahore")
+    assert len(models.calls) == 1

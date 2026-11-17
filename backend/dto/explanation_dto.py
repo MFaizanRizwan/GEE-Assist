@@ -126,6 +126,7 @@ class ExplanationDTO:
     request: ExplanationRequestDTO | None = None
     saved_path: str = ""                        # the explanation kept in the project's explanation folder (.md)
     created_at: str = ""                        # ISO timestamp
+    previews_attached: bool = True              # False: Gemini refused the previews too; only the metadata
 
 
 def _size(size: int) -> str:

@@ -123,4 +123,6 @@ def test_an_answer_for_an_earlier_result_is_ignored(page):
 
 def test_the_sent_line_says_when_gemini_refused_the_geotiff():
     text = sent_text(replace(ANSWER, tif_attached=False))
-    assert text.startswith("Saved in the project: result.tif. Gemini does not read GeoTIFFs")
+    assert text.startswith("Saved in the project: result.tif. Gemini refused the GeoTIFF, so it was sent 1 layer")
+    text = sent_text(replace(ANSWER, tif_attached=False, previews_attached=False))
+    assert "so it was sent the metadata only" in text
