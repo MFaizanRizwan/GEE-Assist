@@ -1,8 +1,10 @@
 """Vertical navigation bar on the left of the signed-in window.
 
 The bar slides between two widths (``set_expanded``). Expanded, its buttons show their
-full names ("Downloads"); collapsed, only a short label ("D"). It starts collapsed unless
-created with ``expanded=True``. The logo at the top is the way home: clicking it emits
+full names ("Downloads"); collapsed, only a short label ("D"). It opens by itself while the
+pointer is over it and closes again shortly after the pointer leaves (not while one of its
+menus, e.g. the account menu, is open). ``set_pinned(True)`` keeps it open. It starts
+collapsed unless created with ``expanded=True``, which also pins it. The logo at the top is the way home: clicking it emits
 ``home_requested`` (the signed-in window shows the dashboard).
 Any widget added with a ``set_compact(bool)`` method follows the same switch.
 
@@ -20,6 +22,7 @@ from PyQt6.QtCore import QEasingCurve, QElapsedTimer, QRectF, QSize, Qt, QTimer,
 from PyQt6.QtGui import QIcon, QPainter, QPixmap
 from PyQt6.QtWidgets import (
     QWIDGETSIZE_MAX,
+    QApplication,
     QBoxLayout,
     QFrame,
     QPushButton,
@@ -39,6 +42,8 @@ COLLAPSED_WIDTH = LOGO_SIZE + 2 * SIDE_MARGIN + BORDER   # just wide enough for 
 EXPANDED_WIDTH = 220
 SLIDE_MS = 220
 FRAME_MS = 15     # about 60 frames a second
+HOVER_OPEN_MS = 150   # the pointer rests on the bar this long before it opens (passing over does not)
+HOVER_CLOSE_MS = 350  # and is away this long before it closes
 BUTTON_HEIGHT = 40  # collapsed, a button is as wide as it is high: a circle
 ICON_SIZE = 22
 ICON_LEFT = 14      # expanded: the icon's distance from the button's left edge
@@ -136,6 +141,7 @@ class SideButton(QPushButton):
 
 class SideBar(QFrame):
     expanded_changed = pyqtSignal(bool)
+    pinned_changed = pyqtSignal(bool)
     home_requested = pyqtSignal()  # the logo was clicked
 
     def __init__(self, logo: QPixmap, parent: QWidget | None = None, expanded: bool = False):
@@ -143,6 +149,8 @@ class SideBar(QFrame):
         self.setObjectName("SideBar")
         self.setStyleSheet(STYLESHEET)
         self._expanded = expanded
+        self._pinned = expanded       # kept open whatever the pointer does
+        self._hovered = False
         self._compact_widgets: list[QWidget] = []
         self._layout_of: dict[QWidget, QBoxLayout] = {}
 
@@ -175,6 +183,15 @@ class SideBar(QFrame):
         self._slide_from = self._slide_to = width
         self._easing = QEasingCurve(QEasingCurve.Type.OutCubic)
 
+        self._hover_open = QTimer(self)
+        self._hover_open.setSingleShot(True)
+        self._hover_open.setInterval(HOVER_OPEN_MS)
+        self._hover_open.timeout.connect(self._open_on_hover)
+        self._hover_close = QTimer(self)
+        self._hover_close.setSingleShot(True)
+        self._hover_close.setInterval(HOVER_CLOSE_MS)
+        self._hover_close.timeout.connect(self._close_after_hover)
+
     # ------------------------------------------------------------- contents
     def add_button(self, text: str, short: str, footer: bool = False, icon: SideIcon | None = None) -> SideButton:
         button = SideButton(text, short, icon)
@@ -199,6 +216,51 @@ class SideBar(QFrame):
 
     def toggle(self) -> None:
         self.set_expanded(not self._expanded)
+
+    # ------------------------------------------------------------- hover and pinning
+    def is_pinned(self) -> bool:
+        return self._pinned
+
+    def is_hovered(self) -> bool:
+        return self._hovered
+
+    def set_pinned(self, pinned: bool) -> None:
+        """Keep the bar open (View → Side bar), or let it follow the pointer again."""
+        if pinned == self._pinned:
+            return
+        self._pinned = pinned
+        self._hover_close.stop()
+        if pinned:
+            self.set_expanded(True)
+        elif not self._hovered:
+            self.set_expanded(False)
+        self.pinned_changed.emit(pinned)
+
+    def enterEvent(self, event) -> None:  # noqa: N802 (Qt API)
+        super().enterEvent(event)
+        self._hovered = True
+        self._hover_close.stop()
+        if not self._expanded:
+            self._hover_open.start()
+
+    def leaveEvent(self, event) -> None:  # noqa: N802 (Qt API)
+        super().leaveEvent(event)  # moving onto one of the bar's own buttons is not leaving it
+        self._hovered = False
+        self._hover_open.stop()
+        if self._expanded and not self._pinned:
+            self._hover_close.start()
+
+    def _open_on_hover(self) -> None:
+        if self._hovered:
+            self.set_expanded(True)
+
+    def _close_after_hover(self) -> None:
+        if self._pinned or self._hovered:
+            return
+        if QApplication.activePopupWidget() is not None:  # e.g. the account menu opened from the bar
+            self._hover_close.start()  # look again once it is closed
+            return
+        self.set_expanded(False)
 
     def set_expanded(self, expanded: bool, animate: bool = True) -> None:
         if expanded == self._expanded:
