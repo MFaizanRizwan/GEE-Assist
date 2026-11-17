@@ -163,3 +163,28 @@ def test_explanation_tables_have_a_shaded_repeated_header_and_colour_keys_are_un
     assert explanation.cellAt(1, 0).format().background().style().name == "NoBrush"
     keys = [table for table in found if table is not explanation]
     assert keys and all(table.format().headerRowCount() == 0 for table in keys)
+
+
+def test_the_colour_bar_is_as_wide_as_its_picture_with_the_range_under_its_ends():
+    key = colour_key_html(SCALE, 437)
+    assert "<table width='437'" in key
+    assert "align='left'" in key and "align='right'" in key  # low under the left end, high under the right
+    assert key.index("-0.2") < key.index("0.8")
+
+
+def test_the_colour_bar_lines_up_with_the_picture_in_the_document():
+    from PyQt6.QtGui import QTextTable
+
+    document = report_document(report(images=(picture(),)))
+    image_width = None
+    block = document.begin()
+    while block.isValid() and image_width is None:
+        pieces = block.begin()
+        while not pieces.atEnd():
+            form = pieces.fragment().charFormat()
+            if form.isImageFormat():
+                image_width = form.toImageFormat().width()
+            pieces += 1
+        block = block.next()
+    bar = next(frame for frame in document.rootFrame().childFrames() if isinstance(frame, QTextTable))
+    assert bar.format().width().rawValue() == round(image_width)

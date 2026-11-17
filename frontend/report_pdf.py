@@ -34,7 +34,6 @@ IMAGE_WIDTH = 620                               # in document pixels: about the 
 MUTED = "#5f6b6d"
 IMAGE_URL = "report-image://{}"
 BAR_CELLS = 24                                  # colours blended across a colour bar
-BAR_CELL_WIDTH = 12
 SECTION_GAP = 14                                # space between pictures, and before the explanation
 BLANK_HEADER_NAMES = ("Property", "Value")      # for two-column tables saved without column names
 HEADER_BACKGROUND = "#E6EFEC"                   # the explanation tables' header row
@@ -71,7 +70,7 @@ def report_document(report: ReportDTO) -> QTextDocument:
         picture_format.setWidth(width)
         picture_format.setHeight(width * picture.height() / max(1, picture.width()))
         cursor.insertImage(picture_format)
-        key = colour_key_html(image.colour_key)
+        key = colour_key_html(image.colour_key, round(width))  # as wide as the picture, to line up
         if key:
             cursor.insertBlock(centred)
             cursor.insertHtml(key)
@@ -168,17 +167,24 @@ def render_report_pdf(report: ReportDTO) -> bytes:
     return bytes(buffer.data())
 
 
-def colour_key_html(legend: LegendDTO | None) -> str:
-    """A colour bar with its low and high values, or a swatch per class; "" if there is nothing to draw."""
+def colour_key_html(legend: LegendDTO | None, width: int = IMAGE_WIDTH) -> str:
+    """A colour bar with its low and high values, or a swatch per class; "" if there is nothing to draw.
+
+    The bar is ``width`` wide, the width of its picture, so that both line up when centred; the
+    low value is under its left end and the high value under its right end."""
     if legend is None or not legend.colours:
         return ""
     if legend.kind == "scale":
-        cells = "".join(f"<td width='{BAR_CELL_WIDTH}' bgcolor='{colour}'>&nbsp;</td>"
+        cell = f"{100 / BAR_CELLS:.4f}%"
+        cells = "".join(f"<td width='{cell}' bgcolor='{colour}' style='font-size:5pt'>&nbsp;</td>"
                         for colour in blend(legend.colours, BAR_CELLS))
-        return (f"<table cellspacing='0' cellpadding='1' align='center'><tr>"
-                f"<td style='color:{MUTED}; font-size:8pt'>{html.escape(format_value(legend.low))}&nbsp;</td>"
-                f"{cells}<td style='color:{MUTED}; font-size:8pt'>&nbsp;{html.escape(format_value(legend.high))}</td>"
-                f"</tr></table>")
+        half = BAR_CELLS // 2
+        label = f"style='color:{MUTED}; font-size:8pt'"
+        return (f"<table width='{width}' cellspacing='0' cellpadding='0' border='0' align='center'>"
+                f"<tr>{cells}</tr>"
+                f"<tr><td colspan='{half}' align='left' {label}>{html.escape(format_value(legend.low))}</td>"
+                f"<td colspan='{BAR_CELLS - half}' align='right' {label}>{html.escape(format_value(legend.high))}"
+                f"</td></tr></table>")
     if legend.kind == "classes" and legend.labels:
         cells = "".join(f"<td width='12' bgcolor='{colour}'>&nbsp;</td>"
                         f"<td style='font-size:8pt'>&nbsp;{html.escape(label)}&nbsp;&nbsp;&nbsp;</td>"
