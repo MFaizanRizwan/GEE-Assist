@@ -193,8 +193,8 @@ As in other desktop apps, you work inside a project. A project is a folder:
 
 ### Feedback
 
-After every AI explanation, and whenever you go from the AI explanation page to the dashboard, a
-window asks you to **Rate the app**, **Send feedback** or **Suggest a feature** (or **Not now**).
+After every AI explanation, whenever you go from the AI explanation page to the dashboard, and
+whenever you come back to the dashboard after running an analysis, a window asks you to **Rate the app**, **Send feedback** or **Suggest a feature** (or **Not now**).
 Your choice opens that tab of the website's community page in the browser:
 `http://localhost:5173/community?tab=rate`, `?tab=feedback` or `?tab=suggest`. **Help → Rate,
 feedback or suggestion…** opens the same window at any time. The website's address is
