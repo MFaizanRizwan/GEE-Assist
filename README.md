@@ -64,27 +64,29 @@ whatever was never entered in the app.
   lasts as long as chosen in **Options → Settings…** (7 days unless changed), counted from signing in; after that
   the app asks to sign in again.
 - After signing in the app opens on the **dashboard**. Its **Query Input** card opens the parameter
-  form (with the "Chat with Gemini" assistant); the back arrow (**←**) at the top of the side bar
-  returns to it. On the dashboard itself there is no back arrow and the logo is at the top.
+  form (with the "Chat with Gemini" assistant). Clicking the **GEE-Assist logo** at the top of the
+  side bar returns to the dashboard from any page (there is no back arrow).
 - A menu bar runs along the top of every page, as in Word or Excel:
   - **File**: New project… (Ctrl+Shift+N), Open project… (Ctrl+Shift+O), Recent projects, Rename
     project…, Move project…, Close project, New request (Ctrl+N), Open GeoTIFF… (Ctrl+O), Sign out,
     Exit (Ctrl+Q)
   - **Edit**: Undo, Redo, Cut, Copy, Paste, Select all, acting on the text field with the cursor
   - **View**: Dashboard, Query Input, Downloads, Account, Analysis (Ctrl+1 to Ctrl+5), Reports (Ctrl+7),
-    Show analysis table (Ctrl+6), Side bar (Ctrl+B), Terminal (Ctrl+`), Full screen (F11), Theme
+    Show analysis table (Ctrl+6), Side bar (Ctrl+B: keep it open), Terminal (Ctrl+`), Full screen (F11), Theme
   - **Terminal** (gkonsol's, as in VS Code): Show terminal (Ctrl+`), Maximise terminal, Clear terminal,
     Stop running command; Check everything, Verify Earth Engine sign-in, Sign in to Earth Engine…,
     Verify my session, Watch download progress, Download speed chart, List downloads and gkonsol help,
     which run that command in the terminal; Command reference (opens docs/GKONSOL.md)
   - **Options**: Download chunk size…, Manage users… (administrators)
   - **Help**: Rate, feedback or suggestion…, About GEE-Assist
-- Navigation is in a side bar on the left: **Query Input**, **Downloads**, **Analysis** and
-  **Terminal**, each with an icon that animates while the pointer is over it (a pencil writing on a
-  sheet; an arrow sliding down into a tray; chart bars rising in a wave under a sweeping magnifying
-  lens; a prompt typing). It starts collapsed (icons only); clicking the logo slides it
-  open (icons and names) or closed again. **Terminal** opens gkonsol (see below) and stays
-  highlighted while it is open.
+- Navigation is in a side bar on the left: **Query Input**, **Downloads**, **Analysis**, **AI
+  Explanation** and **Terminal**, each with an icon that animates while the pointer is over it (a
+  pencil writing on a sheet; an arrow sliding down into a tray; chart bars rising in a wave under a
+  sweeping magnifying lens; lines appearing in a speech bubble with a twinkling sparkle; a prompt
+  typing). It is collapsed (icons only) and opens by itself (icons and names) while the pointer rests
+  on it, sliding over the page, and closes again when the pointer leaves; no click is needed.
+  **View → Side bar** (Ctrl+B) keeps it open beside the page. **Terminal** opens gkonsol (see below)
+  and stays highlighted while it is open.
 - Clicking your name or avatar in the side bar opens the account menu: **Manage account**
   (the account page), **Sign-up details** and **Sign out**.
 - The **account page** shows your details on the left and your photo on the right. Click your
@@ -175,6 +177,10 @@ As in other desktop apps, you work inside a project. A project is a folder:
 
 ## AI explanation
 
+- **AI Explanation** in the side bar explains any result saved in the open project: it lists the
+  project's result GeoTIFFs (newest first, with their analysis, processes and date) and asks which
+  one to explain. Without an open project it asks to create or open one; with no saved result yet it
+  offers to open the Analysis page.
 - **Explain with AI** under an analysis result opens the **AI explanation** page. A project must be
   open: if the result is not saved yet, its GeoTIFF is saved in the project's `analysis` folder
   first (as **Save result** does), so the file sent to Gemini is always the one kept in the project.
