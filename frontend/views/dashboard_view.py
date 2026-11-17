@@ -4,8 +4,7 @@ From the top: a greeting, the open project (or buttons to create / open one), on
 workspace, and at the bottom the three most recent projects and the latest analysis results
 of those projects.
 
-"Query Input", "Download" and "Analysis" open their pages; "Reports" is a placeholder
-for a use case that is not built yet.
+"Query Input", "Download", "Analysis" and "Reports" open their pages.
 """
 
 from __future__ import annotations
@@ -279,6 +278,7 @@ class DashboardView(QWidget):
     open_query_input = pyqtSignal()
     open_downloads = pyqtSignal()
     open_analysis = pyqtSignal()
+    open_reports = pyqtSignal()
     new_project = pyqtSignal()
     open_project = pyqtSignal()
     open_recent = pyqtSignal(str)  # a recent project's folder
@@ -314,11 +314,17 @@ class DashboardView(QWidget):
             "when there is one.",
             "Open Analysis",
         )
+        self.reports_tile = DashboardTile(
+            "☰", "Reports",
+            "Turn an AI explanation into a PDF report: the analysis picture, then the explanation. Export it "
+            "anywhere.",
+            "Open Reports",
+        )
         tiles = (
             self.query_tile,
             self.download_tile,
             self.analysis_tile,
-            DashboardTile("☰", "Reports", "Collect maps, charts and explanations into a report.", None),
+            self.reports_tile,
         )
         grid = QGridLayout()
         grid.setSpacing(20)
@@ -376,6 +382,8 @@ class DashboardView(QWidget):
         self.download_tile.button.clicked.connect(self.open_downloads)
         assert self.analysis_tile.button is not None
         self.analysis_tile.button.clicked.connect(self.open_analysis)
+        assert self.reports_tile.button is not None
+        self.reports_tile.button.clicked.connect(self.open_reports)
         card = self.project_card
         for button, signal in ((card.new_button, self.new_project), (card.open_button, self.open_project),
                                (self.recent_new, self.new_project), (self.recent_open, self.open_project),

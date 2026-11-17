@@ -172,13 +172,16 @@ def test_signup_details_open_for_the_signed_in_user(home, monkeypatch):
     assert opened == ["ayesha"]
 
 
-def test_unbuilt_workspaces_are_disabled_placeholders(home):
+def test_every_workspace_card_is_built(home):
     grid = home.dashboard.findChildren(type(home.dashboard.query_tile))
-    active = (home.dashboard.query_tile, home.dashboard.download_tile, home.dashboard.analysis_tile)
-    placeholders = [tile for tile in grid if tile not in active]
+    assert len(grid) == 4 and all(tile.isEnabled() and tile.button is not None for tile in grid)
 
-    assert len(placeholders) == 1  # Reports
-    assert all(not tile.isEnabled() and tile.button is None for tile in placeholders)
+
+def test_reports_card_asks_for_the_reports_page(home):
+    asked = []
+    home.dashboard.open_reports.connect(lambda: asked.append(True))
+    home.dashboard.reports_tile.button.click()
+    assert asked == [True]
 
 
 def test_analysis_card_opens_the_analysis_page(home):
