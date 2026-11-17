@@ -272,15 +272,39 @@ def test_file_menu_new_request_sign_out_and_exit(home, monkeypatch):
     assert quits == [True]
 
 
-def test_view_menu_toggles_the_side_bar(home):
+def test_view_menu_keeps_the_side_bar_open(home):
     item = home.menu_bar.toggle_side_bar
-    assert not item.isChecked()  # the side bar starts collapsed
+    assert not item.isChecked()  # the side bar starts collapsed, opening on hover
 
     item.trigger()
-    assert home.side_bar.is_expanded() and item.isChecked()
+    assert home.side_bar.is_pinned() and home.side_bar.is_expanded() and item.isChecked()
 
-    home.side_bar.set_expanded(False, animate=False)  # e.g. by clicking the logo
-    assert not item.isChecked()
+    home.terminal.shell.submit("sidebar off")  # gkonsol switches the same thing
+    assert not home.side_bar.is_pinned() and not item.isChecked()
+
+
+def test_the_side_bar_floats_over_the_pages_until_it_is_kept_open(home):
+    from frontend.views.home_window import SideBarHost
+    from frontend.widgets.side_bar import COLLAPSED_WIDTH, EXPANDED_WIDTH
+
+    host = home.centralWidget()
+    assert isinstance(host, SideBarHost) and home.side_bar.parent() is host
+    assert host.layout().indexOf(home.side_bar) == -1  # not in the layout: over the pages
+    home.resize(1200, 800)
+    home.show()
+    QApplication.processEvents()
+    assert home.side_bar.geometry().topLeft().isNull() and home.side_bar.height() == host.height()
+    assert host.room.width() == COLLAPSED_WIDTH
+
+    home.side_bar.set_expanded(True, animate=False)  # opened by the pointer: the page does not move
+    QApplication.processEvents()
+    assert host.room.width() == COLLAPSED_WIDTH and home.side_bar.width() == EXPANDED_WIDTH
+    assert home.terminal_area.x() == COLLAPSED_WIDTH
+
+    home.side_bar.set_pinned(True)  # kept open: it takes its own room beside the page
+    QApplication.processEvents()
+    assert host.room.width() == EXPANDED_WIDTH and home.terminal_area.x() == EXPANDED_WIDTH
+    home.hide()
 
 
 def test_view_menu_full_screen_and_back(home, monkeypatch):

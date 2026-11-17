@@ -954,8 +954,9 @@ Shows a page: `dashboard` (also `home`), `query` (`query-input`, `form`, `parame
 sidebar [on|off|toggle]
 ```
 
-Opens (`on`), collapses (`off`) or switches (`toggle`, or nothing) the side bar. `show` /
-`hide`, `open` / `close` and `expand` / `collapse` work too. Same as **Ctrl+B**.
+Keeps the side bar open (`on`), lets it open only while the pointer is over it (`off`), or
+switches (`toggle`, or nothing). `show` / `hide`, `open` / `close` and `expand` / `collapse` work
+too. Same as **View → Side bar** (**Ctrl+B**).
 
 #### `fullscreen`
 

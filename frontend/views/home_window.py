@@ -6,7 +6,9 @@ page), the query-input workspace, downloads, analysis, the AI explanation of an 
 result, the PDF reports made from explanations, the account card, the GeoTIFF viewer (opened
 from a finished download) and the analysis table (View → Show analysis table only). Clicking
 the GEE-Assist logo shows the dashboard (there is no back button); clicking the user opens
-the account menu (account options and "Sign out").
+the account menu (account options and "Sign out"). The side bar opens while the pointer is
+over it, sliding over the page rather than pushing it aside; View → Side bar (Ctrl+B) keeps it
+open, and then it takes its own room beside the page.
 
 Below the pages is the terminal, gkonsol, as in VS Code: hidden until opened from the
 side bar's Terminal button, the Terminal menu or View → Terminal (Ctrl+`), and as tall
@@ -66,7 +68,7 @@ from frontend.gkonsol.panel import GkonsolPanel, TerminalArea
 from frontend.gkonsol.ports import MemoryForm
 from frontend.views.user_admin_view import UserAdminDialog
 from frontend.widgets.menu_bar import AppMenuBar
-from frontend.widgets.side_bar import LOGO_SIZE, SideBar
+from frontend.widgets.side_bar import COLLAPSED_WIDTH, EXPANDED_WIDTH, LOGO_SIZE, SideBar
 from frontend.widgets.side_icons import AnalysisIcon, DownloadIcon, TerminalIcon, WritingIcon
 
 PAGE_BACKGROUND = (
@@ -79,6 +81,34 @@ AFTER_EXPLANATION = "Your AI explanation is ready. Was it useful?"
 BACK_FROM_EXPLANATION = "Thanks for trying the AI explanation."
 AFTER_ANALYSIS = "Your analysis is done. How did it go?"
 FEEDBACK_DELAY_MS = 800  # the explanation is drawn (and seen) before the modal opens
+
+
+class SideBarHost(QWidget):
+    """The window's central widget: the side bar floats over the pages' left edge, as tall as
+    the window, while the layout keeps ``room`` for it: its collapsed width, or all of it when
+    it is kept open. Opening on hover then slides over the page instead of reflowing it."""
+
+    def __init__(self, side_bar: SideBar, pages: QWidget, parent: QWidget | None = None):
+        super().__init__(parent)
+        self.side_bar = side_bar
+        self.room = QWidget()
+        self.room.setFixedWidth(EXPANDED_WIDTH if side_bar.is_pinned() else COLLAPSED_WIDTH)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        layout.addWidget(self.room)
+        layout.addWidget(pages, 1)
+        side_bar.setParent(self)
+        side_bar.raise_()  # above the pages
+        side_bar.pinned_changed.connect(self._pinned)
+
+    def _pinned(self, pinned: bool) -> None:
+        self.room.setFixedWidth(EXPANDED_WIDTH if pinned else COLLAPSED_WIDTH)
+
+    def resizeEvent(self, event) -> None:  # noqa: N802 (Qt API)
+        super().resizeEvent(event)
+        self.side_bar.setGeometry(0, 0, self.side_bar.width(), self.height())
+        self.side_bar.raise_()
 
 
 class ProfileButton(QFrame):
@@ -150,10 +180,10 @@ class TerminalApp:
         self._window.sign_out()
 
     def is_side_bar_expanded(self) -> bool:
-        return self._window.side_bar.is_expanded()
+        return self._window.side_bar.is_pinned()  # "on": kept open, as View → Side bar
 
     def set_side_bar_expanded(self, expanded: bool) -> None:
-        self._window.side_bar.set_expanded(expanded)
+        self._window.side_bar.set_pinned(expanded)
 
     def is_full_screen(self) -> bool:
         return self._window.isFullScreen()
@@ -272,13 +302,7 @@ class HomeWindow(QMainWindow):
         form = WidgetForm(form_view) if form_view is not None else MemoryForm(facade)
         self.terminal.start(facade, TerminalApp(self), form, self.terminal_area, History(store))
 
-        root = QWidget()
-        layout = QHBoxLayout(root)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-        layout.addWidget(self.side_bar)
-        layout.addWidget(self.terminal_area, 1)
-        self.setCentralWidget(root)
+        self.setCentralWidget(SideBarHost(self.side_bar, self.terminal_area))
 
         self.sign_out_action.triggered.connect(self.sign_out)
         self.account.session_expired.connect(
@@ -604,10 +628,10 @@ class HomeWindow(QMainWindow):
         bar.view_analysis.triggered.connect(self.show_analysis)
         bar.view_reports.triggered.connect(lambda: self.show_reports())
         bar.view_analysis_table.triggered.connect(self.show_analysis_table)
-        bar.toggle_side_bar.setChecked(self.side_bar.is_expanded())
-        bar.toggle_side_bar.triggered.connect(self.side_bar.set_expanded)
+        bar.toggle_side_bar.setChecked(self.side_bar.is_pinned())  # "Side bar": keep it open
+        bar.toggle_side_bar.triggered.connect(self.side_bar.set_pinned)
         bar.toggle_terminal.triggered.connect(self.set_terminal_visible)
-        self.side_bar.expanded_changed.connect(bar.toggle_side_bar.setChecked)  # also when the logo is clicked
+        self.side_bar.pinned_changed.connect(bar.toggle_side_bar.setChecked)  # also from gkonsol
         bar.terminal_menu.aboutToShow.connect(self._update_terminal_menu)
         bar.show_terminal.triggered.connect(self.set_terminal_visible)
         bar.maximize_terminal.triggered.connect(self.terminal_area.set_terminal_maximized)
