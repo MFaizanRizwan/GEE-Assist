@@ -8,6 +8,7 @@ from typing import Callable, Optional
 from backend.business.analysis.i_analysis_service import IAnalysisService
 from backend.business.download.i_download_service import IDownloadService
 from backend.business.download.naming import parse_dataset_name
+from backend.business.explanation.i_explanation_service import IExplanationService
 from backend.business.facade.i_business_facade import IBusinessFacade
 from backend.business.map.i_map_service import IMapService
 from backend.business.request.i_request_service import IRequestService
@@ -17,11 +18,12 @@ from backend.dto import CheckDTO, DownloadJobDTO, FormDTO, PlaceDTO, ValidationD
 from backend.dto.version_dto import AppVersionDTO
 from backend.dto.analysis_dto import AnalysisOptionDTO, AnalysisRequestDTO, ComputeDeviceDTO, FormulaDTO
 from backend.dto.download_dto import JOB_COMPLETED, DatasetDTO
+from backend.dto.explanation_dto import ExplanationDTO, ExplanationRequestDTO
 from backend.dto.map_dto import MapLayerDTO, RasterInfoDTO, RasterViewDTO, ViewPresetDTO
 from backend.dto.project_dto import AnalysisRecordDTO, ProjectDTO
 from backend.dto.settings_dto import AppSettingsDTO, AppSettingsUpdateDTO
 from backend.dto.result_dto import ResultDTO
-from backend.exceptions import AnalysisError, GeeAssistError, ProjectError
+from backend.exceptions import AnalysisError, ExplanationError, GeeAssistError, ProjectError
 from backend.dto.user_dto import (
     GoogleSignInDTO,
     NewUserDTO,
@@ -39,8 +41,7 @@ logger = logging.getLogger(__name__)
 class BusinessFacade(IBusinessFacade):
     """Class diagram: BusinessFacade. Delegates to the services.
 
-    Other services (analysis, explanation, report) are injected here as their use
-    cases are implemented.
+    Other services (report) are injected here as their use cases are implemented.
     """
 
     def __init__(
@@ -51,6 +52,7 @@ class BusinessFacade(IBusinessFacade):
         map_service: IMapService,
         analysis_service: Optional[IAnalysisService] = None,
         settings_service: ISettingsService | None = None,
+        explanation_service: IExplanationService | None = None,
     ):
         self._user_service = user_service
         self._request_service = request_service
@@ -58,6 +60,7 @@ class BusinessFacade(IBusinessFacade):
         self._map_service = map_service
         self._analysis_service = analysis_service
         self._settings_service = settings_service
+        self._explanation_service = explanation_service
 
     # ------------------------------------------------------------- authentication
     def is_server_available(self) -> bool:
@@ -373,3 +376,28 @@ class BusinessFacade(IBusinessFacade):
         if self._analysis_service is None:
             raise AnalysisError("Analysis is not set up in this build.")
         return self._analysis_service
+
+    # ------------------------------------------------------------- AI explanation (UC-08)
+    def prepare_explanation(self, result: ResultDTO) -> ExplanationRequestDTO:
+        project = self._require_project("the result is saved in the project before it is sent to Gemini.")
+        if not result.saved:  # the GeoTIFF sent to Gemini is always the one kept in the project
+            target = free_path(Path(project.analysis_dir) / Path(result.output_path).name)
+            result = self.save_analysis_result(result, str(target))
+        return self._explanation().prepare(result)
+
+    def explain_analysis_result(self, request: ExplanationRequestDTO) -> ExplanationDTO:
+        return self._explanation().explain(request)
+
+    def _explanation(self) -> IExplanationService:
+        if self._explanation_service is None:
+            raise ExplanationError("AI explanations are not set up in this build.")
+        return self._explanation_service
+
+
+def free_path(path: Path) -> Path:
+    """``path``, or ``<name>_2``, ``<name>_3``, ... when it is taken: an earlier result is never overwritten."""
+    target, number = path, 2
+    while target.exists():
+        target = path.with_name(f"{path.stem}_{number}{path.suffix}")
+        number += 1
+    return target

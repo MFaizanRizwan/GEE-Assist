@@ -7,6 +7,7 @@ from backend.dto import CheckDTO, DownloadJobDTO, FormDTO, PlaceDTO, ValidationD
 from backend.dto.version_dto import AppVersionDTO
 from backend.dto.analysis_dto import AnalysisOptionDTO, AnalysisRequestDTO, ComputeDeviceDTO, FormulaDTO
 from backend.dto.download_dto import DatasetDTO
+from backend.dto.explanation_dto import ExplanationDTO, ExplanationRequestDTO
 from backend.dto.map_dto import MapLayerDTO, RasterInfoDTO, RasterViewDTO, ViewPresetDTO
 from backend.dto.project_dto import AnalysisRecordDTO, ProjectDTO
 from backend.dto.settings_dto import AppSettingsDTO, AppSettingsUpdateDTO
@@ -304,3 +305,14 @@ class IBusinessFacade(ABC):
     @abstractmethod
     def get_compute_device(self, use_gpu: bool = True) -> ComputeDeviceDTO:
         """Where analyses run (GPU or CPU), the graphics cards found, and why."""
+
+    # ------------------------------------------------------------- AI explanation (UC-08)
+    @abstractmethod
+    def prepare_explanation(self, result: ResultDTO) -> ExplanationRequestDTO:
+        """Save the result's GeoTIFF in the open project's analysis folder (if it is not saved yet),
+        then gather what Gemini is given: the analysis, the metadata before and after it, its numbers
+        and a preview of each layer. The request's ``result`` is the saved result."""
+
+    @abstractmethod
+    def explain_analysis_result(self, request: ExplanationRequestDTO) -> ExplanationDTO:
+        """Send the saved GeoTIFF, previews and prompt to Gemini; its answer is kept next to the result."""

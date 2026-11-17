@@ -6,6 +6,7 @@ import os
 
 from backend.business.analysis import AnalysisService
 from backend.business.download import Chunker, ChunkMerger, DownloadService
+from backend.business.explanation import ExplanationService
 from backend.business.facade import BusinessFacade, IBusinessFacade
 from backend.business.map import MapService
 from backend.business.request import RequestService
@@ -68,11 +69,13 @@ def build_business_facade() -> IBusinessFacade:
         on_session_duration=user_service.set_session_duration,
     )
 
+    map_service = MapService()
     return BusinessFacade(
         user_service=user_service,
         request_service=request_service,
         download_service=download_service,
-        map_service=MapService(),
+        map_service=map_service,
         analysis_service=AnalysisService(data_facade=data_facade),
         settings_service=settings_service,
+        explanation_service=ExplanationService(data_facade=data_facade, map_service=map_service),
     )
