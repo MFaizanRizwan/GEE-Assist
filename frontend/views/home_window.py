@@ -2,13 +2,18 @@
 
 A menu bar along the top (File, Edit, View, Terminal, Options, Help) over a side bar on the
 left (logo, navigation and the signed-in user) next to the pages: the dashboard (start
-page), the query-input workspace, downloads, analysis, the account card, the GeoTIFF viewer
-(opened from a finished download) and the analysis table (View → Show analysis table only). Clicking the logo slides the side bar open or closed; clicking the user
+page), the query-input workspace, downloads, analysis, the AI explanation of an analysis
+result, the account card, the GeoTIFF viewer (opened from a finished download) and the
+analysis table (View → Show analysis table only). Clicking the logo slides the side bar open or closed; clicking the user
 opens the account menu (account options and "Sign out").
 
 Below the pages is the terminal, gkonsol, as in VS Code: hidden until opened from the
 side bar's Terminal button, the Terminal menu or View → Terminal (Ctrl+`), and as tall
 as the user drags it. The Terminal menu also runs common commands in it.
+
+After every AI explanation, and whenever the user goes from the AI explanation page to the
+dashboard, a modal asks them to rate the app, send feedback or suggest a feature; the choice
+opens that tab of the website's community page in the browser.
 """
 
 from __future__ import annotations
@@ -43,6 +48,8 @@ from frontend.views.project_dialogs import ProjectActions
 from frontend.views.settings_dialog import SettingsDialog, settings_needed
 from frontend.views.analysis_table_view import AnalysisTableView
 from frontend.views.analysis_view import AnalysisView
+from frontend.views.explanation_view import ExplanationView
+from frontend.views.feedback_dialog import ask_for_feedback
 from frontend.restart import restart_app
 from frontend.workers.task_worker import run_task
 from frontend.views.auth.hero_panel import round_logo
@@ -64,6 +71,12 @@ PAGE_BACKGROUND = (
     "qlineargradient(x1:0, y1:0, x2:1, y2:1, "
     f"stop:0 {theme.PAGE_GRADIENT_TOP}, stop:0.6 {theme.PAGE_GRADIENT_MIDDLE}, stop:1 {theme.PAGE_GRADIENT_BOTTOM})"
 )
+
+# Why the feedback modal is shown (its first line).
+AFTER_EXPLANATION = "Your AI explanation is ready. Was it useful?"
+BACK_FROM_EXPLANATION = "Thanks for trying the AI explanation."
+FEEDBACK_DELAY_MS = 800  # the explanation is drawn (and seen) before the modal opens
+
 
 class ProfileButton(QFrame):
     """The signed-in user at the bottom of the side bar: avatar, plus name and role when expanded."""
@@ -214,6 +227,7 @@ class HomeWindow(QMainWindow):
         self.downloads = DownloadView(facade)
         self.viewer = RasterViewerView(facade)
         self.analysis = AnalysisView(facade)
+        self.explanation = ExplanationView(facade)
         self.analysis_table = AnalysisTableView(facade)
 
         self.account = AccountView(facade)
@@ -243,6 +257,7 @@ class HomeWindow(QMainWindow):
         self.pages.addWidget(account_page)
         self.pages.addWidget(self.viewer)
         self.pages.addWidget(self.analysis)
+        self.pages.addWidget(self.explanation)
         self.pages.addWidget(self.analysis_table)
         self._account_page = account_page
 
@@ -298,6 +313,13 @@ class HomeWindow(QMainWindow):
         self.viewer.show_on_map_requested.connect(self.show_on_map)
         self.analysis.show_on_map_requested.connect(self.show_on_map)
         self.analysis.open_in_viewer_requested.connect(self.show_viewer)
+        self.analysis.explain_requested.connect(self.show_explanation)
+        self.explanation.back_requested.connect(self.show_analysis)
+        self.explanation.result_saved.connect(self.analysis.set_saved_result)
+        self.explanation.explanation_ready.connect(
+            lambda _explanation: QTimer.singleShot(FEEDBACK_DELAY_MS, lambda: self.ask_for_feedback(AFTER_EXPLANATION)))
+        self.feedback_prompt = ask_for_feedback  # (parent, reason) -> tab opened or None; tests replace it
+        self._asking_feedback = False
         self._connect_menu_bar()
         self._admin_dialog: UserAdminDialog | None = None
         self._was_maximized = False  # before going full screen
@@ -377,8 +399,11 @@ class HomeWindow(QMainWindow):
 
     # ------------------------------------------------------------- navigation
     def show_dashboard(self) -> None:
+        from_explanation = self.current_page() is self.explanation
         self.refresh_projects()  # e.g. results of analyses run since
         self._show_page(self.dashboard)
+        if from_explanation:  # once the dashboard is drawn
+            QTimer.singleShot(0, lambda: self.ask_for_feedback(BACK_FROM_EXPLANATION))
 
     def show_query_input(self) -> None:
         self._show_page(self.query_input)
@@ -390,6 +415,22 @@ class HomeWindow(QMainWindow):
         if self.analysis.isVisibleTo(self.pages) or self.analysis._loaded:
             self.analysis.refresh_datasets()  # a download may have finished since (the first visit loads anyway)
         self._show_page(self.analysis)
+
+    def show_explanation(self, result) -> None:
+        """The AI explanation page for an analysis result (saved in the project, then sent to Gemini)."""
+        self.explanation.explain(result)
+        self._show_page(self.explanation)
+
+    def ask_for_feedback(self, reason: str = "") -> str | None:
+        """The modal asking to rate the app, send feedback or suggest a feature (one at a time);
+        the choice opens that tab of the website's community page."""
+        if self._asking_feedback or not self.isVisible():
+            return None
+        self._asking_feedback = True
+        try:
+            return self.feedback_prompt(self, reason)
+        finally:
+            self._asking_feedback = False
 
     def show_analysis_table(self) -> None:
         """The cheat sheet of indices: only opened from View → Show analysis table."""
@@ -553,6 +594,7 @@ class HomeWindow(QMainWindow):
         bar.app_settings.triggered.connect(self.open_settings)
         bar.manage_users.triggered.connect(self.open_user_admin)
         bar.about.triggered.connect(self.show_about)
+        bar.give_feedback.triggered.connect(lambda: self.ask_for_feedback())
         bar.theme_chosen.connect(self.change_theme)
 
     def open_user_admin(self) -> None:

@@ -42,7 +42,7 @@ def test_menus_hold_the_expected_items(bar):
     assert _items(bar.terminal_menu)[:4] == ["&Show terminal	Ctrl+`", "&Maximise terminal", "&Clear terminal",
                                              "S&top running command"]
     assert _items(bar.options_menu) == ["&Settings…", "Download &chunk size…", "&Manage users…"]
-    assert _items(bar.help_menu) == ["&About GEE-Assist"]
+    assert _items(bar.help_menu) == ["&Rate, feedback or suggestion…", "&About GEE-Assist"]
 
 
 def test_shortcuts_are_the_familiar_ones(bar):

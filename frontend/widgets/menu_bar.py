@@ -169,6 +169,9 @@ class AppMenuBar(QMenuBar):
         self.manage_users = self._action(self.options_menu, "&Manage users…")
 
         self.help_menu = self._menu("&Help")
+        self.give_feedback = self._action(self.help_menu, "&Rate, feedback or suggestion…")
+        self.give_feedback.setToolTip("Rate GEE-Assist, send feedback or suggest a feature on the website")
+        self.help_menu.addSeparator()
         self.about = self._action(self.help_menu, "&About GEE-Assist")
 
         # ---- update available badge (shown on the right side of the navbar if an update is available)
