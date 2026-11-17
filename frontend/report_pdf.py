@@ -1,0 +1,156 @@
+"""Draw a report (``ReportDTO``) as an A4 PDF with Qt: the analysis pictures on top, each
+with its colour key (a colour bar with its range, or the classes), then the AI explanation
+(its Markdown: headings, tables, lists, emphasis) below them."""
+
+from __future__ import annotations
+
+import html
+
+from PyQt6.QtCore import QBuffer, QIODevice, QMarginsF, Qt, QUrl
+from PyQt6.QtGui import (
+    QColor,
+    QFont,
+    QImage,
+    QPageLayout,
+    QPageSize,
+    QPdfWriter,
+    QTextBlockFormat,
+    QTextCharFormat,
+    QTextCursor,
+    QTextDocument,
+    QTextImageFormat,
+)
+
+from backend.dto.map_dto import LegendDTO
+from backend.dto.report_dto import ReportDTO
+from frontend.widgets.raster_legend import format_value
+
+PAGE_MARGIN_MM = 18
+RESOLUTION_DPI = 300
+IMAGE_WIDTH = 620                               # in document pixels: about the text width of an A4 page
+MUTED = "#5f6b6d"
+IMAGE_URL = "report-image://{}"
+BAR_CELLS = 24                                  # colours blended across a colour bar
+BAR_CELL_WIDTH = 12
+SECTION_GAP = 14                                # space between pictures, and before the explanation
+
+
+def report_document(report: ReportDTO) -> QTextDocument:
+    """The report laid out as a document: each analysis picture with its title and colours,
+    then the explanation exactly as saved."""
+    document = QTextDocument()
+    document.setDocumentMargin(0)
+    document.setDefaultFont(QFont("Segoe UI", 10))
+    document.setMetaInformation(QTextDocument.MetaInformation.DocumentTitle, report.title)
+    cursor = QTextCursor(document)
+
+    centred = QTextBlockFormat()
+    centred.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+    for index, image in enumerate(report.images):
+        picture = QImage.fromData(image.png, "PNG")
+        if picture.isNull():
+            continue
+        url = QUrl(IMAGE_URL.format(index))
+        document.addResource(QTextDocument.ResourceType.ImageResource, url, picture)
+        title = QTextBlockFormat(centred)
+        title.setTopMargin(SECTION_GAP if index else 0)
+        if index:
+            cursor.insertBlock()
+        cursor.setBlockFormat(title)
+        cursor.insertText(image.title, _char(bold=True, size=11))
+        cursor.insertBlock(centred)
+        width = min(IMAGE_WIDTH, max(IMAGE_WIDTH // 2, picture.width()))  # small results are enlarged
+        picture_format = QTextImageFormat()
+        picture_format.setName(url.toString())
+        picture_format.setWidth(width)
+        picture_format.setHeight(width * picture.height() / max(1, picture.width()))
+        cursor.insertImage(picture_format)
+        key = colour_key_html(image.colour_key)
+        if key:
+            cursor.insertBlock(centred)
+            cursor.insertHtml(key)
+        elif image.legend:
+            cursor.insertBlock(centred)
+            cursor.insertText(f"Colours: {image.legend}", _char(size=8.5, colour=MUTED))
+    if report.note:
+        if report.images:
+            cursor.insertBlock()
+        cursor.setBlockFormat(QTextBlockFormat())
+        cursor.insertText(report.note, _char(italic=True, colour=MUTED))
+
+    above = bool(report.images or report.note)
+    if above:
+        cursor.insertBlock(QTextBlockFormat(), QTextCharFormat())
+    start = cursor.position()
+    cursor.insertMarkdown(report.markdown)
+    # The explanation's first block is merged into the empty block it was inserted in and takes
+    # that block's format: give it back its own (e.g. its heading level), with a gap above it.
+    source = QTextDocument()
+    source.setMarkdown(report.markdown)
+    first = QTextBlockFormat(source.begin().blockFormat())
+    first.setTopMargin(max(first.topMargin(), SECTION_GAP if above else 0))
+    QTextCursor(document.findBlock(start)).setBlockFormat(first)
+    return document
+
+
+def render_report_pdf(report: ReportDTO) -> bytes:
+    """The report as the bytes of an A4 PDF."""
+    buffer = QBuffer()
+    buffer.open(QIODevice.OpenModeFlag.WriteOnly)
+    writer = QPdfWriter(buffer)
+    writer.setTitle(report.title)
+    writer.setCreator("GEE-Assist")
+    writer.setResolution(RESOLUTION_DPI)
+    writer.setPageLayout(QPageLayout(QPageSize(QPageSize.PageSizeId.A4), QPageLayout.Orientation.Portrait,
+                                     QMarginsF(*[PAGE_MARGIN_MM] * 4), QPageLayout.Unit.Millimeter))
+    report_document(report).print(writer)
+    del writer  # finishes the PDF
+    buffer.close()
+    return bytes(buffer.data())
+
+
+def colour_key_html(legend: LegendDTO | None) -> str:
+    """A colour bar with its low and high values, or a swatch per class; "" if there is nothing to draw."""
+    if legend is None or not legend.colours:
+        return ""
+    if legend.kind == "scale":
+        cells = "".join(f"<td width='{BAR_CELL_WIDTH}' bgcolor='{colour}'>&nbsp;</td>"
+                        for colour in blend(legend.colours, BAR_CELLS))
+        return (f"<table cellspacing='0' cellpadding='1' align='center'><tr>"
+                f"<td style='color:{MUTED}; font-size:8pt'>{html.escape(format_value(legend.low))}&nbsp;</td>"
+                f"{cells}<td style='color:{MUTED}; font-size:8pt'>&nbsp;{html.escape(format_value(legend.high))}</td>"
+                f"</tr></table>")
+    if legend.kind == "classes" and legend.labels:
+        cells = "".join(f"<td width='12' bgcolor='{colour}'>&nbsp;</td>"
+                        f"<td style='font-size:8pt'>&nbsp;{html.escape(label)}&nbsp;&nbsp;&nbsp;</td>"
+                        for label, colour in zip(legend.labels, legend.colours))
+        return f"<table cellspacing='0' cellpadding='1' align='center'><tr>{cells}</tr></table>"
+    return ""
+
+
+def blend(colours: tuple[str, ...], count: int) -> list[str]:
+    """``count`` colours spread evenly along the stops ``colours`` ("#RRGGBB"), ends included."""
+    stops = [QColor(colour) for colour in colours]
+    if len(stops) == 1 or count < 2:
+        return [stops[0].name()] * max(1, count)
+    blended = []
+    for index in range(count):
+        position = index / (count - 1) * (len(stops) - 1)
+        left = min(int(position), len(stops) - 2)
+        t = position - left
+        a, b = stops[left], stops[left + 1]
+        blended.append(QColor(round(a.red() + (b.red() - a.red()) * t), round(a.green() + (b.green() - a.green()) * t),
+                              round(a.blue() + (b.blue() - a.blue()) * t)).name())
+    return blended
+
+
+def _char(bold: bool = False, italic: bool = False, size: float = 0, colour: str = "") -> QTextCharFormat:
+    form = QTextCharFormat()
+    if bold:
+        form.setFontWeight(QFont.Weight.Bold)
+    form.setFontItalic(italic)
+    if size:
+        form.setFontPointSize(size)
+    if colour:
+        form.setForeground(QColor(colour))
+    return form
