@@ -209,7 +209,8 @@ def _server_status(ctx: Context, args: Args) -> Generator:
         ctx.out.success(f"The authentication server at {url} is reachable ({elapsed:.0f} ms).")
     else:
         ctx.out.error(f"Cannot reach the authentication server at {url}.")
-        ctx.out.hint("Start GEE-Assist-Backend (uvicorn app.main:app), or set AUTH_API_URL in .env.")
+        ctx.out.hint("Check the internet connection, or the server address (AUTH_API_URL in .env). A local "
+                     "GEE-Assist-Backend runs with: uvicorn app.main:app")
 
 
 def register(registry: Registry) -> None:

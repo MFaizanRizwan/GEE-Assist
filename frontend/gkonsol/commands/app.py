@@ -138,7 +138,7 @@ def _doctor(ctx: Context, args: Args) -> Generator:
     reachable, elapsed = yield task(timed, ctx.facade.is_server_available, label="Contacting the authentication server")
     checks.append(CheckDTO("Authentication server", CHECK_OK, f"{url} answered.", duration_ms=elapsed) if reachable
                   else CheckDTO("Authentication server", CHECK_FAIL, f"Cannot reach {url}.",
-                                "Start GEE-Assist-Backend, or set AUTH_API_URL in .env."))
+                                "Check the internet connection, or the server address (AUTH_API_URL in .env)."))
     if reachable:
         try:
             user, elapsed = yield task(timed, ctx.facade.reload_current_user, label="Checking your session")
