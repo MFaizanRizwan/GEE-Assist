@@ -4,6 +4,10 @@
              on_success=self._on_logged_in, on_error=self._on_failed)
 
 Callbacks run on the UI thread. They are dropped if ``owner`` has been deleted meanwhile.
+
+An exception raised by a callback is logged and, from ``on_success``, handed to ``on_error``:
+PyQt ends the whole application when a slot raises, so a bug in showing one result (or a test
+leaving a window behind) must never take the app down.
 """
 
 from __future__ import annotations
@@ -62,9 +66,32 @@ def run_task(
     # Parented to the owner (UI thread), so the callbacks are queued back onto the UI thread.
     signals = _TaskSignals(owner)
     if on_success:
-        signals.succeeded.connect(on_success)
+        signals.succeeded.connect(_guarded_success(on_success, on_error))
     if on_error:
-        signals.failed.connect(on_error)
+        signals.failed.connect(_guarded_error(on_error))
     signals.succeeded.connect(signals.deleteLater)
     signals.failed.connect(signals.deleteLater)
     QThreadPool.globalInstance().start(_Task(fn, args, signals))
+
+
+def _guarded_success(on_success: Callable[[Any], None],
+                     on_error: Callable[[Exception], None] | None) -> Callable[[Any], None]:
+    """``on_success``, with an exception it raises logged and passed to ``on_error`` instead of ending the app."""
+    def deliver(value: Any) -> None:
+        try:
+            on_success(value)
+        except Exception as exc:  # noqa: BLE001 - shown on the page through on_error, never fatal
+            logger.exception("Showing the result of a background task failed")
+            if on_error is not None:
+                _guarded_error(on_error)(exc)
+    return deliver
+
+
+def _guarded_error(on_error: Callable[[Exception], None]) -> Callable[[Exception], None]:
+    """``on_error``, with an exception it raises itself logged instead of ending the app."""
+    def deliver(exc: Exception) -> None:
+        try:
+            on_error(exc)
+        except Exception:  # noqa: BLE001
+            logger.exception("Reporting the failure of a background task failed")
+    return deliver
