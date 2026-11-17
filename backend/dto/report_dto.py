@@ -47,7 +47,7 @@ class ReportDTO:
 
     title: str                                  # the explanation's first heading
     explanation_path: str
-    markdown: str                               # the explanation, exactly as saved
+    markdown: str                               # the explanation as saved, its heading worded "Summary"
     result_path: str = ""                       # the analysis GeoTIFF pictured ("" if not found)
     images: tuple[ReportImageDTO, ...] = ()
     note: str = ""                              # e.g. why there is no picture

@@ -74,8 +74,8 @@ def explanation_path(project: ProjectDTO, name: str = f"{RESULT}_explanation.md"
 
 def test_the_report_has_the_analysis_picture_then_the_explanation(service, project):
     report = service.build_report(explanation_path(project), project)
-    assert report.title == "AI explanation: Vegetation (NDVI)"
-    assert report.markdown == EXPLANATION  # exactly as saved
+    assert report.title == "Summary: Vegetation (NDVI)"
+    assert report.markdown == EXPLANATION.replace("# AI explanation:", "# Summary:", 1)  # otherwise as saved
     assert Path(report.result_path) == Path(project.analysis_dir) / f"{RESULT}.tif"
     image = report.images[0]
     assert image.png.startswith(b"\x89PNG") and struct.unpack(">II", image.png[16:24]) == (50, 40)
@@ -100,7 +100,7 @@ def test_a_missing_result_gives_a_report_without_a_picture(service, project, tmp
     report = service.build_report(explanation_path(project), project)
     assert report.images == () and report.result_path == ""
     assert "is not in the project's analysis folder" in report.note
-    assert report.markdown == EXPLANATION
+    assert report.markdown.endswith(EXPLANATION.split("\n", 1)[1])  # the explanation is still all there
 
 
 def test_an_unreadable_result_is_explained_in_the_note(project):
@@ -159,3 +159,22 @@ def test_a_report_can_be_exported_anywhere(service, project, tmp_path):
 def test_exporting_a_missing_report_is_refused(service, tmp_path):
     with pytest.raises(ReportError, match="no longer there"):
         service.export_report(str(tmp_path / "gone.pdf"), str(tmp_path / "out.pdf"))
+
+
+def test_the_report_heading_says_summary_and_the_saved_explanation_is_unchanged(service, project):
+    report = service.build_report(explanation_path(project), project)
+    assert report.markdown.startswith("# Summary: Vegetation (NDVI)\n")
+    assert report.markdown.count("# AI explanation") == 0
+    saved = Path(explanation_path(project)).read_text(encoding="utf-8")
+    assert saved == EXPLANATION  # the .md in the project keeps its own heading
+    assert service.list_explanations(project)[0].title == "AI explanation: Vegetation (NDVI)"
+
+
+def test_only_the_explanation_heading_is_reworded():
+    from backend.business.report.report_service import report_heading
+
+    assert report_heading("# AI explanation: Water (NDWI)\n\n## Summary\nWet.") == \
+        "# Summary: Water (NDWI)\n\n## Summary\nWet."
+    assert report_heading("# Older explanation\n\nText.") == "# Older explanation\n\nText."
+    assert report_heading("Intro\n# AI explanation: LST\n# AI explanation: again") == \
+        "Intro\n# Summary: LST\n# AI explanation: again"  # the first one only

@@ -2,7 +2,8 @@
 
 A report is made from an explanation in ``<project>/explanation/``: first a picture of each
 layer of the analysis result it explains (``<project>/analysis/<result>.tif``, coloured as on
-the Analysis page), then the explanation exactly as saved (Markdown). The PDF itself is drawn
+the Analysis page), then the explanation as saved (Markdown), its "AI explanation" heading
+worded "Summary" as the report's heading. The PDF itself is drawn
 by the UI (``frontend/report_pdf.py``) and kept here in ``<project>/reports/``, named after
 the explanation, from where it can be exported anywhere.
 """
@@ -30,6 +31,8 @@ logger = logging.getLogger(__name__)
 IMAGE_SIZE = 1400                               # longer side of each layer picture in the report
 _RESULT_LINE = re.compile(r"^- Result: (?P<name>.+?\.tiff?)\s*$", re.MULTILINE | re.IGNORECASE)
 _EXPLAINED_LINE = re.compile(r"^- Explained: (?P<when>\S+)", re.MULTILINE)
+_EXPLANATION_HEADING = re.compile(r"^# AI explanation\b", re.MULTILINE | re.IGNORECASE)
+REPORT_HEADING = "Summary"                      # the report's first heading, in place of "AI explanation"
 _NUMBERED = re.compile(rf"{re.escape(EXPLANATION_SUFFIX.removesuffix('.md'))}(_\d+)?$")
 
 
@@ -62,7 +65,7 @@ class ReportService(IReportService):
     def build_report(self, explanation_path: str, project: ProjectDTO) -> ReportDTO:
         path = Path(explanation_path)
         try:
-            markdown = path.read_text(encoding="utf-8")
+            markdown = report_heading(path.read_text(encoding="utf-8"))
         except OSError as exc:
             raise ReportError(f"The explanation {path.name} cannot be read: {exc.strerror or exc}") from exc
         result = Path(project.analysis_dir) / _result_name(markdown, path)
@@ -130,6 +133,11 @@ class ReportService(IReportService):
 
 
 # ----------------------------------------------------------------------------- reading explanations
+def report_heading(markdown: str) -> str:
+    """The explanation with its "# AI explanation: ..." heading worded "# Summary: ..." for the report."""
+    return _EXPLANATION_HEADING.sub(f"# {REPORT_HEADING}", markdown, count=1)
+
+
 def _title(markdown: str, path: Path) -> str:
     for line in markdown.splitlines():
         if line.startswith("# "):
