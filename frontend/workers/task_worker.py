@@ -3,7 +3,10 @@
     run_task(self, self._facade.log_in, username, password,
              on_success=self._on_logged_in, on_error=self._on_failed)
 
-Callbacks run on the UI thread. They are dropped if ``owner`` has been deleted meanwhile.
+Callbacks run on the UI thread. They are dropped if ``owner`` (or the object a callback belongs
+to) has been deleted meanwhile, e.g. the page was closed while the task ran. The signals that
+carry the result back are not owned by ``owner``: deleting a page must never delete them while
+the worker thread may still emit on them (that crashed the process).
 
 An exception raised by a callback is logged and, from ``on_success``, handed to ``on_error``:
 PyQt ends the whole application when a slot raises, so a bug in showing one result (or a test
@@ -15,9 +18,12 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable
 
+from PyQt6 import sip
 from PyQt6.QtCore import QObject, QRunnable, QThreadPool, pyqtSignal
 
 logger = logging.getLogger(__name__)
+
+_pending: set = set()  # the signals of running tasks, until their result is delivered
 
 
 class _TaskSignals(QObject):
@@ -63,33 +69,54 @@ def run_task(
     on_success: Callable[[Any], None] | None = None,
     on_error: Callable[[Exception], None] | None = None,
 ) -> None:
-    # Parented to the owner (UI thread), so the callbacks are queued back onto the UI thread.
-    signals = _TaskSignals(owner)
+    # Created on the UI thread, so the callbacks are queued back onto it. Kept alive here, not by
+    # ``owner``, until the result is delivered (see the module docstring).
+    signals = _TaskSignals()
+    _pending.add(signals)
     if on_success:
-        signals.succeeded.connect(_guarded_success(on_success, on_error))
+        signals.succeeded.connect(_guarded_success(owner, on_success, on_error))
     if on_error:
-        signals.failed.connect(_guarded_error(on_error))
-    signals.succeeded.connect(signals.deleteLater)
-    signals.failed.connect(signals.deleteLater)
+        signals.failed.connect(_guarded_error(owner, on_error))
+    def finished(_value: Any) -> None:
+        _pending.discard(signals)
+        signals.deleteLater()
+
+    signals.succeeded.connect(finished)
+    signals.failed.connect(finished)
     QThreadPool.globalInstance().start(_Task(fn, args, signals))
 
 
-def _guarded_success(on_success: Callable[[Any], None],
+def _alive(*objects: object) -> bool:
+    """False once one of the Qt objects among ``objects`` has been deleted.
+
+    Connected straight to a widget's method, PyQt drops a queued call when that widget is deleted;
+    the guards below are plain functions, so they check it themselves (calling into a deleted
+    widget crashes the process)."""
+    return not any(isinstance(obj, QObject) and sip.isdeleted(obj) for obj in objects)
+
+
+def _guarded_success(owner: QObject, on_success: Callable[[Any], None],
                      on_error: Callable[[Exception], None] | None) -> Callable[[Any], None]:
-    """``on_success``, with an exception it raises logged and passed to ``on_error`` instead of ending the app."""
+    """``on_success``, dropped once its owner is deleted, with an exception it raises logged and
+    passed to ``on_error`` instead of ending the app."""
     def deliver(value: Any) -> None:
+        if not _alive(owner, getattr(on_success, "__self__", None)):
+            return
         try:
             on_success(value)
         except Exception as exc:  # noqa: BLE001 - shown on the page through on_error, never fatal
             logger.exception("Showing the result of a background task failed")
             if on_error is not None:
-                _guarded_error(on_error)(exc)
+                _guarded_error(owner, on_error)(exc)
     return deliver
 
 
-def _guarded_error(on_error: Callable[[Exception], None]) -> Callable[[Exception], None]:
-    """``on_error``, with an exception it raises itself logged instead of ending the app."""
+def _guarded_error(owner: QObject, on_error: Callable[[Exception], None]) -> Callable[[Exception], None]:
+    """``on_error``, dropped once its owner is deleted, with an exception it raises logged instead of
+    ending the app."""
     def deliver(exc: Exception) -> None:
+        if not _alive(owner, getattr(on_error, "__self__", None)):
+            return
         try:
             on_error(exc)
         except Exception:  # noqa: BLE001
