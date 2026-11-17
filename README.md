@@ -76,7 +76,7 @@ whatever was never entered in the app.
     Verify my session, Watch download progress, Download speed chart, List downloads and gkonsol help,
     which run that command in the terminal; Command reference (opens docs/GKONSOL.md)
   - **Options**: Download chunk size…, Manage users… (administrators)
-  - **Help**: About GEE-Assist
+  - **Help**: Rate, feedback or suggestion…, About GEE-Assist
 - Navigation is in a side bar on the left: **Query Input**, **Downloads**, **Analysis** and
   **Terminal**, each with an icon that animates while the pointer is over it (a pencil writing on a
   sheet; an arrow sliding down into a tray; chart bars rising in a wave under a sweeping magnifying
@@ -108,6 +108,7 @@ As in other desktop apps, you work inside a project. A project is a folder:
     downloads/                   every dataset downloaded while the project is open
     analysis/                    analysis results you save
         analysis_results.json    every analysis run in the project: settings, numbers, saved file
+    explanation/                 AI explanations of analysis results (Markdown)
 ```
 
 - **Create** one from the dashboard (**New project**) or **File → New project…**: give it a name and
@@ -168,6 +169,37 @@ As in other desktop apps, you work inside a project. A project is a folder:
   bands, value range, how to read it and its use cases, grouped the same way (e.g. "Vegetation ›
   Burn & fire"), with chips for the four analyses and a search box. Rows marked "Reference" (SPI,
   PDSI, NDBaI, coherence) are described but not computed.
+
+## AI explanation
+
+- **Explain with AI** under an analysis result opens the **AI explanation** page. A project must be
+  open: if the result is not saved yet, its GeoTIFF is saved in the project's `analysis` folder
+  first (as **Save result** does), so the file sent to Gemini is always the one kept in the project.
+- On the left the page shows what Gemini is sent:
+  - **Analysis**: which analysis and processes ran (with their formulas), the parameters, where it
+    ran and how long it took;
+  - **Before the analysis**: the metadata of the dataset analysed, and of any earlier dataset it was
+    compared with: satellite, dates, bands, size in pixels, pixel size, coordinate system, bounds,
+    centre, area, data type, no-data value, file size;
+  - **After the analysis**: the same metadata of the result GeoTIFF, its layers (with how each
+    preview is coloured) and its numbers.
+- Gemini is sent the result **GeoTIFF** (through the Gemini Files API, deleted again afterwards), a
+  **PNG preview** of each layer and a prompt with all of the above. Gemini does not read every file
+  type: if it refuses the GeoTIFF, the request is sent again with the previews and metadata only, and
+  the page says so.
+- The explanation (Markdown) appears on the right, with **Explain again**, **Copy** and **Open
+  folder**. It is kept in the project as `explanation/<result>_explanation.md` (explaining the same
+  result again keeps the earlier file: `_2`, `_3`, ...), together with the metadata it was made from.
+
+### Feedback
+
+After every AI explanation, and whenever you go from the AI explanation page to the dashboard, a
+window asks you to **Rate the app**, **Send feedback** or **Suggest a feature** (or **Not now**).
+Your choice opens that tab of the website's community page in the browser:
+`http://localhost:5173/community?tab=rate`, `?tab=feedback` or `?tab=suggest`. **Help → Rate,
+feedback or suggestion…** opens the same window at any time. The website's address is
+`WEB_APP_URL` in `.env` (default `http://localhost:5173`, where
+[GEE-Assist-Web](https://github.com/Abdullah2265Habib/GEE-Assist-Web) runs with `npm run dev`).
 
 ## gkonsol, the command line
 
@@ -282,5 +314,7 @@ viewer:
 | Earth Engine client | `backend/data/clients/gee_client.py`, `gee_tiles.py` |
 | Downloads page | `frontend/views/download_view.py`, `frontend/widgets/download_rows.py`, `speed_chart.py` |
 | GeoTIFF viewer (views, colours, legend, values) | `backend/business/map/`, `frontend/views/raster_viewer_view.py`, `frontend/widgets/raster_canvas.py`, `raster_legend.py` |
+| AI explanation (metadata, previews, Gemini, saving) | `backend/business/explanation/`, `backend/data/clients/gemini_client.py`, `prompts.py`, `frontend/views/explanation_view.py` |
+| Feedback window (website community tabs) | `frontend/views/feedback_dialog.py` |
 | gkonsol terminal (shell, commands, panel) | `frontend/gkonsol/` (see [docs/GKONSOL.md](docs/GKONSOL.md#9-for-developers)) |
 | Earth Engine set-up checks and browser sign-in | `backend/data/clients/gee_client.py`, `gee_sign_in.py` |
