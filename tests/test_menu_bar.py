@@ -38,7 +38,7 @@ def test_menus_hold_the_expected_items(bar):
                                      "Sign &out", "E&xit"]
     assert _items(bar.edit_menu) == ["&Undo", "&Redo", "Cu&t", "&Copy", "&Paste", "Select &all"]
     assert _items(bar.view_menu) == ["&Dashboard", "&Query Input", "Do&wnloads", "&Account", "A&nalysis",
-                                     "Show analysis ta&ble", "&Side bar", "&Terminal", "&Full screen", "&Theme"]
+                                     "&Reports", "Show analysis ta&ble", "&Side bar", "&Terminal", "&Full screen", "&Theme"]
     assert _items(bar.terminal_menu)[:4] == ["&Show terminal	Ctrl+`", "&Maximise terminal", "&Clear terminal",
                                              "S&top running command"]
     assert _items(bar.options_menu) == ["&Settings…", "Download &chunk size…", "&Manage users…"]
