@@ -40,6 +40,9 @@ class Settings:
     session_duration: float = 7 * 24 * 3600
     # Google Cloud project registered for Earth Engine (dataset downloads).
     gee_project: str = ""
+    # Base URL of the GEE-Assist website (GEE-Assist-Web): its community page takes ratings,
+    # feedback and suggestions.
+    web_app_url: str = "http://localhost:5173"
 
 
 _UNIT_SECONDS = {"s": 1, "m": 60, "h": 3600, "d": 86400}
@@ -74,4 +77,5 @@ def get_settings() -> Settings:
         keyring_service=os.getenv("KEYRING_SERVICE", Settings.keyring_service),
         session_duration=_session_duration(),
         gee_project=os.getenv("GEE_PROJECT", Settings.gee_project).strip(),
+        web_app_url=(os.getenv("WEB_APP_URL", "").strip() or Settings.web_app_url).rstrip("/"),
     )
