@@ -386,7 +386,8 @@ class BusinessFacade(IBusinessFacade):
         return self._explanation().prepare(result)
 
     def explain_analysis_result(self, request: ExplanationRequestDTO) -> ExplanationDTO:
-        return self._explanation().explain(request)
+        project = self._require_project("the explanation is saved in the project's explanation folder.")
+        return self._explanation().explain(request, project.explanation_dir)
 
     def _explanation(self) -> IExplanationService:
         if self._explanation_service is None:

@@ -5,7 +5,8 @@ the open project's analysis folder (if it was not saved yet), then its metadata 
 the left: which analysis ran and with which settings, the dataset **before** the analysis
 (and any earlier dataset it was compared with) and the result **after** it, with its numbers.
 Meanwhile the saved GeoTIFF, a preview of each layer and the prompt go to Gemini; its
-explanation appears on the right and is kept next to the result as ``<result>_explanation.md``.
+explanation appears on the right and is kept in the project's ``explanation`` folder as
+``<result>_explanation.md``.
 """
 
 from __future__ import annotations
@@ -207,7 +208,10 @@ class ExplanationView(QWidget):
             self.banner.show_success("Explanation copied.")
 
     def open_folder(self) -> None:
-        if self.result is not None and self.result.saved:
+        """The project's explanation folder once the explanation is saved, else the result's folder."""
+        if self.explanation is not None and self.explanation.saved_path:
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(Path(self.explanation.saved_path).parent)))
+        elif self.result is not None and self.result.saved:
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(Path(self.result.output_path).parent)))
 
     def _set_busy(self, busy: bool) -> None:

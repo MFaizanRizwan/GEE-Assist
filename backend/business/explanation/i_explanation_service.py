@@ -19,8 +19,9 @@ class IExplanationService(ABC):
         """
 
     @abstractmethod
-    def explain(self, request: ExplanationRequestDTO) -> ExplanationDTO:
-        """Send the request (with the saved GeoTIFF) to Gemini and keep its answer next to the result.
+    def explain(self, request: ExplanationRequestDTO, folder: str) -> ExplanationDTO:
+        """Send the request (with the saved GeoTIFF) to Gemini and keep its answer in ``folder``
+        (the project's explanation folder) as ``<result>_explanation.md``.
 
         Raises:
             ExplanationError: the GeoTIFF is no longer there.

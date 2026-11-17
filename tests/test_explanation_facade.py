@@ -69,9 +69,16 @@ def test_explaining_needs_an_open_project(facade, services, tmp_path):
         facade.prepare_explanation(unsaved(tmp_path))
 
 
-def test_the_request_goes_to_the_explanation_service(facade, services):
+def test_the_explanation_is_kept_in_the_projects_explanation_folder(facade, services, tmp_path):
     assert facade.explain_analysis_result("request") is services[2].explain.return_value
-    services[2].explain.assert_called_once_with("request")
+    services[2].explain.assert_called_once_with("request", str(tmp_path / "Project 1" / "explanation"))
+
+
+def test_an_explanation_needs_an_open_project(facade, services):
+    services[0].get_current_project.return_value = None
+    with pytest.raises(ProjectError, match="explanation folder"):
+        facade.explain_analysis_result("request")
+    services[2].explain.assert_not_called()
 
 
 def test_a_build_without_explanations_says_so(services, tmp_path):

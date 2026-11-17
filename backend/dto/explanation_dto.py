@@ -124,7 +124,7 @@ class ExplanationDTO:
     model: str = ""                             # the Gemini model that answered
     tif_attached: bool = True                   # False: Gemini refused the GeoTIFF; only previews were sent
     request: ExplanationRequestDTO | None = None
-    saved_path: str = ""                        # the explanation kept next to the result (.md)
+    saved_path: str = ""                        # the explanation kept in the project's explanation folder (.md)
     created_at: str = ""                        # ISO timestamp
 
 

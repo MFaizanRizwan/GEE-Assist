@@ -315,4 +315,5 @@ class IBusinessFacade(ABC):
 
     @abstractmethod
     def explain_analysis_result(self, request: ExplanationRequestDTO) -> ExplanationDTO:
-        """Send the saved GeoTIFF, previews and prompt to Gemini; its answer is kept next to the result."""
+        """Send the saved GeoTIFF, previews and prompt to Gemini; its answer is kept in the open
+        project's ``explanation`` folder."""

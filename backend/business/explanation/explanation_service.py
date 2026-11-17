@@ -10,7 +10,8 @@ Gemini is given:
 * the metadata **after** the analysis: the result GeoTIFF, its layers and numbers;
 * the result GeoTIFF itself and a PNG preview of each layer.
 
-Gemini's answer is kept next to the result as ``<result>_explanation.md``.
+Gemini's answer is kept in the project's ``explanation`` folder as
+``<result>_explanation.md`` (``_2``, ``_3``, ... when the result is explained again).
 """
 
 from __future__ import annotations
@@ -76,13 +77,13 @@ class ExplanationService(IExplanationService):
             previews=previews,
         )
 
-    def explain(self, request: ExplanationRequestDTO) -> ExplanationDTO:
+    def explain(self, request: ExplanationRequestDTO, folder: str) -> ExplanationDTO:
         if not Path(request.tif_path).is_file():
             raise ExplanationError(f"The result {Path(request.tif_path).name} is no longer there. "
                                    "Run the analysis again.")
         explanation = self._data_facade.generate_explanation(request)
         explanation = replace(explanation, request=request, created_at=self._now().isoformat(timespec="seconds"))
-        return replace(explanation, saved_path=self._keep(explanation))
+        return replace(explanation, saved_path=self._keep(explanation, Path(folder)))
 
     # ------------------------------------------------------------- metadata
     def metadata(self, path: str, dataset: DatasetDTO | None = None) -> RasterMetadataDTO:
@@ -144,11 +145,15 @@ class ExplanationService(IExplanationService):
         return tuple(layers), tuple(previews)
 
     # ------------------------------------------------------------- keeping the answer
-    def _keep(self, explanation: ExplanationDTO) -> str:
-        """Write the explanation next to the result GeoTIFF; "" if that is not possible."""
-        request = explanation.request
-        target = Path(request.tif_path).with_name(Path(request.tif_path).stem + EXPLANATION_SUFFIX)
+    def _keep(self, explanation: ExplanationDTO, folder: Path) -> str:
+        """Write the explanation in ``folder`` (never over an earlier one); "" if that is not possible."""
+        stem = Path(explanation.request.tif_path).stem + EXPLANATION_SUFFIX.removesuffix(".md")
+        target, number = folder / f"{stem}.md", 2
+        while target.exists():
+            target = folder / f"{stem}_{number}.md"
+            number += 1
         try:
+            folder.mkdir(parents=True, exist_ok=True)
             target.write_text(explanation_markdown(explanation), encoding="utf-8")
         except OSError:
             logger.warning("Could not save the explanation to %s", target, exc_info=True)

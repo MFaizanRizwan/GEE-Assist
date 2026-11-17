@@ -124,14 +124,14 @@ def test_unreadable_datasets_fall_back_to_what_is_known(data_facade, project):
     assert request.layers[0].legend == ""
 
 
-def test_the_explanation_is_kept_next_to_the_result(service, project, data_facade):
+def test_the_explanation_is_kept_in_the_projects_explanation_folder(service, project, data_facade, tmp_path):
     request = service.prepare(project)
-    explanation = service.explain(request)
+    explanation = service.explain(request, str(tmp_path / "explanation"))
 
     data_facade.generate_explanation.assert_called_once_with(request)
     assert explanation.request is request and explanation.created_at == "2024-07-02T09:30:00"
     saved = explanation.saved_path
-    assert saved.endswith("result_explanation.md")
+    assert saved == str(tmp_path / "explanation" / "result_explanation.md")  # the folder is made if needed
     text = open(saved, encoding="utf-8").read()
     assert text.startswith("# AI explanation: Vegetation health (NDVI)")
     assert "## Before the analysis: dataset" in text and "## After the analysis: result" in text
@@ -142,8 +142,24 @@ def test_a_deleted_geotiff_is_not_sent(service, project, data_facade):
     request = service.prepare(project)
     Path(project.output_path).unlink()
     with pytest.raises(ExplanationError):
-        service.explain(request)
+        service.explain(request, str(Path(project.output_path).parent))
     data_facade.generate_explanation.assert_not_called()
+
+
+def test_explaining_again_keeps_the_earlier_explanation(service, project, tmp_path):
+    folder = str(tmp_path / "explanation")
+    request = service.prepare(project)
+    first, second = service.explain(request, folder), service.explain(request, folder)
+    assert Path(first.saved_path).name == "result_explanation.md"
+    assert Path(second.saved_path).name == "result_explanation_2.md"
+    assert Path(first.saved_path).is_file()
+
+
+def test_an_explanation_that_cannot_be_written_is_still_returned(service, project, tmp_path):
+    blocker = tmp_path / "explanation"
+    blocker.write_text("a file, not a folder")
+    explanation = service.explain(service.prepare(project), str(blocker))
+    assert explanation.text and explanation.saved_path == ""
 
 
 def test_png_encoding_round_trips():
