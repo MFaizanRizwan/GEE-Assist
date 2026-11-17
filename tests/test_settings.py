@@ -31,3 +31,14 @@ def test_invalid_session_duration_falls_back_to_seven_days(monkeypatch):
 def test_gee_project_comes_from_the_environment(monkeypatch):
     monkeypatch.setenv("GEE_PROJECT", " my-ee-project ")
     assert settings.get_settings.__wrapped__().gee_project == "my-ee-project"  # bypass the cache
+
+
+def test_the_deployed_authentication_server_is_used_by_default(monkeypatch):
+    monkeypatch.delenv("AUTH_API_URL", raising=False)
+    monkeypatch.setattr(settings, "load_dotenv", None)  # ignore a .env on this computer
+    assert settings.get_settings.__wrapped__().auth_api_url == "https://gee-assist-backend.vercel.app"
+
+
+def test_a_local_server_can_still_be_chosen(monkeypatch):
+    monkeypatch.setenv("AUTH_API_URL", "http://localhost:8000/")
+    assert settings.get_settings.__wrapped__().auth_api_url == "http://localhost:8000"

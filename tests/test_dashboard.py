@@ -10,7 +10,7 @@ import pytest  # noqa: E402
 
 PyQt6 = pytest.importorskip("PyQt6")
 from PyQt6.QtCore import pyqtSignal  # noqa: E402
-from PyQt6.QtWidgets import QApplication, QLabel, QMainWindow, QPushButton  # noqa: E402
+from PyQt6.QtWidgets import QApplication, QLabel, QMainWindow, QPushButton, QToolButton  # noqa: E402
 
 from backend.business.facade import IBusinessFacade  # noqa: E402
 from backend.dto import FormDTO  # noqa: E402
@@ -63,7 +63,7 @@ def home(app, monkeypatch, tmp_path):
 def test_opens_on_the_dashboard_with_a_greeting(home):
     assert home.current_page() is home.dashboard
     assert home.dashboard.greeting.text() == "Welcome, Ayesha"
-    assert home.back_button.isHidden()
+    assert not hasattr(home, "back_button")  # the logo leads home instead
     assert not home.side_bar.is_expanded() and home.downloads_button.text() == ""  # collapsed: icons only
 
 
@@ -71,12 +71,11 @@ def test_query_input_button_opens_the_parameter_form(home):
     home.dashboard.query_tile.button.click()
 
     assert isinstance(home.current_page(), StubQueryWorkspace)
-    assert not home.back_button.isHidden()
 
 
-def test_back_button_returns_from_query_input(home):
+def test_the_logo_returns_from_query_input(home):
     home.show_query_input()
-    home.back_button.click()
+    home.side_bar.logo.click()
 
     assert home.current_page() is home.dashboard
 
@@ -87,24 +86,26 @@ def test_there_is_no_separate_dashboard_item(home):
     assert "Dashboard" not in names and "Db" not in names
 
 
-def test_back_button_returns_to_the_dashboard(home):
-    home.show_downloads()
-    assert not home.back_button.isHidden()
+def test_the_logo_returns_to_the_dashboard_from_any_page(home):
+    for show in (home.show_downloads, home.show_analysis, home.show_account, home.show_reports):
+        show()
+        assert home.current_page() is not home.dashboard
+        home.side_bar.logo.click()
+        assert home.current_page() is home.dashboard
+    assert home.side_bar.logo.toolTip() == "Dashboard"
 
-    home.back_button.click()
-    assert home.current_page() is home.dashboard and home.back_button.isHidden()
 
-
-def test_dashboard_has_the_logo_at_the_top_and_no_home_icon(home):
+def test_the_logo_stays_at_the_top_on_every_page_and_there_is_no_home_icon(home):
     home.show()
     QApplication.processEvents()
     top_margin = home.side_bar.layout().contentsMargins().top()
-    assert home.back_button.isHidden() and home.side_bar.logo.y() == top_margin
+    assert home.side_bar.logo.y() == top_margin
     assert "⌂" not in [label.text() for label in home.side_bar.findChildren(QLabel)]
+    assert "←" not in [button.text() for button in home.side_bar.findChildren(QToolButton)]
 
     home.show_downloads()
     QApplication.processEvents()
-    assert not home.back_button.isHidden() and home.side_bar.logo.y() > top_margin  # back button above it
+    assert home.side_bar.logo.y() == top_margin  # nothing appears above it any more
 
 
 def test_navigation_is_in_a_side_bar_without_the_app_name(home):
@@ -161,7 +162,6 @@ def test_manage_account_opens_the_account_page(home):
     home.manage_account_action.trigger()
 
     assert home.current_page() is home._account_page
-    assert not home.back_button.isHidden()
 
 
 def test_signup_details_open_for_the_signed_in_user(home, monkeypatch):
@@ -172,13 +172,16 @@ def test_signup_details_open_for_the_signed_in_user(home, monkeypatch):
     assert opened == ["ayesha"]
 
 
-def test_unbuilt_workspaces_are_disabled_placeholders(home):
+def test_every_workspace_card_is_built(home):
     grid = home.dashboard.findChildren(type(home.dashboard.query_tile))
-    active = (home.dashboard.query_tile, home.dashboard.download_tile, home.dashboard.analysis_tile)
-    placeholders = [tile for tile in grid if tile not in active]
+    assert len(grid) == 4 and all(tile.isEnabled() and tile.button is not None for tile in grid)
 
-    assert len(placeholders) == 1  # Reports
-    assert all(not tile.isEnabled() and tile.button is None for tile in placeholders)
+
+def test_reports_card_asks_for_the_reports_page(home):
+    asked = []
+    home.dashboard.open_reports.connect(lambda: asked.append(True))
+    home.dashboard.reports_tile.button.click()
+    assert asked == [True]
 
 
 def test_analysis_card_opens_the_analysis_page(home):
@@ -192,7 +195,7 @@ def test_download_card_opens_the_downloads_page(home):
     home.dashboard.download_tile.button.click()
 
     assert home.current_page() is home.downloads
-    assert home.downloads_button.isHidden() and not home.back_button.isHidden()
+    assert home.downloads_button.isHidden()
 
 
 def test_start_download_in_query_input_starts_the_job_and_shows_downloads(home, monkeypatch):
@@ -210,7 +213,7 @@ def test_downloading_without_a_project_asks_to_create_one_first(home, monkeypatc
     started, asked = [], []
     monkeypatch.setattr(home.downloads, "start", started.append)
     home._facade.get_current_project.return_value = None
-    monkeypatch.setattr(home, "ask_for_project", lambda: asked.append(True))  # cancelled
+    monkeypatch.setattr(home, "ask_for_project", lambda why="": asked.append(why))  # cancelled
     home.query_input.download_requested.emit(FormDTO(dataset="sentinel2_sr", aoi="{}"))
     assert asked and started == [] and home.current_page() is not home.downloads
 
@@ -218,7 +221,7 @@ def test_downloading_without_a_project_asks_to_create_one_first(home, monkeypatc
         home._facade.get_current_project.return_value = PROJECT
         return PROJECT
 
-    monkeypatch.setattr(home, "ask_for_project", lambda: "new")
+    monkeypatch.setattr(home, "ask_for_project", lambda why="": "new")
     monkeypatch.setattr(home.projects, "new_project", create_one)
     home.query_input.download_requested.emit(FormDTO(dataset="sentinel2_sr", aoi="{}"))
     assert len(started) == 1 and home.current_page() is home.downloads
@@ -269,15 +272,39 @@ def test_file_menu_new_request_sign_out_and_exit(home, monkeypatch):
     assert quits == [True]
 
 
-def test_view_menu_toggles_the_side_bar(home):
+def test_view_menu_keeps_the_side_bar_open(home):
     item = home.menu_bar.toggle_side_bar
-    assert not item.isChecked()  # the side bar starts collapsed
+    assert not item.isChecked()  # the side bar starts collapsed, opening on hover
 
     item.trigger()
-    assert home.side_bar.is_expanded() and item.isChecked()
+    assert home.side_bar.is_pinned() and home.side_bar.is_expanded() and item.isChecked()
 
-    home.side_bar.set_expanded(False, animate=False)  # e.g. by clicking the logo
-    assert not item.isChecked()
+    home.terminal.shell.submit("sidebar off")  # gkonsol switches the same thing
+    assert not home.side_bar.is_pinned() and not item.isChecked()
+
+
+def test_the_side_bar_floats_over_the_pages_until_it_is_kept_open(home):
+    from frontend.views.home_window import SideBarHost
+    from frontend.widgets.side_bar import COLLAPSED_WIDTH, EXPANDED_WIDTH
+
+    host = home.centralWidget()
+    assert isinstance(host, SideBarHost) and home.side_bar.parent() is host
+    assert host.layout().indexOf(home.side_bar) == -1  # not in the layout: over the pages
+    home.resize(1200, 800)
+    home.show()
+    QApplication.processEvents()
+    assert home.side_bar.geometry().topLeft().isNull() and home.side_bar.height() == host.height()
+    assert host.room.width() == COLLAPSED_WIDTH
+
+    home.side_bar.set_expanded(True, animate=False)  # opened by the pointer: the page does not move
+    QApplication.processEvents()
+    assert host.room.width() == COLLAPSED_WIDTH and home.side_bar.width() == EXPANDED_WIDTH
+    assert home.terminal_area.x() == COLLAPSED_WIDTH
+
+    home.side_bar.set_pinned(True)  # kept open: it takes its own room beside the page
+    QApplication.processEvents()
+    assert host.room.width() == EXPANDED_WIDTH and home.terminal_area.x() == EXPANDED_WIDTH
+    home.hide()
 
 
 def test_view_menu_full_screen_and_back(home, monkeypatch):
@@ -533,8 +560,8 @@ def test_view_on_a_completed_download_opens_the_viewer(home, monkeypatch):
     home.downloads.view_requested.emit("D:/downloads/x/x.tif")
 
     assert opened == ["D:/downloads/x/x.tif"]
-    assert home.current_page() is home.viewer and not home.back_button.isHidden()
-    home.back_button.click()
+    assert home.current_page() is home.viewer
+    home.side_bar.logo.click()
     assert home.current_page() is home.dashboard
 
 

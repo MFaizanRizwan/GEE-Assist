@@ -4,8 +4,10 @@ Desktop app (PyQt6) for querying and analysing Google Earth Engine data.
 
 ## Running the app
 
-1. Start the authentication server ([GEE-Assist-Backend](https://github.com/Abdullah2265Habib/GEE-Assist-Backend)),
-   by default on `http://localhost:8000`:
+1. The authentication server ([GEE-Assist-Backend](https://github.com/Abdullah2265Habib/GEE-Assist-Backend))
+   is deployed at <https://gee-assist-backend.vercel.app>, which the app uses by default: there is
+   nothing to start. To use a server run on this computer instead, start it and set
+   `AUTH_API_URL=http://localhost:8000` in `.env`:
 
    ```bash
    cd GEE-Assist-Backend
@@ -19,7 +21,7 @@ Desktop app (PyQt6) for querying and analysing Google Earth Engine data.
    python -m venv .venv
    .venv\Scripts\activate
    pip install -r requirements.txt
-   copy .env.example .env      # optional: AUTH_API_URL if the server is not on localhost:8000
+   copy .env.example .env      # optional: e.g. AUTH_API_URL for a server on this computer
    python main.py
    ```
 
@@ -62,27 +64,29 @@ whatever was never entered in the app.
   lasts as long as chosen in **Options → Settings…** (7 days unless changed), counted from signing in; after that
   the app asks to sign in again.
 - After signing in the app opens on the **dashboard**. Its **Query Input** card opens the parameter
-  form (with the "Chat with Gemini" assistant); the back arrow (**←**) at the top of the side bar
-  returns to it. On the dashboard itself there is no back arrow and the logo is at the top.
+  form (with the "Chat with Gemini" assistant). Clicking the **GEE-Assist logo** at the top of the
+  side bar returns to the dashboard from any page (there is no back arrow).
 - A menu bar runs along the top of every page, as in Word or Excel:
   - **File**: New project… (Ctrl+Shift+N), Open project… (Ctrl+Shift+O), Recent projects, Rename
     project…, Move project…, Close project, New request (Ctrl+N), Open GeoTIFF… (Ctrl+O), Sign out,
     Exit (Ctrl+Q)
   - **Edit**: Undo, Redo, Cut, Copy, Paste, Select all, acting on the text field with the cursor
-  - **View**: Dashboard, Query Input, Downloads, Account, Analysis (Ctrl+1 to Ctrl+5), Show analysis
-    table (Ctrl+6), Side bar (Ctrl+B), Terminal (Ctrl+`), Full screen (F11), Theme
+  - **View**: Dashboard, Query Input, Downloads, Account, Analysis (Ctrl+1 to Ctrl+5), Reports (Ctrl+7),
+    Show analysis table (Ctrl+6), Side bar (Ctrl+B: keep it open), Terminal (Ctrl+`), Full screen (F11), Theme
   - **Terminal** (gkonsol's, as in VS Code): Show terminal (Ctrl+`), Maximise terminal, Clear terminal,
     Stop running command; Check everything, Verify Earth Engine sign-in, Sign in to Earth Engine…,
     Verify my session, Watch download progress, Download speed chart, List downloads and gkonsol help,
     which run that command in the terminal; Command reference (opens docs/GKONSOL.md)
   - **Options**: Download chunk size…, Manage users… (administrators)
   - **Help**: Rate, feedback or suggestion…, About GEE-Assist
-- Navigation is in a side bar on the left: **Query Input**, **Downloads**, **Analysis** and
-  **Terminal**, each with an icon that animates while the pointer is over it (a pencil writing on a
-  sheet; an arrow sliding down into a tray; chart bars rising in a wave under a sweeping magnifying
-  lens; a prompt typing). It starts collapsed (icons only); clicking the logo slides it
-  open (icons and names) or closed again. **Terminal** opens gkonsol (see below) and stays
-  highlighted while it is open.
+- Navigation is in a side bar on the left: **Query Input**, **Downloads**, **Analysis**, **AI
+  Explanation** and **Terminal**, each with an icon that animates while the pointer is over it (a
+  pencil writing on a sheet; an arrow sliding down into a tray; chart bars rising in a wave under a
+  sweeping magnifying lens; lines appearing in a speech bubble with a twinkling sparkle; a prompt
+  typing). It is collapsed (icons only) and opens by itself (icons and names) while the pointer rests
+  on it, sliding over the page, and closes again when the pointer leaves; no click is needed.
+  **View → Side bar** (Ctrl+B) keeps it open beside the page. **Terminal** opens gkonsol (see below)
+  and stays highlighted while it is open.
 - Clicking your name or avatar in the side bar opens the account menu: **Manage account**
   (the account page), **Sign-up details** and **Sign out**.
 - The **account page** shows your details on the left and your photo on the right. Click your
@@ -109,6 +113,7 @@ As in other desktop apps, you work inside a project. A project is a folder:
     analysis/                    analysis results you save
         analysis_results.json    every analysis run in the project: settings, numbers, saved file
     explanation/                 AI explanations of analysis results (Markdown)
+    reports/                     PDF reports made from the AI explanations
 ```
 
 - **Create** one from the dashboard (**New project**) or **File → New project…**: give it a name and
@@ -172,6 +177,10 @@ As in other desktop apps, you work inside a project. A project is a folder:
 
 ## AI explanation
 
+- **AI Explanation** in the side bar explains any result saved in the open project: it lists the
+  project's result GeoTIFFs (newest first, with their analysis, processes and date) and asks which
+  one to explain. Without an open project it asks to create or open one; with no saved result yet it
+  offers to open the Analysis page.
 - **Explain with AI** under an analysis result opens the **AI explanation** page. A project must be
   open: if the result is not saved yet, its GeoTIFF is saved in the project's `analysis` folder
   first (as **Save result** does), so the file sent to Gemini is always the one kept in the project.
@@ -200,6 +209,24 @@ Your choice opens that tab of the website's community page in the browser:
 feedback or suggestion…** opens the same window at any time. The website's address is
 `WEB_APP_URL` in `.env` (default `http://localhost:5173`, where
 [GEE-Assist-Web](https://github.com/Abdullah2265Habib/GEE-Assist-Web) runs with `npm run dev`).
+
+## PDF reports
+
+- The **Reports** page (the dashboard's **Reports** card, **View → Reports** or Ctrl+7) lists the AI
+  explanations saved in the open project, newest first, and whether each already has a PDF.
+- **Create PDF report** makes the chosen explanation's report: first a picture of each layer of the
+  analysis result it explains (the `.tif` in the project's `analysis` folder, coloured as on the
+  Analysis page, each with its colour bar and range, or its classes), then the explanation, headed
+  "Summary", with its headings, lists and tables; each table stays on one page with its heading.
+  It is an A4 PDF with numbered pages and bookmarks, written with
+  [markdown-pdf](https://pypi.org/project/markdown-pdf/) (through PyMuPDF), and kept in the project
+  as `reports/<explanation>.pdf`; creating it again replaces it. If the result `.tif` is no longer
+  there, the report says so and has the explanation only.
+- **PDF report** on the AI explanation page goes to the Reports page and creates that explanation's
+  report at once.
+- **Export PDF…** saves a copy anywhere on the computer (Documents, a USB drive, ...); the project keeps
+  its own copy. **Open PDF** opens it in the computer's PDF viewer, **Open reports folder** shows the
+  folder.
 
 ## gkonsol, the command line
 
@@ -316,5 +343,6 @@ viewer:
 | GeoTIFF viewer (views, colours, legend, values) | `backend/business/map/`, `frontend/views/raster_viewer_view.py`, `frontend/widgets/raster_canvas.py`, `raster_legend.py` |
 | AI explanation (metadata, previews, Gemini, saving) | `backend/business/explanation/`, `backend/data/clients/gemini_client.py`, `prompts.py`, `frontend/views/explanation_view.py` |
 | Feedback window (website community tabs) | `frontend/views/feedback_dialog.py` |
+| PDF reports (content, PDF with markdown-pdf, saving, export; page) | `backend/business/report/` (`pdf_writer.py`), `frontend/views/reports_view.py` |
 | gkonsol terminal (shell, commands, panel) | `frontend/gkonsol/` (see [docs/GKONSOL.md](docs/GKONSOL.md#9-for-developers)) |
 | Earth Engine set-up checks and browser sign-in | `backend/data/clients/gee_client.py`, `gee_sign_in.py` |

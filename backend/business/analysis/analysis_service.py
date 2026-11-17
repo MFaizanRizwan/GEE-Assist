@@ -14,9 +14,11 @@ from __future__ import annotations
 import logging
 
 import atexit
+import json
 import shutil
 import tempfile
 from dataclasses import replace
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Optional
 
@@ -40,7 +42,7 @@ from backend.dto.analysis_dto import (
     GpuDTO,
 )
 from backend.dto.download_dto import DatasetDTO
-from backend.dto.result_dto import ResultDTO
+from backend.dto.result_dto import ResultDTO, ResultLayerDTO
 from backend.exceptions import AnalysisError
 
 
@@ -144,6 +146,52 @@ class AnalysisService(IAnalysisService):
             atexit.register(self.cleanup)
         return self._scratch
 
+    def list_saved_results(self, folder: str) -> list[ResultDTO]:
+        """The analysis results saved in ``folder`` (GeoTIFFs), newest first."""
+        directory = Path(folder)
+        if not directory.is_dir():
+            return []
+        files = [path for path in directory.iterdir() if path.suffix.lower() in (".tif", ".tiff") and path.is_file()]
+        results = [self.load_result(str(path)) for path in files]
+        return sorted(results, key=lambda result: result.created_at, reverse=True)
+
+    def load_result(self, path: str) -> ResultDTO:
+        """A saved result GeoTIFF as a ResultDTO, from the settings and numbers saved next to it (.json).
+
+        A GeoTIFF without its .json is still listed, with only what its file tells (its name, when it was made).
+        """
+        file = Path(path)
+        summary = _read_summary(file)
+        created = str(summary.get("created_at") or "") or _modified_at(file)
+        dataset_path = str(summary.get("dataset") or "")
+        layers = []
+        for item in summary.get("styles") or []:
+            try:
+                layers.append(ResultLayerDTO(**{key: item[key] for key in ResultLayerDTO.__dataclass_fields__
+                                                if key in item}))
+            except (TypeError, KeyError):
+                continue
+        return ResultDTO(
+            id=str(summary.get("id") or file.stem), category=str(summary.get("category") or ""),
+            processes=[str(p) for p in summary.get("processes") or []],
+            metrics={str(k): v for k, v in (summary.get("metrics") or {}).items() if isinstance(v, (int, float))},
+            output_path=str(file), created_at=created,
+            dataset=self._dataset_of(dataset_path) if dataset_path else None, layers=layers,
+            device=str(summary.get("device") or ""), seconds=float(summary.get("seconds") or 0.0),
+            notes=[str(n) for n in summary.get("notes") or []], saved=True,
+        )
+
+    def _dataset_of(self, path: str) -> DatasetDTO:
+        """The dataset a result was made from: read from its file, or only its name when it is gone."""
+        if Path(path).is_file():
+            try:
+                return self.describe_dataset(path)
+            except (OSError, AnalysisError, ValueError):
+                logger.info("Could not read the dataset %s of a saved result", path, exc_info=True)
+        satellite, start, end = parse_dataset_name(Path(path).stem)
+        return DatasetDTO(id="", source="", path=path, name=Path(path).stem, satellite=satellite,
+                          start_date=start, end_date=end)
+
     def describe_dataset(self, path: str) -> DatasetDTO:
         file = Path(path)
         names = read_band_names(path)
@@ -175,3 +223,19 @@ class AnalysisService(IAnalysisService):
 
     def _backend(self, use_gpu: bool) -> ComputeBackend:
         return self._select(self._find_gpus(), use_gpu)
+
+
+def _read_summary(tif: Path) -> dict[str, Any]:
+    """The .json saved next to a result GeoTIFF (its settings, numbers and layer styles); {} if none."""
+    try:
+        data = json.loads(tif.with_suffix(".json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _modified_at(file: Path) -> str:
+    try:
+        return datetime.fromtimestamp(file.stat().st_mtime).isoformat(timespec="seconds")
+    except OSError:
+        return ""

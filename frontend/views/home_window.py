@@ -3,9 +3,12 @@
 A menu bar along the top (File, Edit, View, Terminal, Options, Help) over a side bar on the
 left (logo, navigation and the signed-in user) next to the pages: the dashboard (start
 page), the query-input workspace, downloads, analysis, the AI explanation of an analysis
-result, the account card, the GeoTIFF viewer (opened from a finished download) and the
-analysis table (View → Show analysis table only). Clicking the logo slides the side bar open or closed; clicking the user
-opens the account menu (account options and "Sign out").
+result, the PDF reports made from explanations, the account card, the GeoTIFF viewer (opened
+from a finished download) and the analysis table (View → Show analysis table only). Clicking
+the GEE-Assist logo shows the dashboard (there is no back button); clicking the user opens
+the account menu (account options and "Sign out"). The side bar opens while the pointer is
+over it, sliding over the page rather than pushing it aside; View → Side bar (Ctrl+B) keeps it
+open, and then it takes its own room beside the page.
 
 Below the pages is the terminal, gkonsol, as in VS Code: hidden until opened from the
 side bar's Terminal button, the Terminal menu or View → Terminal (Ctrl+`), and as tall
@@ -50,6 +53,7 @@ from frontend.views.analysis_table_view import AnalysisTableView
 from frontend.views.analysis_view import AnalysisView
 from frontend.views.explanation_view import ExplanationView
 from frontend.views.feedback_dialog import ask_for_feedback
+from frontend.views.reports_view import ReportsView
 from frontend.restart import restart_app
 from frontend.workers.task_worker import run_task
 from frontend.views.auth.hero_panel import round_logo
@@ -64,8 +68,9 @@ from frontend.gkonsol.panel import GkonsolPanel, TerminalArea
 from frontend.gkonsol.ports import MemoryForm
 from frontend.views.user_admin_view import UserAdminDialog
 from frontend.widgets.menu_bar import AppMenuBar
-from frontend.widgets.side_bar import LOGO_SIZE, SideBar
-from frontend.widgets.side_icons import AnalysisIcon, DownloadIcon, TerminalIcon, WritingIcon
+from frontend.widgets.side_bar import COLLAPSED_WIDTH, EXPANDED_WIDTH, LOGO_SIZE, SideBar
+from frontend.widgets.side_icons import AnalysisIcon, DownloadIcon, ExplainIcon, TerminalIcon, WritingIcon
+from frontend.views.result_picker_dialog import choose_result
 
 PAGE_BACKGROUND = (
     "qlineargradient(x1:0, y1:0, x2:1, y2:1, "
@@ -77,6 +82,38 @@ AFTER_EXPLANATION = "Your AI explanation is ready. Was it useful?"
 BACK_FROM_EXPLANATION = "Thanks for trying the AI explanation."
 AFTER_ANALYSIS = "Your analysis is done. How did it go?"
 FEEDBACK_DELAY_MS = 800  # the explanation is drawn (and seen) before the modal opens
+
+# Why a project is needed (the first lines of the "A project is needed" message).
+DOWNLOAD_NEEDS_PROJECT = "Datasets are downloaded into a project's downloads folder."
+EXPLANATION_NEEDS_PROJECT = "AI explanations are made from the analysis results saved in a project."
+
+
+class SideBarHost(QWidget):
+    """The window's central widget: the side bar floats over the pages' left edge, as tall as
+    the window, while the layout keeps ``room`` for it: its collapsed width, or all of it when
+    it is kept open. Opening on hover then slides over the page instead of reflowing it."""
+
+    def __init__(self, side_bar: SideBar, pages: QWidget, parent: QWidget | None = None):
+        super().__init__(parent)
+        self.side_bar = side_bar
+        self.room = QWidget()
+        self.room.setFixedWidth(EXPANDED_WIDTH if side_bar.is_pinned() else COLLAPSED_WIDTH)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        layout.addWidget(self.room)
+        layout.addWidget(pages, 1)
+        side_bar.setParent(self)
+        side_bar.raise_()  # above the pages
+        side_bar.pinned_changed.connect(self._pinned)
+
+    def _pinned(self, pinned: bool) -> None:
+        self.room.setFixedWidth(EXPANDED_WIDTH if pinned else COLLAPSED_WIDTH)
+
+    def resizeEvent(self, event) -> None:  # noqa: N802 (Qt API)
+        super().resizeEvent(event)
+        self.side_bar.setGeometry(0, 0, self.side_bar.width(), self.height())
+        self.side_bar.raise_()
 
 
 class ProfileButton(QFrame):
@@ -148,10 +185,10 @@ class TerminalApp:
         self._window.sign_out()
 
     def is_side_bar_expanded(self) -> bool:
-        return self._window.side_bar.is_expanded()
+        return self._window.side_bar.is_pinned()  # "on": kept open, as View → Side bar
 
     def set_side_bar_expanded(self, expanded: bool) -> None:
-        self._window.side_bar.set_expanded(expanded)
+        self._window.side_bar.set_pinned(expanded)
 
     def is_full_screen(self) -> bool:
         return self._window.isFullScreen()
@@ -192,12 +229,13 @@ class HomeWindow(QMainWindow):
         self.setMenuBar(self.menu_bar)
 
         self.side_bar = SideBar(round_logo(LOGO_SIZE, self.devicePixelRatioF()))
-        self.back_button = self.side_bar.back_button
-        self.back_button.setToolTip("Back to the dashboard")
         self.query_input_button = self.side_bar.add_button("Query Input", "Q", icon=WritingIcon())
         self.downloads_button = self.side_bar.add_button("Downloads", "D", icon=DownloadIcon())
         self.analysis_button = self.side_bar.add_button("Analysis", "A", icon=AnalysisIcon())
         self.analysis_button.setToolTip("Analysis: run vegetation, water, burn, ... analyses on a dataset (Ctrl+5)")
+        self.explain_button = self.side_bar.add_button("AI Explanation", "AI", icon=ExplainIcon())
+        self.explain_button.setToolTip("AI Explanation: choose an analysis result of the open project and "
+                                       "let Gemini explain it")
         self.terminal_button = self.side_bar.add_button("Terminal", "T", icon=TerminalIcon())
         self.terminal_button.setCheckable(True)  # lit while the terminal is open
         self.terminal_button.setToolTip("Terminal: gkonsol, the GEE-Assist command line (Ctrl+`)")
@@ -229,6 +267,7 @@ class HomeWindow(QMainWindow):
         self.viewer = RasterViewerView(facade)
         self.analysis = AnalysisView(facade)
         self.explanation = ExplanationView(facade)
+        self.reports = ReportsView(facade)
         self.analysis_table = AnalysisTableView(facade)
 
         self.account = AccountView(facade)
@@ -259,6 +298,7 @@ class HomeWindow(QMainWindow):
         self.pages.addWidget(self.viewer)
         self.pages.addWidget(self.analysis)
         self.pages.addWidget(self.explanation)
+        self.pages.addWidget(self.reports)
         self.pages.addWidget(self.analysis_table)
         self._account_page = account_page
 
@@ -270,20 +310,14 @@ class HomeWindow(QMainWindow):
         form = WidgetForm(form_view) if form_view is not None else MemoryForm(facade)
         self.terminal.start(facade, TerminalApp(self), form, self.terminal_area, History(store))
 
-        root = QWidget()
-        layout = QHBoxLayout(root)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-        layout.addWidget(self.side_bar)
-        layout.addWidget(self.terminal_area, 1)
-        self.setCentralWidget(root)
+        self.setCentralWidget(SideBarHost(self.side_bar, self.terminal_area))
 
         self.sign_out_action.triggered.connect(self.sign_out)
         self.account.session_expired.connect(
             lambda: self.signed_out.emit("Your session has expired. Please sign in again.")
         )
         self.manage_users.clicked.connect(self.open_user_admin)
-        self.back_button.clicked.connect(self.show_dashboard)
+        self.side_bar.home_requested.connect(self.show_dashboard)  # the GEE-Assist logo leads home
         self.profile.clicked.connect(self.show_account_menu)
         self.manage_account_action.triggered.connect(self.manage_account)
         self.account.user_changed.connect(self.set_user)  # e.g. a new name or photo shows in the side bar
@@ -304,6 +338,8 @@ class HomeWindow(QMainWindow):
         self.query_input_button.clicked.connect(self.show_query_input)
         self.downloads_button.clicked.connect(self.show_downloads)
         self.analysis_button.clicked.connect(self.show_analysis)
+        self.explain_button.clicked.connect(self.explain_saved_result)
+        self.result_chooser = choose_result  # (results, project name, parent) -> result or None; tests replace it
         self.terminal_button.clicked.connect(self.toggle_terminal)
         self.terminal_area.visibility_changed.connect(self._terminal_shown)
         app = QApplication.instance()
@@ -317,6 +353,8 @@ class HomeWindow(QMainWindow):
         self.analysis.explain_requested.connect(self.show_explanation)
         self.explanation.back_requested.connect(self.show_analysis)
         self.explanation.result_saved.connect(self.analysis.set_saved_result)
+        self.explanation.report_requested.connect(self.show_reports)
+        self.dashboard.open_reports.connect(self.show_reports)
         self.explanation.explanation_ready.connect(
             lambda _explanation: QTimer.singleShot(FEEDBACK_DELAY_MS, lambda: self.ask_for_feedback(AFTER_EXPLANATION)))
         self.feedback_prompt = ask_for_feedback  # (parent, reason) -> tab opened or None; tests replace it
@@ -378,22 +416,21 @@ class HomeWindow(QMainWindow):
             self._project_shown = project.id if project is not None else None
             self.analysis.project_changed()  # only that project's datasets
 
-    def ensure_project(self) -> bool:
+    def ensure_project(self, why: str = DOWNLOAD_NEEDS_PROJECT) -> bool:
         """True once a project is open; asks the user to create or open one when none is."""
         if current_project(self._facade) is not None:
             return True
-        choice = self.ask_for_project()
+        choice = self.ask_for_project(why)
         if choice == "new":
             return self.projects.new_project() is not None
         if choice == "open":
             return self.projects.open_project() is not None
         return False
 
-    def ask_for_project(self) -> str | None:
-        """"new", "open" or None (cancelled): what to do when a download needs a project and none is open."""
+    def ask_for_project(self, why: str = DOWNLOAD_NEEDS_PROJECT) -> str | None:
+        """"new", "open" or None (cancelled): what to do when something needs a project and none is open."""
         box = QMessageBox(QMessageBox.Icon.Information, "A project is needed",
-                          "Datasets are downloaded into a project's downloads folder. "
-                          "Create a project, or open an existing one, first.", parent=self)
+                          f"{why} Create a project, or open an existing one, first.", parent=self)
         create = box.addButton("New project…", QMessageBox.ButtonRole.AcceptRole)
         existing = box.addButton("Open project…", QMessageBox.ButtonRole.ActionRole)
         box.addButton(QMessageBox.StandardButton.Cancel)
@@ -431,6 +468,43 @@ class HomeWindow(QMainWindow):
         if self.analysis.isVisibleTo(self.pages) or self.analysis._loaded:
             self.analysis.refresh_datasets()  # a download may have finished since (the first visit loads anyway)
         self._show_page(self.analysis)
+
+    def show_reports(self, explanation_path: str = "") -> None:
+        """The Reports page; given a saved explanation, its PDF report is created there at once."""
+        self._show_page(self.reports)
+        if explanation_path:
+            self.reports.create_report(explanation_path)
+
+    def explain_saved_result(self) -> None:
+        """The side bar's AI Explanation: choose one of the open project's saved results and explain it."""
+        if not self.ensure_project(EXPLANATION_NEEDS_PROJECT):
+            return
+        project = current_project(self._facade)
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            results = list(self._facade.list_saved_results())
+        except GeeAssistError as exc:
+            QMessageBox.warning(self, "AI explanation", str(exc))
+            return
+        finally:
+            QApplication.restoreOverrideCursor()
+        if not results:
+            if self.offer_analysis(project.name if project else ""):
+                self.show_analysis()
+            return
+        chosen = self.result_chooser(results, project.name if project else "", self)
+        if chosen is not None:
+            self.show_explanation(chosen)
+
+    def offer_analysis(self, project_name: str) -> bool:
+        """No result to explain yet: True if the user wants to go and run an analysis."""
+        box = QMessageBox(QMessageBox.Icon.Information, "AI explanation",
+                          f"No analysis results are saved in {project_name or 'this project'} yet. Run an "
+                          "analysis and press Save result (or Explain with AI) first.", parent=self)
+        analyse = box.addButton("Open Analysis", QMessageBox.ButtonRole.AcceptRole)
+        box.addButton(QMessageBox.StandardButton.Close)
+        box.exec()
+        return box.clickedButton() is analyse
 
     def show_explanation(self, result) -> None:
         """The AI explanation page for an analysis result (saved in the project, then sent to Gemini)."""
@@ -526,10 +600,10 @@ class HomeWindow(QMainWindow):
 
     def _show_page(self, page: QWidget) -> None:
         self.pages.setCurrentWidget(page)
-        self.side_bar.show_back(page is not self.dashboard)  # nowhere to go back to on the dashboard
         self.query_input_button.setVisible(page is not self.query_input)
         self.downloads_button.setVisible(page is not self.downloads)
         self.analysis_button.setVisible(page is not self.analysis)
+        self.explain_button.setVisible(page is not self.explanation)
         self.terminal.refresh_prompt()  # the prompt shows the page: ~/downloads
 
     # ------------------------------------------------------------- terminal
@@ -593,11 +667,12 @@ class HomeWindow(QMainWindow):
         bar.view_downloads.triggered.connect(self.show_downloads)
         bar.view_account.triggered.connect(self.show_account)
         bar.view_analysis.triggered.connect(self.show_analysis)
+        bar.view_reports.triggered.connect(lambda: self.show_reports())
         bar.view_analysis_table.triggered.connect(self.show_analysis_table)
-        bar.toggle_side_bar.setChecked(self.side_bar.is_expanded())
-        bar.toggle_side_bar.triggered.connect(self.side_bar.set_expanded)
+        bar.toggle_side_bar.setChecked(self.side_bar.is_pinned())  # "Side bar": keep it open
+        bar.toggle_side_bar.triggered.connect(self.side_bar.set_pinned)
         bar.toggle_terminal.triggered.connect(self.set_terminal_visible)
-        self.side_bar.expanded_changed.connect(bar.toggle_side_bar.setChecked)  # also when the logo is clicked
+        self.side_bar.pinned_changed.connect(bar.toggle_side_bar.setChecked)  # also from gkonsol
         bar.terminal_menu.aboutToShow.connect(self._update_terminal_menu)
         bar.show_terminal.triggered.connect(self.set_terminal_visible)
         bar.maximize_terminal.triggered.connect(self.terminal_area.set_terminal_maximized)

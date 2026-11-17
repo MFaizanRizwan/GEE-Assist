@@ -51,7 +51,8 @@ def _open(ctx: Context, args: Args) -> None:
 def _side_bar(ctx: Context, args: Args) -> None:
     expanded = switch(args.word(0), ctx.app.is_side_bar_expanded())
     ctx.app.set_side_bar_expanded(expanded)
-    ctx.out.muted(f"The side bar is {'open' if expanded else 'collapsed'}.")
+    ctx.out.muted("The side bar is kept open." if expanded else
+                  "The side bar is collapsed; it opens while the pointer is over it.")
 
 
 def _full_screen(ctx: Context, args: Args) -> None:
@@ -138,7 +139,7 @@ def _doctor(ctx: Context, args: Args) -> Generator:
     reachable, elapsed = yield task(timed, ctx.facade.is_server_available, label="Contacting the authentication server")
     checks.append(CheckDTO("Authentication server", CHECK_OK, f"{url} answered.", duration_ms=elapsed) if reachable
                   else CheckDTO("Authentication server", CHECK_FAIL, f"Cannot reach {url}.",
-                                "Start GEE-Assist-Backend, or set AUTH_API_URL in .env."))
+                                "Check the internet connection, or the server address (AUTH_API_URL in .env)."))
     if reachable:
         try:
             user, elapsed = yield task(timed, ctx.facade.reload_current_user, label="Checking your session")
@@ -203,7 +204,7 @@ def register(registry: Registry) -> None:
         aliases=("goto",), group=GROUP, completer=_complete_page,
         examples=[("open downloads", "The Downloads page"), ("open query", "The parameter form")],
     ))
-    registry.add(Command("sidebar", "Open or collapse the side bar", _side_bar, params="[on|off|toggle]",
+    registry.add(Command("sidebar", "Keep the side bar open, or let it open on hover", _side_bar, params="[on|off|toggle]",
                          max_args=1, group=GROUP, completer=_complete_switch))
     registry.add(Command("fullscreen", "Switch full screen on or off", _full_screen, params="[on|off|toggle]",
                          max_args=1, group=GROUP, completer=_complete_switch))

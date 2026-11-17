@@ -28,6 +28,14 @@ class IAnalysisService(ABC):
         """Delete a result that was not saved (its temporary files)."""
 
     @abstractmethod
+    def list_saved_results(self, folder: str) -> list[ResultDTO]:
+        """The analysis results saved in ``folder`` (a project's analysis folder), newest first."""
+
+    @abstractmethod
+    def load_result(self, path: str) -> ResultDTO:
+        """A saved result GeoTIFF as a ResultDTO, from the settings and numbers saved next to it."""
+
+    @abstractmethod
     def describe_dataset(self, path: str) -> DatasetDTO:
         """A GeoTIFF on disk as a dataset to analyse (its bands, satellite and dates)."""
 

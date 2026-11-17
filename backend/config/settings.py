@@ -30,8 +30,9 @@ DEFAULT_PROJECTS_DIR = Path.home() / "Documents" / "GEE-Assist Projects"
 
 @dataclass(frozen=True)
 class Settings:
-    # Base URL of the GEE-Assist authentication server (GEE-Assist-Backend).
-    auth_api_url: str = "http://localhost:8000"
+    # Base URL of the GEE-Assist authentication server (GEE-Assist-Backend), as deployed.
+    # AUTH_API_URL overrides it, e.g. http://localhost:8000 for a server running on this computer.
+    auth_api_url: str = "https://gee-assist-backend.vercel.app"
     # Seconds to wait for the authentication server before giving up.
     auth_api_timeout: float = 15.0
     # Name under which the refresh token is kept in the OS credential store.

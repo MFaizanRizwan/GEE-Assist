@@ -10,6 +10,7 @@ from backend.business.download.i_download_service import IDownloadService
 from backend.business.download.naming import parse_dataset_name
 from backend.business.explanation.i_explanation_service import IExplanationService
 from backend.business.facade.i_business_facade import IBusinessFacade
+from backend.business.report.i_report_service import IReportService
 from backend.business.map.i_map_service import IMapService
 from backend.business.request.i_request_service import IRequestService
 from backend.business.settings.i_settings_service import ISettingsService
@@ -21,9 +22,10 @@ from backend.dto.download_dto import JOB_COMPLETED, DatasetDTO
 from backend.dto.explanation_dto import ExplanationDTO, ExplanationRequestDTO
 from backend.dto.map_dto import MapLayerDTO, RasterInfoDTO, RasterViewDTO, ViewPresetDTO
 from backend.dto.project_dto import AnalysisRecordDTO, ProjectDTO
+from backend.dto.report_dto import ExplanationFileDTO
 from backend.dto.settings_dto import AppSettingsDTO, AppSettingsUpdateDTO
 from backend.dto.result_dto import ResultDTO
-from backend.exceptions import AnalysisError, ExplanationError, GeeAssistError, ProjectError
+from backend.exceptions import AnalysisError, ExplanationError, GeeAssistError, ProjectError, ReportError
 from backend.dto.user_dto import (
     GoogleSignInDTO,
     NewUserDTO,
@@ -41,7 +43,7 @@ logger = logging.getLogger(__name__)
 class BusinessFacade(IBusinessFacade):
     """Class diagram: BusinessFacade. Delegates to the services.
 
-    Other services (report) are injected here as their use cases are implemented.
+    Every service is injected here; optional ones raise a plain error when missing from a build.
     """
 
     def __init__(
@@ -53,6 +55,7 @@ class BusinessFacade(IBusinessFacade):
         analysis_service: Optional[IAnalysisService] = None,
         settings_service: ISettingsService | None = None,
         explanation_service: IExplanationService | None = None,
+        report_service: IReportService | None = None,
     ):
         self._user_service = user_service
         self._request_service = request_service
@@ -61,6 +64,7 @@ class BusinessFacade(IBusinessFacade):
         self._analysis_service = analysis_service
         self._settings_service = settings_service
         self._explanation_service = explanation_service
+        self._report_service = report_service
 
     # ------------------------------------------------------------- authentication
     def is_server_available(self) -> bool:
@@ -378,6 +382,12 @@ class BusinessFacade(IBusinessFacade):
         return self._analysis_service
 
     # ------------------------------------------------------------- AI explanation (UC-08)
+    def list_saved_results(self) -> list[ResultDTO]:
+        project = self._request_service.get_current_project()
+        if project is None:
+            return []
+        return self._analysis().list_saved_results(project.analysis_dir)
+
     def prepare_explanation(self, result: ResultDTO) -> ExplanationRequestDTO:
         project = self._require_project("the result is saved in the project before it is sent to Gemini.")
         if not result.saved:  # the GeoTIFF sent to Gemini is always the one kept in the project
@@ -393,6 +403,23 @@ class BusinessFacade(IBusinessFacade):
         if self._explanation_service is None:
             raise ExplanationError("AI explanations are not set up in this build.")
         return self._explanation_service
+
+    # ------------------------------------------------------------- reports (UC-09)
+    def list_explanations(self) -> list[ExplanationFileDTO]:
+        project = self._request_service.get_current_project()
+        return self._reports().list_explanations(project) if project is not None else []
+
+    def create_report(self, explanation_path: str) -> str:
+        project = self._require_project("reports are made from the project's explanations.")
+        return self._reports().create_report(explanation_path, project)
+
+    def export_report(self, pdf_path: str, destination: str) -> str:
+        return self._reports().export_report(pdf_path, destination)
+
+    def _reports(self) -> IReportService:
+        if self._report_service is None:
+            raise ReportError("Reports are not set up in this build.")
+        return self._report_service
 
 
 def free_path(path: Path) -> Path:

@@ -18,6 +18,7 @@ from backend.dto.project_dto import (
     DOWNLOADS_FOLDER,
     EXPLANATION_FOLDER,
     PROJECT_FILE,
+    REPORTS_FOLDER,
     AnalysisRecordDTO,
     ProjectDTO,
 )
@@ -38,7 +39,7 @@ class ProjectDAO(IProjectDAO):
     def save(self, entity: ProjectDTO) -> bool:
         folder = Path(entity.folder)
         try:
-            for sub in (DOWNLOADS_FOLDER, ANALYSIS_FOLDER, EXPLANATION_FOLDER):
+            for sub in (DOWNLOADS_FOLDER, ANALYSIS_FOLDER, EXPLANATION_FOLDER, REPORTS_FOLDER):
                 (folder / sub).mkdir(parents=True, exist_ok=True)
             _write_json(folder / PROJECT_FILE, {"app": "GEE-Assist", "id": entity.id, "name": entity.name,
                                                 "created_at": entity.created_at})

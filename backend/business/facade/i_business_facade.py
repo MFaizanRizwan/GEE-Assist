@@ -10,6 +10,7 @@ from backend.dto.download_dto import DatasetDTO
 from backend.dto.explanation_dto import ExplanationDTO, ExplanationRequestDTO
 from backend.dto.map_dto import MapLayerDTO, RasterInfoDTO, RasterViewDTO, ViewPresetDTO
 from backend.dto.project_dto import AnalysisRecordDTO, ProjectDTO
+from backend.dto.report_dto import ExplanationFileDTO
 from backend.dto.settings_dto import AppSettingsDTO, AppSettingsUpdateDTO
 from backend.dto.result_dto import ResultDTO
 from backend.dto.user_dto import (
@@ -308,6 +309,11 @@ class IBusinessFacade(ABC):
 
     # ------------------------------------------------------------- AI explanation (UC-08)
     @abstractmethod
+    def list_saved_results(self) -> list[ResultDTO]:
+        """The analysis results (GeoTIFFs) saved in the open project's analysis folder, newest first;
+        none when no project is open. Each can be explained with ``prepare_explanation``."""
+
+    @abstractmethod
     def prepare_explanation(self, result: ResultDTO) -> ExplanationRequestDTO:
         """Save the result's GeoTIFF in the open project's analysis folder (if it is not saved yet),
         then gather what Gemini is given: the analysis, the metadata before and after it, its numbers
@@ -317,3 +323,17 @@ class IBusinessFacade(ABC):
     def explain_analysis_result(self, request: ExplanationRequestDTO) -> ExplanationDTO:
         """Send the saved GeoTIFF, previews and prompt to Gemini; its answer is kept in the open
         project's ``explanation`` folder."""
+
+    # ------------------------------------------------------------- reports (UC-09)
+    @abstractmethod
+    def list_explanations(self) -> list[ExplanationFileDTO]:
+        """The AI explanations saved in the open project, newest first; none when no project is open."""
+
+    @abstractmethod
+    def create_report(self, explanation_path: str) -> str:
+        """Write a saved explanation's PDF report (the analysis pictures, then the explanation) in the
+        open project's reports folder; returns its path."""
+
+    @abstractmethod
+    def export_report(self, pdf_path: str, destination: str) -> str:
+        """Copy a report's PDF to a file the user chose on this computer; returns where it went."""

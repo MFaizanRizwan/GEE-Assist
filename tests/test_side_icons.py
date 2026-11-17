@@ -11,7 +11,7 @@ from PyQt6.QtCore import QRectF, Qt  # noqa: E402
 from PyQt6.QtGui import QImage, QPainter  # noqa: E402
 from PyQt6.QtWidgets import QApplication  # noqa: E402
 
-from frontend.widgets.side_icons import DownloadIcon, TerminalIcon, WritingIcon  # noqa: E402
+from frontend.widgets.side_icons import DownloadIcon, ExplainIcon, TerminalIcon, WritingIcon  # noqa: E402
 
 RECT = QRectF(0, 0, 44, 44)
 
@@ -31,7 +31,7 @@ def _render(icon, t):
 
 
 def test_icons_draw_something_at_rest_and_while_animated(app):
-    for icon in (DownloadIcon(), WritingIcon(), TerminalIcon()):
+    for icon in (DownloadIcon(), WritingIcon(), TerminalIcon(), ExplainIcon()):
         for t in (None, 0.0, 0.3, 0.8):
             image = _render(icon, t)
             assert any(image.pixelColor(x, y).alpha() for x in range(44) for y in range(44))
@@ -58,3 +58,14 @@ def test_terminal_types_after_the_prompt_while_the_cursor_blinks(app):
     blinks = [TerminalIcon.cursor_visible(t / 16) for t in range(16)]
     assert True in blinks and False in blinks
     assert _render(TerminalIcon(), 0.0) != _render(TerminalIcon(), 0.8)
+
+
+def test_explain_icon_writes_its_lines_in_turn_while_the_sparkle_twinkles(app):
+    assert [ExplainIcon.line_shown(None, i) for i in range(3)] == [1.0, 1.0, 1.0]  # at rest: all written
+    assert [ExplainIcon.line_shown(0.0, i) for i in range(3)] == [0.0, 0.0, 0.0]   # the loop starts empty
+    early = [ExplainIcon.line_shown(0.2, i) for i in range(3)]
+    assert early[0] > 0 and early[1] == 0 and early[2] == 0                       # the first line first
+    assert [ExplainIcon.line_shown(0.9, i) for i in range(3)] == [1.0, 1.0, 1.0]   # a pause with all shown
+    sizes = [ExplainIcon.sparkle(t) for t in (0.0, 0.25, 0.5)]
+    assert ExplainIcon.sparkle(None) == 1.0 and min(sizes) < 0.6 and max(sizes) == 1.0
+    assert _render(ExplainIcon(), 0.0) != _render(ExplainIcon(), 0.5)              # it moves
