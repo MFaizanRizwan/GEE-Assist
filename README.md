@@ -69,8 +69,8 @@ whatever was never entered in the app.
     project…, Move project…, Close project, New request (Ctrl+N), Open GeoTIFF… (Ctrl+O), Sign out,
     Exit (Ctrl+Q)
   - **Edit**: Undo, Redo, Cut, Copy, Paste, Select all, acting on the text field with the cursor
-  - **View**: Dashboard, Query Input, Downloads, Account, Analysis (Ctrl+1 to Ctrl+5), Show analysis
-    table (Ctrl+6), Side bar (Ctrl+B), Terminal (Ctrl+`), Full screen (F11), Theme
+  - **View**: Dashboard, Query Input, Downloads, Account, Analysis (Ctrl+1 to Ctrl+5), Reports (Ctrl+7),
+    Show analysis table (Ctrl+6), Side bar (Ctrl+B), Terminal (Ctrl+`), Full screen (F11), Theme
   - **Terminal** (gkonsol's, as in VS Code): Show terminal (Ctrl+`), Maximise terminal, Clear terminal,
     Stop running command; Check everything, Verify Earth Engine sign-in, Sign in to Earth Engine…,
     Verify my session, Watch download progress, Download speed chart, List downloads and gkonsol help,
@@ -109,6 +109,7 @@ As in other desktop apps, you work inside a project. A project is a folder:
     analysis/                    analysis results you save
         analysis_results.json    every analysis run in the project: settings, numbers, saved file
     explanation/                 AI explanations of analysis results (Markdown)
+    reports/                     PDF reports made from the AI explanations
 ```
 
 - **Create** one from the dashboard (**New project**) or **File → New project…**: give it a name and
@@ -200,6 +201,22 @@ Your choice opens that tab of the website's community page in the browser:
 feedback or suggestion…** opens the same window at any time. The website's address is
 `WEB_APP_URL` in `.env` (default `http://localhost:5173`, where
 [GEE-Assist-Web](https://github.com/Abdullah2265Habib/GEE-Assist-Web) runs with `npm run dev`).
+
+## PDF reports
+
+- The **Reports** page (the dashboard's **Reports** card, **View → Reports** or Ctrl+7) lists the AI
+  explanations saved in the open project, newest first, and whether each already has a PDF.
+- **Create PDF report** makes the chosen explanation's report: first a picture of each layer of the
+  analysis result it explains (the `.tif` in the project's `analysis` folder, coloured as on the
+  Analysis page, each with its colour bar and range, or its classes), then the explanation exactly
+  as saved, with its headings, lists and tables. It is an A4 PDF kept in the project as
+  `reports/<explanation>.pdf`; creating it again replaces it. If the result `.tif` is no longer
+  there, the report says so and has the explanation only.
+- **PDF report** on the AI explanation page goes to the Reports page and creates that explanation's
+  report at once.
+- **Export PDF…** saves a copy anywhere on the computer (Documents, a USB drive, ...); the project keeps
+  its own copy. **Open PDF** opens it in the computer's PDF viewer, **Open reports folder** shows the
+  folder.
 
 ## gkonsol, the command line
 
@@ -316,5 +333,6 @@ viewer:
 | GeoTIFF viewer (views, colours, legend, values) | `backend/business/map/`, `frontend/views/raster_viewer_view.py`, `frontend/widgets/raster_canvas.py`, `raster_legend.py` |
 | AI explanation (metadata, previews, Gemini, saving) | `backend/business/explanation/`, `backend/data/clients/gemini_client.py`, `prompts.py`, `frontend/views/explanation_view.py` |
 | Feedback window (website community tabs) | `frontend/views/feedback_dialog.py` |
+| PDF reports (content, saving, export; drawing; page) | `backend/business/report/`, `frontend/report_pdf.py`, `frontend/views/reports_view.py` |
 | gkonsol terminal (shell, commands, panel) | `frontend/gkonsol/` (see [docs/GKONSOL.md](docs/GKONSOL.md#9-for-developers)) |
 | Earth Engine set-up checks and browser sign-in | `backend/data/clients/gee_client.py`, `gee_sign_in.py` |
