@@ -1,4 +1,5 @@
-"""Prompt for turning a natural-language request into form parameters."""
+"""Prompts for Gemini: turning a natural-language request into form parameters, and
+explaining an analysis result (UC-08 Get AI Explanation)."""
 
 from __future__ import annotations
 
@@ -6,6 +7,7 @@ import json
 from datetime import date
 
 from backend.config import ANALYSIS_CATEGORIES, COMPOSITE_METHODS, DATASETS
+from backend.dto.explanation_dto import ExplanationRequestDTO, RasterMetadataDTO
 
 
 def _catalogue() -> dict:
@@ -62,3 +64,86 @@ Rules:
   the user's explicit choices, use PLACE entries for aoi_name / aoi_bbox, and use a DATE value
   (YYYY-MM-DD/YYYY-MM-DD) when one is given.
 """
+
+
+# ----------------------------------------------------------------------------- explanation
+EXPLANATION_SYSTEM_PROMPT = """You are a remote-sensing analyst inside GEE-Assist, a desktop app that
+downloads satellite imagery from Google Earth Engine and analyses it on the user's computer.
+Explain one analysis result to the user, who may not be a remote-sensing expert.
+
+You are given which analysis ran and with which settings, the metadata of the dataset before the
+analysis (and of any earlier dataset it was compared with), the metadata of the result GeoTIFF
+after the analysis, the numbers it produced, the result GeoTIFF itself (one band per layer,
+no-data = -9999) when it could be attached, and a PNG preview of each layer coloured as described.
+
+Answer in Markdown with these sections, leaving out any that do not apply:
+## Summary            two or three sentences: what the result says about this place and time
+## What was measured  each process in plain words: what it measures and how to read its values
+## What the results show   the numbers, read against the usual ranges; cite the values given
+## Where               spatial patterns visible in the previews (which parts are high or low)
+## Before and after    for change processes only: what changed between the dates
+## Reliability         caveats from the metadata: dates, season, clouds, resolution, sensor, notes
+## Next steps          two or three concrete follow-ups the user could run in GEE-Assist
+
+Rules:
+- Use only the numbers and metadata given; never invent values, places or dates.
+- Say when something cannot be told from the data (e.g. the cause of a change).
+- Keep it under about 450 words. Use units. No preamble, no closing remarks.
+"""
+
+
+def _metadata_lines(metadata: RasterMetadataDTO) -> list[str]:
+    return [f"- {label}: {value}" for label, value in metadata.rows()]
+
+
+def build_explanation_prompt(request: ExplanationRequestDTO) -> str:
+    """The user prompt sent with the result GeoTIFF and its previews."""
+    result = request.result
+    label = request.category_label or request.category
+    lines = ["Explain this GEE-Assist analysis result.", "", "# Analysis that was run",
+             f"- Analysis: {label}" + (f" ({request.category})" if label != request.category else "")]
+    lines.append("- Processes:")
+    for process in request.processes:
+        details = "; ".join(part for part in (
+            process.name, f"formula {process.formula}" if process.formula else "",
+            f"range {process.value_range}" if process.value_range else "",
+            f"how to read it: {process.interpretation}" if process.interpretation else "") if part)
+        lines.append(f"  - {process.key}" + (f": {details}" if details else ""))
+    if request.params:
+        lines.append("- Parameters: " + ", ".join(f"{key} = {value}" for key, value in request.params.items()))
+    run = [part for part in (result.device and f"on {result.device}",
+                             result.seconds and f"in {result.seconds:.1f} s",
+                             result.created_at and f"at {result.created_at}") if part]
+    if run:
+        lines.append("- Ran " + " ".join(run))
+
+    lines += ["", "# Metadata before the analysis (the dataset analysed)"]
+    lines += _metadata_lines(request.before) if request.before else ["- Not available"]
+    for index, other in enumerate(request.compared_with, start=1):
+        lines += ["", f"# Metadata before the analysis: compared dataset {index} (earlier date)"]
+        lines += _metadata_lines(other)
+
+    lines += ["", "# Metadata after the analysis (the result GeoTIFF)"]
+    lines += _metadata_lines(request.after) if request.after else ["- Not available"]
+    if request.layers:
+        lines.append("- Layers (one band each, in this order):")
+        for number, layer in enumerate(request.layers, start=1):
+            unit = f" [{layer.unit}]" if layer.unit else ""
+            legend = f": preview coloured {layer.legend}" if layer.legend else ""
+            lines.append(f"  {number}. {layer.key} ({layer.label}){unit}{legend}")
+
+    lines += ["", "# Numbers the analysis produced"]
+    lines += [f"- {name}: {value:g}" if isinstance(value, (int, float)) else f"- {name}: {value}"
+              for name, value in result.metrics.items()] or ["- None"]
+    if result.notes:
+        lines += ["", "# Notes from the analysis"] + [f"- {note}" for note in result.notes]
+
+    attached = []
+    if request.tif_path:
+        attached.append(f"- The result GeoTIFF {request.after.name if request.after else ''}.tif (if accepted)")
+    if request.previews:
+        names = ", ".join(layer.key for layer in request.layers[:len(request.previews)])
+        attached.append(f"- {len(request.previews)} PNG preview(s), one per layer, in this order: {names}")
+    if attached:
+        lines += ["", "# Attached"] + attached
+    return "\n".join(lines)
