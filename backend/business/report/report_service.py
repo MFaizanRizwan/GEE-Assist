@@ -116,14 +116,14 @@ class ReportService(IReportService):
                 result = ResultDTO(id="", category="", output_path=str(tif), layers=list(info.result_layers))
                 layers = self._map_service.build_layers(result, self._image_size)
                 return tuple(ReportImageDTO(_layer_title(layer.name, layer.legend), rgba_to_png(layer.data),
-                                            layer.width, layer.height, describe_legend(layer.legend))
+                                            layer.width, layer.height, describe_legend(layer.legend), layer.legend)
                              for layer in layers), ""
             presets = self._map_service.view_presets(info)
             if not presets:
                 return (), f"{tif.name} has no band that can be drawn."
             view = self._map_service.render(info, presets[0], self._image_size)
             return (ReportImageDTO(presets[0].label, rgba_to_png(view.rgba), view.width, view.height,
-                                   describe_legend(view.legend)),), ""
+                                   describe_legend(view.legend), view.legend),), ""
         except GeeAssistError as exc:
             logger.warning("Could not draw %s for the report", tif, exc_info=True)
             return (), f"The analysis result could not be drawn: {exc}"

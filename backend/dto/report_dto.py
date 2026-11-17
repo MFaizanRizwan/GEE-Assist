@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from backend.dto.map_dto import LegendDTO
+
 
 @dataclass(frozen=True)
 class ExplanationFileDTO:
@@ -36,6 +38,7 @@ class ReportImageDTO:
     width: int
     height: int
     legend: str = ""                            # how it is coloured, in words
+    colour_key: LegendDTO | None = None         # the colour scale or classes, to draw next to it
 
 
 @dataclass(frozen=True)

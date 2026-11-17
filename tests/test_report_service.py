@@ -81,6 +81,7 @@ def test_the_report_has_the_analysis_picture_then_the_explanation(service, proje
     assert image.png.startswith(b"\x89PNG") and struct.unpack(">II", image.png[16:24]) == (50, 40)
     assert (image.width, image.height) == (50, 40)
     assert "over -0.2 to 0.8" in image.legend and image.title == "NDVI"
+    assert image.colour_key.kind == "scale" and (image.colour_key.low, image.colour_key.high) == (-0.2, 0.8)
     assert report.note == "" and report.created_at == "2024-07-03T08:00:00"
 
 
