@@ -208,9 +208,11 @@ feedback or suggestion…** opens the same window at any time. The website's add
   explanations saved in the open project, newest first, and whether each already has a PDF.
 - **Create PDF report** makes the chosen explanation's report: first a picture of each layer of the
   analysis result it explains (the `.tif` in the project's `analysis` folder, coloured as on the
-  Analysis page, each with its colour bar and range, or its classes), then the explanation exactly
-  as saved, with its headings, lists and tables. It is an A4 PDF kept in the project as
-  `reports/<explanation>.pdf`; creating it again replaces it. If the result `.tif` is no longer
+  Analysis page, each with its colour bar and range, or its classes), then the explanation, headed
+  "Summary", with its headings, lists and tables; each table stays on one page with its heading.
+  It is an A4 PDF with numbered pages and bookmarks, written with
+  [markdown-pdf](https://pypi.org/project/markdown-pdf/) (through PyMuPDF), and kept in the project
+  as `reports/<explanation>.pdf`; creating it again replaces it. If the result `.tif` is no longer
   there, the report says so and has the explanation only.
 - **PDF report** on the AI explanation page goes to the Reports page and creates that explanation's
   report at once.
@@ -333,6 +335,6 @@ viewer:
 | GeoTIFF viewer (views, colours, legend, values) | `backend/business/map/`, `frontend/views/raster_viewer_view.py`, `frontend/widgets/raster_canvas.py`, `raster_legend.py` |
 | AI explanation (metadata, previews, Gemini, saving) | `backend/business/explanation/`, `backend/data/clients/gemini_client.py`, `prompts.py`, `frontend/views/explanation_view.py` |
 | Feedback window (website community tabs) | `frontend/views/feedback_dialog.py` |
-| PDF reports (content, saving, export; drawing; page) | `backend/business/report/`, `frontend/report_pdf.py`, `frontend/views/reports_view.py` |
+| PDF reports (content, PDF with markdown-pdf, saving, export; page) | `backend/business/report/` (`pdf_writer.py`), `frontend/views/reports_view.py` |
 | gkonsol terminal (shell, commands, panel) | `frontend/gkonsol/` (see [docs/GKONSOL.md](docs/GKONSOL.md#9-for-developers)) |
 | Earth Engine set-up checks and browser sign-in | `backend/data/clients/gee_client.py`, `gee_sign_in.py` |
