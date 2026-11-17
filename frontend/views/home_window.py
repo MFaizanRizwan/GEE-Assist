@@ -3,9 +3,10 @@
 A menu bar along the top (File, Edit, View, Terminal, Options, Help) over a side bar on the
 left (logo, navigation and the signed-in user) next to the pages: the dashboard (start
 page), the query-input workspace, downloads, analysis, the AI explanation of an analysis
-result, the PDF reports made from explanations, the account card, the GeoTIFF viewer (opened from a finished download) and the
-analysis table (View → Show analysis table only). Clicking the logo slides the side bar open or closed; clicking the user
-opens the account menu (account options and "Sign out").
+result, the PDF reports made from explanations, the account card, the GeoTIFF viewer (opened
+from a finished download) and the analysis table (View → Show analysis table only). Clicking
+the GEE-Assist logo shows the dashboard (there is no back button); clicking the user opens
+the account menu (account options and "Sign out").
 
 Below the pages is the terminal, gkonsol, as in VS Code: hidden until opened from the
 side bar's Terminal button, the Terminal menu or View → Terminal (Ctrl+`), and as tall
@@ -193,8 +194,6 @@ class HomeWindow(QMainWindow):
         self.setMenuBar(self.menu_bar)
 
         self.side_bar = SideBar(round_logo(LOGO_SIZE, self.devicePixelRatioF()))
-        self.back_button = self.side_bar.back_button
-        self.back_button.setToolTip("Back to the dashboard")
         self.query_input_button = self.side_bar.add_button("Query Input", "Q", icon=WritingIcon())
         self.downloads_button = self.side_bar.add_button("Downloads", "D", icon=DownloadIcon())
         self.analysis_button = self.side_bar.add_button("Analysis", "A", icon=AnalysisIcon())
@@ -286,7 +285,7 @@ class HomeWindow(QMainWindow):
             lambda: self.signed_out.emit("Your session has expired. Please sign in again.")
         )
         self.manage_users.clicked.connect(self.open_user_admin)
-        self.back_button.clicked.connect(self.show_dashboard)
+        self.side_bar.home_requested.connect(self.show_dashboard)  # the GEE-Assist logo leads home
         self.profile.clicked.connect(self.show_account_menu)
         self.manage_account_action.triggered.connect(self.manage_account)
         self.account.user_changed.connect(self.set_user)  # e.g. a new name or photo shows in the side bar
@@ -537,7 +536,6 @@ class HomeWindow(QMainWindow):
 
     def _show_page(self, page: QWidget) -> None:
         self.pages.setCurrentWidget(page)
-        self.side_bar.show_back(page is not self.dashboard)  # nowhere to go back to on the dashboard
         self.query_input_button.setVisible(page is not self.query_input)
         self.downloads_button.setVisible(page is not self.downloads)
         self.analysis_button.setVisible(page is not self.analysis)

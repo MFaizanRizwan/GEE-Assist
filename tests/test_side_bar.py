@@ -56,7 +56,7 @@ def test_starts_collapsed_with_short_labels(bar):
     downloads = bar.add_button("Downloads", "D")
     assert not bar.is_expanded() and bar.width() == COLLAPSED_WIDTH
     assert downloads.text() == "D"
-    assert bar.logo.toolTip() == "Expand the side bar"
+    assert bar.logo.toolTip() == "Dashboard"
 
 
 def test_can_start_expanded_with_full_names(app):
@@ -64,7 +64,7 @@ def test_can_start_expanded_with_full_names(app):
     downloads = bar.add_button("Downloads", "D")
     assert bar.is_expanded() and bar.width() == EXPANDED_WIDTH
     assert downloads.text() == "Downloads"
-    assert bar.logo.toolTip() == "Collapse the side bar"
+    assert bar.logo.toolTip() == "Dashboard"  # the logo always leads home
     bar.deleteLater()
 
 
@@ -77,7 +77,7 @@ def test_collapsed_shows_short_labels(bar):
     assert bar.width() == COLLAPSED_WIDTH
     assert downloads.text() == "D" and downloads.toolTip() == "Downloads"
     assert footer.compact is True
-    assert bar.logo.toolTip() == "Expand the side bar"
+    assert bar.logo.toolTip() == "Dashboard"
 
     bar.set_expanded(True, animate=False)
     assert downloads.text() == "Downloads" and footer.compact is False
@@ -88,19 +88,28 @@ def test_widgets_added_while_collapsed_start_compact(bar):
     assert bar.add_button("Sign out", "S").text() == "S"
 
 
-def test_clicking_the_logo_slides_the_bar_open_and_closed(bar):
+def test_clicking_the_logo_asks_for_the_dashboard_and_does_not_slide(bar):
+    bar.show()
+    asked = []
+    bar.home_requested.connect(lambda: asked.append(True))
+    bar.logo.click()
+    assert asked == [True]
+    assert not bar.is_expanded() and not bar.is_sliding()
+
+
+def test_the_bar_slides_open_and_closed(bar):
     downloads = bar.add_button("Downloads", "D")
     bar.show()
     changes = []
     bar.expanded_changed.connect(changes.append)
 
-    bar.logo.click()
+    bar.toggle()
     assert bar.is_sliding() and bar.is_expanded()
     assert downloads.text() == "Downloads"   # uncovered as the bar widens
     _wait_for_slide(bar)
     assert not bar.is_sliding() and bar.width() == EXPANDED_WIDTH
 
-    bar.logo.click()
+    bar.toggle()
     assert downloads.text() == "Downloads"   # covered as the bar narrows, switched at the end
     _wait_for_slide(bar)
     assert bar.width() == COLLAPSED_WIDTH and downloads.text() == "D"
@@ -110,9 +119,9 @@ def test_clicking_the_logo_slides_the_bar_open_and_closed(bar):
 def test_reversing_mid_slide_ends_at_the_new_width(bar):
     downloads = bar.add_button("Downloads", "D")
     bar.show()
-    bar.logo.click()                          # start opening
+    bar.toggle()                              # start opening
     QTest.qWait(SLIDE_MS // 3)
-    bar.logo.click()                          # close again before it finished
+    bar.toggle()                              # close again before it finished
     _wait_for_slide(bar)
     assert not bar.is_expanded() and bar.width() == COLLAPSED_WIDTH and downloads.text() == "D"
 
@@ -156,36 +165,11 @@ def test_buttons_added_while_collapsed_are_circles_too(bar):
     assert later.width() == BUTTON_HEIGHT
 
 
-def _in_bar(bar, widget):
-    """``widget``'s rectangle in the side bar's coordinates."""
-    rect = widget.rect()
-    rect.moveTopLeft(widget.mapTo(bar, rect.topLeft()))
-    return rect
-
-
-def test_back_button_is_a_circle_centred_above_the_logo(bar):
+def test_the_logo_is_at_the_top_of_the_bar_with_no_back_button(bar):
     bar.show()
     QApplication.processEvents()
-    back, logo = _in_bar(bar, bar.back_button), bar.logo.geometry()
-
-    assert back.width() == back.height() == BUTTON_HEIGHT
-    assert back.bottom() < logo.top()
-    assert abs(back.center().x() - logo.center().x()) <= 1
-
-
-def test_logo_moves_to_the_top_without_the_back_button(bar):
-    bar.show()
-    QApplication.processEvents()
-    top_margin = bar.layout().contentsMargins().top()
-    assert bar.logo.y() > top_margin  # below the back button
-
-    bar.show_back(False)
-    QApplication.processEvents()
-    assert bar.back_button.isHidden() and bar.logo.y() == top_margin
-
-    bar.show_back(True)
-    QApplication.processEvents()
-    assert not bar.back_button.isHidden() and bar.logo.y() > top_margin
+    assert bar.logo.y() == bar.layout().contentsMargins().top()
+    assert not hasattr(bar, "back_button")
 
 
 def test_button_with_an_icon_shows_only_the_icon_when_collapsed(bar):

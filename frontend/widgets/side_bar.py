@@ -1,10 +1,9 @@
 """Vertical navigation bar on the left of the signed-in window.
 
-The bar slides between two widths when its logo is clicked. Expanded, its buttons
-show their full names ("Downloads"); collapsed, only a short label ("D"). It starts
-collapsed unless created with ``expanded=True``. A round back button sits above
-the logo; the bar's owner decides where it leads and, with ``show_back``, when it shows.
-Without it, the logo moves up to the top of the bar.
+The bar slides between two widths (``set_expanded``). Expanded, its buttons show their
+full names ("Downloads"); collapsed, only a short label ("D"). It starts collapsed unless
+created with ``expanded=True``. The logo at the top is the way home: clicking it emits
+``home_requested`` (the signed-in window shows the dashboard).
 Any widget added with a ``set_compact(bool)`` method follows the same switch.
 
 Sliding open, the names appear first and are uncovered as the bar widens; sliding
@@ -23,7 +22,6 @@ from PyQt6.QtWidgets import (
     QWIDGETSIZE_MAX,
     QBoxLayout,
     QFrame,
-    QHBoxLayout,
     QPushButton,
     QSizePolicy,
     QToolButton,
@@ -48,12 +46,6 @@ ICON_LEFT = 14      # expanded: the icon's distance from the button's left edge
 STYLESHEET = f"""
 #SideBar {{ background: {theme.WHITE}; border: none; border-right: {BORDER}px solid {theme.BORDER}; }}
 QToolButton#SideLogo {{ border: none; background: transparent; padding: 0; }}
-QToolButton#SideBack {{
-    border: none; border-radius: {BUTTON_HEIGHT // 2}px; background: transparent;
-    color: {theme.INK}; font-size: 15pt; padding: 0;
-}}
-QToolButton#SideBack:hover {{ background: {theme.FOAM}; }}
-QToolButton#SideBack:pressed {{ background: {theme.MINT}; }}
 QPushButton#SideButton {{
     border: none; border-radius: 8px; background: transparent; color: {theme.INK};
     font-weight: 600; text-align: left; padding: 0 14px;
@@ -144,6 +136,7 @@ class SideButton(QPushButton):
 
 class SideBar(QFrame):
     expanded_changed = pyqtSignal(bool)
+    home_requested = pyqtSignal()  # the logo was clicked
 
     def __init__(self, logo: QPixmap, parent: QWidget | None = None, expanded: bool = False):
         super().__init__(parent)
@@ -158,17 +151,8 @@ class SideBar(QFrame):
         self.logo.setIconSize(QSize(LOGO_SIZE, LOGO_SIZE))
         self.logo.setFixedSize(LOGO_SIZE, LOGO_SIZE)  # exactly the icon, so the circles line up under it
         self.logo.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.logo.clicked.connect(self.toggle)
-
-        self.back_button = QToolButton(objectName="SideBack")
-        self.back_button.setText("←")
-        self.back_button.setToolTip("Back")
-        self.back_button.setFixedSize(BUTTON_HEIGHT, BUTTON_HEIGHT)
-        self.back_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        back_row = QHBoxLayout()  # centred above the logo, like the circles below it
-        back_row.setContentsMargins((LOGO_SIZE - BUTTON_HEIGHT) // 2, 0, 0, 0)
-        back_row.addWidget(self.back_button)
-        back_row.addStretch(1)
+        self.logo.setToolTip("Dashboard")
+        self.logo.clicked.connect(self.home_requested)
 
         self._items = QVBoxLayout()
         self._items.setSpacing(4)
@@ -177,7 +161,6 @@ class SideBar(QFrame):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(SIDE_MARGIN, 18, SIDE_MARGIN, 18)
         layout.setSpacing(18)
-        layout.addLayout(back_row)
         layout.addWidget(self.logo, 0, Qt.AlignmentFlag.AlignLeft)  # stays put while the bar slides
         layout.addLayout(self._items)
         layout.addStretch(1)
@@ -191,7 +174,6 @@ class SideBar(QFrame):
         self._slide_clock = QElapsedTimer()
         self._slide_from = self._slide_to = width
         self._easing = QEasingCurve(QEasingCurve.Type.OutCubic)
-        self._update_logo_tip()
 
     # ------------------------------------------------------------- contents
     def add_button(self, text: str, short: str, footer: bool = False, icon: SideIcon | None = None) -> SideButton:
@@ -207,10 +189,6 @@ class SideBar(QFrame):
         if hasattr(widget, "set_compact"):
             self._compact_widgets.append(widget)
             self._apply_compact(widget, not self._expanded)
-
-    def show_back(self, show: bool) -> None:
-        """Show or hide the back button above the logo."""
-        self.back_button.setVisible(show)
 
     # ------------------------------------------------------------- sliding
     def is_expanded(self) -> bool:
@@ -237,7 +215,6 @@ class SideBar(QFrame):
         else:
             self.setFixedWidth(target)
             self._slide_finished()
-        self._update_logo_tip()
         self.expanded_changed.emit(expanded)
 
     def _slide_step(self) -> None:
@@ -262,5 +239,3 @@ class SideBar(QFrame):
             centre = Qt.AlignmentFlag.AlignHCenter if compact else Qt.AlignmentFlag(0)
             self._layout_of[widget].setAlignment(widget, centre)
 
-    def _update_logo_tip(self) -> None:
-        self.logo.setToolTip("Collapse the side bar" if self._expanded else "Expand the side bar")
