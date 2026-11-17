@@ -3,9 +3,9 @@
 A report is made from an explanation in ``<project>/explanation/``: first a picture of each
 layer of the analysis result it explains (``<project>/analysis/<result>.tif``, coloured as on
 the Analysis page), then the explanation as saved (Markdown), its "AI explanation" heading
-worded "Summary" as the report's heading. The PDF itself is drawn
-by the UI (``frontend/report_pdf.py``) and kept here in ``<project>/reports/``, named after
-the explanation, from where it can be exported anywhere.
+worded "Summary" as the report's heading. ``create_report`` writes it as a PDF with
+markdown-pdf (``pdf_writer``) and keeps it in ``<project>/reports/``, named after the
+explanation, from where it can be exported anywhere.
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ from backend.business.explanation.explanation_service import EXPLANATION_SUFFIX
 from backend.business.explanation.previews import describe_legend, rgba_to_png
 from backend.business.map.i_map_service import IMapService
 from backend.business.report.i_report_service import IReportService
+from backend.business.report.pdf_writer import write_report_pdf
 from backend.dto.project_dto import ProjectDTO
 from backend.dto.report_dto import ExplanationFileDTO, ReportDTO, ReportImageDTO
 from backend.dto.result_dto import ResultDTO
@@ -38,10 +39,13 @@ _NUMBERED = re.compile(rf"{re.escape(EXPLANATION_SUFFIX.removesuffix('.md'))}(_\
 
 class ReportService(IReportService):
     def __init__(self, map_service: IMapService, image_size: int = IMAGE_SIZE,
-                 now: Callable[[], datetime] = datetime.now):
+                 now: Callable[[], datetime] = datetime.now,
+                 write_pdf: Callable[[ReportDTO], bytes] = write_report_pdf):
+        """``write_pdf`` turns a report into PDF bytes (markdown-pdf); tests may pass another."""
         self._map_service = map_service
         self._image_size = image_size
         self._now = now
+        self._write_pdf = write_pdf
 
     # ------------------------------------------------------------- IReportService
     def list_explanations(self, project: ProjectDTO) -> list[ExplanationFileDTO]:
@@ -75,6 +79,10 @@ class ReportService(IReportService):
             result_path=str(result) if result.is_file() else "", images=images, note=note,
             created_at=self._now().isoformat(timespec="seconds"),
         )
+
+    def create_report(self, explanation_path: str, project: ProjectDTO) -> str:
+        report = self.build_report(explanation_path, project)
+        return self.save_report(report, self._write_pdf(report), project)
 
     def report_path(self, explanation_path: str, project: ProjectDTO) -> str:
         return str(Path(project.reports_dir) / (Path(explanation_path).stem + ".pdf"))

@@ -178,3 +178,31 @@ def test_only_the_explanation_heading_is_reworded():
     assert report_heading("# Older explanation\n\nText.") == "# Older explanation\n\nText."
     assert report_heading("Intro\n# AI explanation: LST\n# AI explanation: again") == \
         "Intro\n# Summary: LST\n# AI explanation: again"  # the first one only
+
+
+def test_create_report_writes_the_pdf_into_the_reports_folder(project, tmp_path):
+    written = []
+    service = ReportService(MapService(), image_size=64,
+                            write_pdf=lambda report: written.append(report) or b"%PDF-1.7 drawn")
+    path = service.create_report(explanation_path(project), project)
+    assert path == str(tmp_path / "Project 1" / "reports" / f"{RESULT}_explanation.pdf")
+    assert Path(path).read_bytes() == b"%PDF-1.7 drawn"
+    assert written[0].title == "Summary: Vegetation (NDVI)" and len(written[0].images) == 1
+
+
+def test_create_report_with_markdown_pdf_gives_a_real_pdf(project):
+    pymupdf = pytest.importorskip("pymupdf")
+    pytest.importorskip("markdown_pdf")
+    path = ReportService(MapService(), image_size=64).create_report(explanation_path(project), project)
+    document = pymupdf.open(path)
+    assert document.page_count >= 1 and document.metadata["title"] == "Summary: Vegetation (NDVI)"
+    assert len(document[0].get_image_info()) == 2  # the NDVI picture and its colour bar
+
+
+def test_a_pdf_that_cannot_be_written_is_reported(project):
+    from backend.exceptions import ReportError as Error
+
+    def fail(report):
+        raise Error("The PDF could not be written: broken")
+    with pytest.raises(Error, match="could not be written"):
+        ReportService(MapService(), write_pdf=fail).create_report(explanation_path(project), project)

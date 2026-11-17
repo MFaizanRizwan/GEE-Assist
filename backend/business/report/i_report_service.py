@@ -22,6 +22,15 @@ class IReportService(ABC):
         """
 
     @abstractmethod
+    def create_report(self, explanation_path: str, project: ProjectDTO) -> str:
+        """Write the explanation's report as a PDF in the project's reports folder (replacing an
+        earlier one of the same explanation); returns its path.
+
+        Raises:
+            ReportError: the explanation cannot be read, or the PDF cannot be written.
+        """
+
+    @abstractmethod
     def report_path(self, explanation_path: str, project: ProjectDTO) -> str:
         """Where the explanation's PDF is kept: ``<project>/reports/<explanation>.pdf``."""
 
