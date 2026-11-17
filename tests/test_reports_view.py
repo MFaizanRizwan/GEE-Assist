@@ -7,17 +7,15 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from dataclasses import replace  # noqa: E402
 from unittest.mock import MagicMock  # noqa: E402
 
-import numpy as np  # noqa: E402
 import pytest  # noqa: E402
 
 PyQt6 = pytest.importorskip("PyQt6")
 from PyQt6.QtTest import QTest  # noqa: E402
 from PyQt6.QtWidgets import QApplication  # noqa: E402
 
-from backend.business.explanation.previews import rgba_to_png  # noqa: E402
 from backend.business.facade import IBusinessFacade  # noqa: E402
 from backend.dto.project_dto import ProjectDTO  # noqa: E402
-from backend.dto.report_dto import ExplanationFileDTO, ReportDTO, ReportImageDTO  # noqa: E402
+from backend.dto.report_dto import ExplanationFileDTO  # noqa: E402
 from backend.exceptions import ReportError  # noqa: E402
 from frontend.views.reports_view import NO_EXPLANATIONS, NO_PROJECT, ReportsView, item_text  # noqa: E402
 
@@ -45,19 +43,15 @@ def page(tmp_path):
     facade = MagicMock(spec=IBusinessFacade)
     facade.get_current_project.return_value = project
     facade.list_explanations.side_effect = lambda: list(files["list"])
-    rgba = np.full((20, 30, 4), 200, np.uint8)
-    facade.build_report.side_effect = lambda path: ReportDTO(
-        "AI explanation", path, "# AI explanation\n\nGreen.", images=(ReportImageDTO("NDVI", rgba_to_png(rgba), 30, 20),))
-
-    def save(report, pdf):
-        target = tmp_path / "Project 1" / "reports" / (os.path.basename(report.explanation_path)[:-3] + ".pdf")
+    def create(explanation_path):  # as the backend does: the PDF in the project's reports folder
+        target = tmp_path / "Project 1" / "reports" / (os.path.basename(explanation_path)[:-3] + ".pdf")
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(pdf)
-        files["list"] = [replace(item, report_path=str(target)) if item.path == report.explanation_path else item
+        target.write_bytes(b"%PDF-1.7 report")
+        files["list"] = [replace(item, report_path=str(target)) if item.path == explanation_path else item
                          for item in files["list"]]
         return str(target)
 
-    facade.save_report.side_effect = save
+    facade.create_report.side_effect = create
     facade.export_report.side_effect = lambda pdf, destination: destination
     view = ReportsView(facade)
     view.refresh()
@@ -79,7 +73,7 @@ def test_creating_a_report_keeps_a_real_pdf_in_the_project(page):
     view.create_button.click()
     _wait(lambda: not view.busy)
 
-    facade.build_report.assert_called_once_with(view.explanations[1].path)
+    facade.create_report.assert_called_once_with(view.explanations[1].path)
     saved = tmp_path / "Project 1" / "reports" / "a_explanation.pdf"
     assert saved.read_bytes().startswith(b"%PDF-")
     assert view.current().path.endswith("a_explanation.md")  # still the one chosen
@@ -129,7 +123,7 @@ def test_a_report_can_be_created_for_a_given_explanation(page):
 
 def test_a_build_error_is_shown(page):
     view, facade, _ = page
-    facade.build_report.side_effect = ReportError("The explanation b_explanation.md cannot be read")
+    facade.create_report.side_effect = ReportError("The explanation b_explanation.md cannot be read")
     view.create_report()
     _wait(lambda: not view.busy)
     assert "cannot be read" in view.banner.text() and view.create_button.isEnabled()

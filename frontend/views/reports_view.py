@@ -26,11 +26,10 @@ from PyQt6.QtWidgets import (
 )
 
 from backend.business.facade import IBusinessFacade
-from backend.dto.report_dto import ExplanationFileDTO, ReportDTO
+from backend.dto.report_dto import ExplanationFileDTO
 from backend.exceptions import GeeAssistError
 from frontend import theme
 from frontend.project_paths import current_project
-from frontend.report_pdf import render_report_pdf
 from frontend.widgets.form_parts import StatusBanner
 from frontend.workers.task_worker import run_task
 
@@ -168,22 +167,14 @@ class ReportsView(QWidget):
             self.refresh(select=explanation_path)
         self._set_busy(True)
         self.banner.show_info(f"Creating the PDF report of {Path(path).name}…")
-        run_task(self, self._facade.build_report, path, on_success=self._on_built, on_error=self._on_failed)
+        # The backend draws the pictures and writes the PDF (markdown-pdf), off the UI thread.
+        run_task(self, self._facade.create_report, path,
+                 on_success=lambda pdf_path: self._on_saved(path, pdf_path), on_error=self._on_failed)
 
-    def _on_built(self, report: ReportDTO) -> None:
-        try:
-            pdf = render_report_pdf(report)  # Qt draws on this (the UI) thread
-        except Exception as exc:  # noqa: BLE001 - shown to the user, never lost
-            self._on_failed(exc)
-            return
-        run_task(self, self._facade.save_report, report, pdf,
-                 on_success=lambda path, note=report.note: self._on_saved(report.explanation_path, path, note),
-                 on_error=self._on_failed)
-
-    def _on_saved(self, explanation_path: str, pdf_path: str, note: str) -> None:
+    def _on_saved(self, explanation_path: str, pdf_path: str) -> None:
         self._set_busy(False)
         self.refresh(select=explanation_path)
-        self.banner.show_success(f"Report saved to {pdf_path}" + (f". {note}" if note else ""))
+        self.banner.show_success(f"Report saved to {pdf_path}")
 
     def _on_failed(self, exc: Exception) -> None:
         self._set_busy(False)
