@@ -15,7 +15,13 @@ from PyQt6.QtWidgets import QApplication  # noqa: E402
 from backend.business.explanation.previews import rgba_to_png  # noqa: E402
 from backend.dto.map_dto import LegendDTO  # noqa: E402
 from backend.dto.report_dto import ReportDTO, ReportImageDTO  # noqa: E402
-from frontend.report_pdf import blend, colour_key_html, render_report_pdf, report_document  # noqa: E402
+from frontend.report_pdf import (  # noqa: E402
+    blend,
+    colour_key_html,
+    name_blank_table_headers,
+    render_report_pdf,
+    report_document,
+)
 
 app = QApplication.instance() or QApplication([])
 
@@ -107,3 +113,40 @@ def test_blending_keeps_the_end_colours_and_passes_the_middle():
     colours = blend(("#000000", "#ffffff"), 3)
     assert colours == ["#000000", "#808080", "#ffffff"]
     assert blend(("#123456",), 4) == ["#123456"] * 4
+
+
+# ------------------------------------------------------------------ tables
+def tables(document):
+    from PyQt6.QtGui import QTextTable
+
+    return [frame for frame in document.rootFrame().childFrames() if isinstance(frame, QTextTable)]
+
+
+def cell_text(table, row, column):
+    cell = table.cellAt(row, column)
+    cursor = cell.firstCursorPosition()
+    cursor.setPosition(cell.lastCursorPosition().position(), cursor.MoveMode.KeepAnchor)
+    return cursor.selectedText()
+
+
+def test_a_table_saved_without_column_names_gets_them_instead_of_a_blank_row():
+    document = report_document(report())  # kept alive while its table is read
+    table = next(table for table in tables(document) if cell_text(table, table.rows() - 1, 0) == "NDVI mean")
+    assert table.rows() == 2  # header and one row, no blank row
+    assert [cell_text(table, 0, 0), cell_text(table, 0, 1)] == ["Property", "Value"]
+    assert [cell_text(table, 1, 0), cell_text(table, 1, 1)] == ["NDVI mean", "0.42"]
+
+
+def test_tables_with_column_names_are_left_alone():
+    markdown = "| Result | Value |\n|---|---|\n| NDVI mean | 0.42 |\n"
+    assert name_blank_table_headers(markdown) == markdown
+
+
+def test_blank_headers_of_other_widths_are_numbered():
+    assert name_blank_table_headers("| | | |\n|:--|:-:|--:|\n| a | b | c |") == \
+        "| Column 1 | Column 2 | Column 3 |\n|:--|:-:|--:|\n| a | b | c |"
+
+
+def test_a_blank_row_inside_a_table_is_not_a_header():
+    markdown = "| Result | Value |\n|---|---|\n| | |\n| x | 1 |"
+    assert name_blank_table_headers(markdown) == markdown

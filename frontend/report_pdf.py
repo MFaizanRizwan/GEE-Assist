@@ -33,6 +33,7 @@ IMAGE_URL = "report-image://{}"
 BAR_CELLS = 24                                  # colours blended across a colour bar
 BAR_CELL_WIDTH = 12
 SECTION_GAP = 14                                # space between pictures, and before the explanation
+BLANK_HEADER_NAMES = ("Property", "Value")      # for two-column tables saved without column names
 
 
 def report_document(report: ReportDTO) -> QTextDocument:
@@ -82,15 +83,44 @@ def report_document(report: ReportDTO) -> QTextDocument:
     if above:
         cursor.insertBlock(QTextBlockFormat(), QTextCharFormat())
     start = cursor.position()
-    cursor.insertMarkdown(report.markdown)
+    markdown = name_blank_table_headers(report.markdown)
+    cursor.insertMarkdown(markdown)
     # The explanation's first block is merged into the empty block it was inserted in and takes
     # that block's format: give it back its own (e.g. its heading level), with a gap above it.
     source = QTextDocument()
-    source.setMarkdown(report.markdown)
+    source.setMarkdown(markdown)
     first = QTextBlockFormat(source.begin().blockFormat())
     first.setTopMargin(max(first.topMargin(), SECTION_GAP if above else 0))
     QTextCursor(document.findBlock(start)).setBlockFormat(first)
     return document
+
+
+def name_blank_table_headers(markdown: str) -> str:
+    """Give column names to tables whose header row is empty (``| | |``), as explanations saved
+    before their tables had headers were written: otherwise they show a blank first row."""
+    lines = markdown.split("\n")
+    for index, line in enumerate(lines[:-1]):
+        cells = _table_cells(line)
+        if cells is None or any(cells) or not _is_separator(lines[index + 1]):
+            continue
+        names = list(BLANK_HEADER_NAMES) if len(cells) == len(BLANK_HEADER_NAMES) else \
+            [f"Column {number}" for number in range(1, len(cells) + 1)]
+        lines[index] = "| " + " | ".join(names) + " |"
+    return "\n".join(lines)
+
+
+def _table_cells(line: str) -> list[str] | None:
+    """The cells of a Markdown table row, stripped; None if ``line`` is not one."""
+    text = line.strip()
+    if len(text) < 2 or not (text.startswith("|") and text.endswith("|")):
+        return None
+    return [cell.strip() for cell in text[1:-1].split("|")]
+
+
+def _is_separator(line: str) -> bool:
+    """A table's header separator, e.g. ``|---|:---:|``."""
+    cells = _table_cells(line)
+    return bool(cells) and all(cell and set(cell) <= set("-:") and "-" in cell for cell in cells)
 
 
 def render_report_pdf(report: ReportDTO) -> bytes:
