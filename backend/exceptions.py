@@ -56,3 +56,7 @@ class ProjectError(GeeAssistError):
     def __init__(self, message: str, field: str | None = None):
         super().__init__(message)
         self.field = field
+
+
+class ExplanationError(GeeAssistError):
+    """An analysis result cannot be explained: it is not saved in the project, or its files are missing."""
