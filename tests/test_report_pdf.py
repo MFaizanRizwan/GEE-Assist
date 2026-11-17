@@ -150,3 +150,16 @@ def test_blank_headers_of_other_widths_are_numbered():
 def test_a_blank_row_inside_a_table_is_not_a_header():
     markdown = "| Result | Value |\n|---|---|\n| | |\n| x | 1 |"
     assert name_blank_table_headers(markdown) == markdown
+
+
+def test_explanation_tables_have_a_shaded_repeated_header_and_colour_keys_are_untouched():
+    from frontend.report_pdf import HEADER_BACKGROUND
+
+    document = report_document(report())
+    found = tables(document)
+    explanation = next(table for table in found if cell_text(table, table.rows() - 1, 0) == "NDVI mean")
+    assert explanation.format().headerRowCount() == 1  # repeated at the top of a new page
+    assert explanation.cellAt(0, 0).format().background().color().name().upper() == HEADER_BACKGROUND.upper()
+    assert explanation.cellAt(1, 0).format().background().style().name == "NoBrush"
+    keys = [table for table in found if table is not explanation]
+    assert keys and all(table.format().headerRowCount() == 0 for table in keys)

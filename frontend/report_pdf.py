@@ -18,7 +18,10 @@ from PyQt6.QtGui import (
     QTextCharFormat,
     QTextCursor,
     QTextDocument,
+    QTextFrameFormat,
     QTextImageFormat,
+    QTextLength,
+    QTextTable,
 )
 
 from backend.dto.map_dto import LegendDTO
@@ -34,6 +37,8 @@ BAR_CELLS = 24                                  # colours blended across a colou
 BAR_CELL_WIDTH = 12
 SECTION_GAP = 14                                # space between pictures, and before the explanation
 BLANK_HEADER_NAMES = ("Property", "Value")      # for two-column tables saved without column names
+HEADER_BACKGROUND = "#E6EFEC"                   # the explanation tables' header row
+TABLE_BORDER = "#B9C4C1"
 
 
 def report_document(report: ReportDTO) -> QTextDocument:
@@ -92,7 +97,31 @@ def report_document(report: ReportDTO) -> QTextDocument:
     first = QTextBlockFormat(source.begin().blockFormat())
     first.setTopMargin(max(first.topMargin(), SECTION_GAP if above else 0))
     QTextCursor(document.findBlock(start)).setBlockFormat(first)
+    style_explanation_tables(document, start)
     return document
+
+
+def style_explanation_tables(document: QTextDocument, start: int = 0) -> None:
+    """The explanation's tables (those from ``start`` on, not the colour keys above it) across the
+    page, with a shaded header row that is repeated when a table runs onto the next page."""
+    for frame in document.rootFrame().childFrames():
+        if not isinstance(frame, QTextTable) or frame.firstPosition() < start:
+            continue
+        table_format = frame.format()
+        table_format.setHeaderRowCount(1)
+        table_format.setWidth(QTextLength(QTextLength.Type.PercentageLength, 100))
+        table_format.setCellPadding(4)
+        table_format.setCellSpacing(0)
+        table_format.setBorder(1)
+        table_format.setBorderStyle(QTextFrameFormat.BorderStyle.BorderStyle_Solid)
+        table_format.setBorderCollapse(True)
+        table_format.setBorderBrush(QColor(TABLE_BORDER))
+        frame.setFormat(table_format)
+        for column in range(frame.columns()):
+            cell = frame.cellAt(0, column)
+            cell_format = cell.format().toTableCellFormat()
+            cell_format.setBackground(QColor(HEADER_BACKGROUND))
+            cell.setFormat(cell_format)
 
 
 def name_blank_table_headers(markdown: str) -> str:
