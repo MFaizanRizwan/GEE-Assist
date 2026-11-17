@@ -21,12 +21,13 @@ def _project(tmp_path, name="MyProject", id="p1", owner="u1", opened="2026-11-14
                       created_at="2026-11-14T09:00:00", last_opened_at=opened)
 
 
-def test_save_makes_the_folder_with_downloads_analysis_and_explanation(dao, tmp_path):
+def test_save_makes_the_folder_with_its_subfolders(dao, tmp_path):
     project = _project(tmp_path)
     assert dao.save(project)
     folder = tmp_path / "work" / "MyProject"
     assert (folder / "downloads").is_dir() and (folder / "analysis").is_dir()
     assert (folder / "explanation").is_dir() and project.explanation_dir == str(folder / "explanation")
+    assert (folder / "reports").is_dir() and project.reports_dir == str(folder / "reports")
     assert json.loads((folder / "project.json").read_text())["name"] == "MyProject"
     history = json.loads((tmp_path / "workspace" / "projects.json").read_text())
     assert history["projects"][0]["folder"] == str(folder)
