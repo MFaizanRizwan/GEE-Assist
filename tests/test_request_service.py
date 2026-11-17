@@ -30,6 +30,9 @@ class FakeDataFacade(IDataFacade):
             raise self.error
         return self.answer
 
+    def generate_explanation(self, request):  # not used here
+        raise NotImplementedError
+
     def search_places(self, query):
         self.place_queries.append(query)
         return self.places

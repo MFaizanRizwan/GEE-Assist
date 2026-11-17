@@ -16,6 +16,7 @@ from backend.data.i_data_facade import IDataFacade
 from backend.dto import CheckDTO, ChunkDTO, FormDTO, PlaceDTO
 from backend.dto.analysis_dto import FormulaDTO
 from backend.dto.check_dto import CHECK_FAIL
+from backend.dto.explanation_dto import ExplanationDTO, ExplanationRequestDTO
 from backend.dto.project_dto import AnalysisRecordDTO, ProjectDTO
 from backend.dto.user_dto import NewUserDTO, UserDTO, UserPageDTO
 from backend.exceptions import GEEError, PlaceSearchError
@@ -49,6 +50,9 @@ class DataFacade(IDataFacade):
 
     def process_query(self, prompt: str) -> FormDTO:
         return self._gemini_client.process_query(prompt)
+
+    def generate_explanation(self, request: ExplanationRequestDTO) -> ExplanationDTO:
+        return self._gemini_client.generate_explanation(request)
 
     def search_places(self, query: str) -> list[PlaceDTO]:
         if self._geocoding_client is None:

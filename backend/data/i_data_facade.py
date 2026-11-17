@@ -6,6 +6,7 @@ from typing import Optional
 from backend.data.clients.i_gee_client import ProgressCallback, StopCheck
 from backend.dto import CheckDTO, ChunkDTO, FormDTO, PlaceDTO
 from backend.dto.analysis_dto import FormulaDTO
+from backend.dto.explanation_dto import ExplanationDTO, ExplanationRequestDTO
 from backend.dto.project_dto import AnalysisRecordDTO, ProjectDTO
 from backend.dto.user_dto import NewUserDTO, UserDTO, UserPageDTO
 
@@ -21,6 +22,10 @@ class IDataFacade(ABC):
     @abstractmethod
     def process_query(self, prompt: str) -> FormDTO:
         """Interpret a natural-language request (delegates to IGeminiClient)."""
+
+    @abstractmethod
+    def generate_explanation(self, request: ExplanationRequestDTO) -> ExplanationDTO:
+        """UC-08: Gemini's explanation of an analysis result (delegates to IGeminiClient)."""
 
     @abstractmethod
     def search_places(self, query: str) -> list[PlaceDTO]:
