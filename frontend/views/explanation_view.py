@@ -6,7 +6,7 @@ the left: which analysis ran and with which settings, the dataset **before** the
 (and any earlier dataset it was compared with) and the result **after** it, with its numbers.
 Meanwhile the saved GeoTIFF, a preview of each layer and the prompt go to Gemini; its
 explanation appears on the right and is kept in the project's ``explanation`` folder as
-``<result>_explanation.md``.
+``<result>_explanation.md``; "PDF report" turns it into a PDF on the Reports page.
 """
 
 from __future__ import annotations
@@ -56,6 +56,7 @@ class ExplanationView(QWidget):
     back_requested = pyqtSignal()
     result_saved = pyqtSignal(object)        # ResultDTO: the result as saved in the project
     explanation_ready = pyqtSignal(object)   # ExplanationDTO
+    report_requested = pyqtSignal(str)       # the saved explanation (.md) to make a PDF report of
 
     def __init__(self, facade: IBusinessFacade, parent: QWidget | None = None):
         super().__init__(parent)
@@ -99,6 +100,9 @@ class ExplanationView(QWidget):
         self.again_button = QPushButton("Explain again", objectName="SecondaryButton")
         self.copy_button = QPushButton("Copy", objectName="SecondaryButton")
         self.folder_button = QPushButton("Open folder", objectName="SecondaryButton")
+        self.report_button = QPushButton("PDF report", objectName="PrimaryButton")
+        self.report_button.setToolTip("Make a PDF of this explanation, with the analysis picture on top, "
+                                      "and export it if you like")
         answer_card = QFrame(objectName="ExplanationCard")
         right = QVBoxLayout(answer_card)
         right.setContentsMargins(16, 14, 16, 14)
@@ -106,7 +110,7 @@ class ExplanationView(QWidget):
         right.addWidget(self.answer_view, 1)
         buttons = QHBoxLayout()
         buttons.addWidget(self.sent_label, 1)
-        for button in (self.again_button, self.copy_button, self.folder_button):
+        for button in (self.again_button, self.copy_button, self.folder_button, self.report_button):
             buttons.addWidget(button)
         right.addLayout(buttons)
 
@@ -128,12 +132,14 @@ class ExplanationView(QWidget):
         layout.addWidget(self.progress)
         layout.addLayout(body, 1)
 
-        for button in (self.back_button, self.again_button, self.copy_button, self.folder_button):
+        for button in (self.back_button, self.again_button, self.copy_button, self.folder_button,
+                       self.report_button):
             button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.back_button.clicked.connect(self.back_requested)
         self.again_button.clicked.connect(self.explain_again)
         self.copy_button.clicked.connect(self.copy_explanation)
         self.folder_button.clicked.connect(self.open_folder)
+        self.report_button.clicked.connect(self.request_report)
         self._update_buttons()
 
     # ------------------------------------------------------------- explaining
@@ -207,6 +213,11 @@ class ExplanationView(QWidget):
             QApplication.clipboard().setText(self.explanation.text)
             self.banner.show_success("Explanation copied.")
 
+    def request_report(self) -> None:
+        """Ask for the PDF report of the explanation shown (once it is saved in the project)."""
+        if self.explanation is not None and self.explanation.saved_path:
+            self.report_requested.emit(self.explanation.saved_path)
+
     def open_folder(self) -> None:
         """The project's explanation folder once the explanation is saved, else the result's folder."""
         if self.explanation is not None and self.explanation.saved_path:
@@ -224,6 +235,8 @@ class ExplanationView(QWidget):
         self.again_button.setText("Explain again" if self.explanation is not None else "Try again")
         self.copy_button.setEnabled(not self.busy and self.explanation is not None)
         self.folder_button.setEnabled(self.result is not None and self.result.saved)
+        self.report_button.setEnabled(not self.busy and self.explanation is not None
+                                      and bool(self.explanation.saved_path))
 
 
 # ----------------------------------------------------------------------------- text

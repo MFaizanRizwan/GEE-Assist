@@ -126,3 +126,22 @@ def test_the_sent_line_says_when_gemini_refused_the_geotiff():
     assert text.startswith("Saved in the project: result.tif. Gemini refused the GeoTIFF, so it was sent 1 layer")
     text = sent_text(replace(ANSWER, tif_attached=False, previews_attached=False))
     assert "so it was sent the metadata only" in text
+
+
+def test_a_saved_explanation_can_be_turned_into_a_pdf_report(page):
+    view, _ = page
+    assert not view.report_button.isEnabled()  # nothing explained yet
+    view.explain(UNSAVED)
+    _wait(lambda: view.explanation is not None)
+    asked = []
+    view.report_requested.connect(asked.append)
+    view.report_button.click()
+    assert asked == [ANSWER.saved_path]
+
+
+def test_an_explanation_that_could_not_be_saved_has_no_report(page):
+    view, facade = page
+    facade.explain_analysis_result.return_value = replace(ANSWER, saved_path="")
+    view.explain(UNSAVED)
+    _wait(lambda: view.explanation is not None)
+    assert not view.report_button.isEnabled()
