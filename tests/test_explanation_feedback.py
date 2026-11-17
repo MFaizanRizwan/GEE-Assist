@@ -141,3 +141,53 @@ def test_help_menu_asks_for_feedback(window):
     home, _, asked = window
     home.menu_bar.give_feedback.trigger()
     assert asked == [""]
+
+
+# ------------------------------------------------------------------ after an analysis
+def test_coming_back_to_the_dashboard_after_an_analysis_asks_for_feedback(window):
+    home, _, asked = window
+    home.show_analysis()
+    home.analysis.analysis_finished.emit(RESULT)
+    home.show_dashboard()
+    _wait(lambda: asked)
+    assert asked == [_texts().AFTER_ANALYSIS] and home.current_page() is home.dashboard
+
+
+def test_the_analysis_is_asked_about_once(window):
+    home, _, asked = window
+    home.show_analysis()
+    home.analysis.analysis_finished.emit(RESULT)
+    home.show_dashboard()
+    _wait(lambda: asked)
+    home.show_downloads()
+    home.show_dashboard()  # no new analysis since
+    QTest.qWait(30)
+    assert asked == [_texts().AFTER_ANALYSIS]
+
+
+def test_any_page_leading_back_to_the_dashboard_counts(window):
+    home, _, asked = window
+    home.analysis.analysis_finished.emit(RESULT)
+    home.show_downloads()  # e.g. went to check a download first
+    home.show_dashboard()
+    _wait(lambda: asked)
+    assert asked == [_texts().AFTER_ANALYSIS]
+
+
+def test_analysis_then_explanation_then_dashboard_asks_once_on_the_way_back(window):
+    home, _, asked = window
+    home.analysis.analysis_finished.emit(RESULT)
+    home.show_explanation(RESULT)
+    _wait(lambda: asked)  # after the explanation
+    home.show_dashboard()
+    _wait(lambda: len(asked) == 2)
+    QTest.qWait(30)
+    assert asked == [_texts().AFTER_EXPLANATION, _texts().BACK_FROM_EXPLANATION]
+
+
+def test_no_analysis_no_question(window):
+    home, _, asked = window
+    home.show_analysis()  # opened, but nothing ran
+    home.show_dashboard()
+    QTest.qWait(30)
+    assert asked == []

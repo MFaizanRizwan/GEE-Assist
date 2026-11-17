@@ -11,8 +11,8 @@ Below the pages is the terminal, gkonsol, as in VS Code: hidden until opened fro
 side bar's Terminal button, the Terminal menu or View → Terminal (Ctrl+`), and as tall
 as the user drags it. The Terminal menu also runs common commands in it.
 
-After every AI explanation, and whenever the user goes from the AI explanation page to the
-dashboard, a modal asks them to rate the app, send feedback or suggest a feature; the choice
+After every AI explanation, whenever the user goes from the AI explanation page to the
+dashboard, and whenever they come back to the dashboard after running an analysis, a modal asks them to rate the app, send feedback or suggest a feature; the choice
 opens that tab of the website's community page in the browser.
 """
 
@@ -75,6 +75,7 @@ PAGE_BACKGROUND = (
 # Why the feedback modal is shown (its first line).
 AFTER_EXPLANATION = "Your AI explanation is ready. Was it useful?"
 BACK_FROM_EXPLANATION = "Thanks for trying the AI explanation."
+AFTER_ANALYSIS = "Your analysis is done. How did it go?"
 FEEDBACK_DELAY_MS = 800  # the explanation is drawn (and seen) before the modal opens
 
 
@@ -320,6 +321,8 @@ class HomeWindow(QMainWindow):
             lambda _explanation: QTimer.singleShot(FEEDBACK_DELAY_MS, lambda: self.ask_for_feedback(AFTER_EXPLANATION)))
         self.feedback_prompt = ask_for_feedback  # (parent, reason) -> tab opened or None; tests replace it
         self._asking_feedback = False
+        self._analysis_since_dashboard = False  # an analysis ran since the dashboard was last shown
+        self.analysis.analysis_finished.connect(self._on_analysis_finished)
         self._connect_menu_bar()
         self._admin_dialog: UserAdminDialog | None = None
         self._was_maximized = False  # before going full screen
@@ -399,11 +402,24 @@ class HomeWindow(QMainWindow):
 
     # ------------------------------------------------------------- navigation
     def show_dashboard(self) -> None:
-        from_explanation = self.current_page() is self.explanation
+        reason = self._feedback_reason_for_dashboard()
         self.refresh_projects()  # e.g. results of analyses run since
         self._show_page(self.dashboard)
-        if from_explanation:  # once the dashboard is drawn
-            QTimer.singleShot(0, lambda: self.ask_for_feedback(BACK_FROM_EXPLANATION))
+        if reason:  # once the dashboard is drawn
+            QTimer.singleShot(0, lambda: self.ask_for_feedback(reason))
+
+    def _feedback_reason_for_dashboard(self) -> str:
+        """Why to ask for feedback on reaching the dashboard ("" = don't): coming from the AI
+        explanation page, or an analysis ran since the last visit. One modal per visit."""
+        if self.current_page() is self.dashboard:
+            return ""
+        analysed, self._analysis_since_dashboard = self._analysis_since_dashboard, False
+        if self.current_page() is self.explanation:
+            return BACK_FROM_EXPLANATION
+        return AFTER_ANALYSIS if analysed else ""
+
+    def _on_analysis_finished(self, _result) -> None:
+        self._analysis_since_dashboard = True
 
     def show_query_input(self) -> None:
         self._show_page(self.query_input)
