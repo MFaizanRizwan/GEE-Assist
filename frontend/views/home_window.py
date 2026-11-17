@@ -3,7 +3,7 @@
 A menu bar along the top (File, Edit, View, Terminal, Options, Help) over a side bar on the
 left (logo, navigation and the signed-in user) next to the pages: the dashboard (start
 page), the query-input workspace, downloads, analysis, the AI explanation of an analysis
-result, the account card, the GeoTIFF viewer (opened from a finished download) and the
+result, the PDF reports made from explanations, the account card, the GeoTIFF viewer (opened from a finished download) and the
 analysis table (View → Show analysis table only). Clicking the logo slides the side bar open or closed; clicking the user
 opens the account menu (account options and "Sign out").
 
@@ -50,6 +50,7 @@ from frontend.views.analysis_table_view import AnalysisTableView
 from frontend.views.analysis_view import AnalysisView
 from frontend.views.explanation_view import ExplanationView
 from frontend.views.feedback_dialog import ask_for_feedback
+from frontend.views.reports_view import ReportsView
 from frontend.restart import restart_app
 from frontend.workers.task_worker import run_task
 from frontend.views.auth.hero_panel import round_logo
@@ -229,6 +230,7 @@ class HomeWindow(QMainWindow):
         self.viewer = RasterViewerView(facade)
         self.analysis = AnalysisView(facade)
         self.explanation = ExplanationView(facade)
+        self.reports = ReportsView(facade)
         self.analysis_table = AnalysisTableView(facade)
 
         self.account = AccountView(facade)
@@ -259,6 +261,7 @@ class HomeWindow(QMainWindow):
         self.pages.addWidget(self.viewer)
         self.pages.addWidget(self.analysis)
         self.pages.addWidget(self.explanation)
+        self.pages.addWidget(self.reports)
         self.pages.addWidget(self.analysis_table)
         self._account_page = account_page
 
@@ -317,6 +320,8 @@ class HomeWindow(QMainWindow):
         self.analysis.explain_requested.connect(self.show_explanation)
         self.explanation.back_requested.connect(self.show_analysis)
         self.explanation.result_saved.connect(self.analysis.set_saved_result)
+        self.explanation.report_requested.connect(self.show_reports)
+        self.dashboard.open_reports.connect(self.show_reports)
         self.explanation.explanation_ready.connect(
             lambda _explanation: QTimer.singleShot(FEEDBACK_DELAY_MS, lambda: self.ask_for_feedback(AFTER_EXPLANATION)))
         self.feedback_prompt = ask_for_feedback  # (parent, reason) -> tab opened or None; tests replace it
@@ -431,6 +436,12 @@ class HomeWindow(QMainWindow):
         if self.analysis.isVisibleTo(self.pages) or self.analysis._loaded:
             self.analysis.refresh_datasets()  # a download may have finished since (the first visit loads anyway)
         self._show_page(self.analysis)
+
+    def show_reports(self, explanation_path: str = "") -> None:
+        """The Reports page; given a saved explanation, its PDF report is created there at once."""
+        self._show_page(self.reports)
+        if explanation_path:
+            self.reports.create_report(explanation_path)
 
     def show_explanation(self, result) -> None:
         """The AI explanation page for an analysis result (saved in the project, then sent to Gemini)."""
@@ -593,6 +604,7 @@ class HomeWindow(QMainWindow):
         bar.view_downloads.triggered.connect(self.show_downloads)
         bar.view_account.triggered.connect(self.show_account)
         bar.view_analysis.triggered.connect(self.show_analysis)
+        bar.view_reports.triggered.connect(lambda: self.show_reports())
         bar.view_analysis_table.triggered.connect(self.show_analysis_table)
         bar.toggle_side_bar.setChecked(self.side_bar.is_expanded())
         bar.toggle_side_bar.triggered.connect(self.side_bar.set_expanded)
