@@ -12,6 +12,7 @@ PyQt6 = pytest.importorskip("PyQt6")
 from PyQt6.QtWidgets import QApplication  # noqa: E402
 
 from backend.business.facade import IBusinessFacade  # noqa: E402
+from backend.dto.explanation_dto import ExplanationDTO, ExplanationRequestDTO  # noqa: E402
 from backend.dto.project_dto import ProjectDTO  # noqa: E402
 from backend.dto.result_dto import ResultDTO  # noqa: E402
 from backend.dto.user_dto import UserDTO  # noqa: E402
@@ -37,6 +38,10 @@ def window():
     facade.get_current_project.return_value = PROJECT
     facade.list_projects.return_value = []
     facade.list_saved_results.return_value = [NEWER, OLDER]
+    # The real explanation page is opened in one test: it gets a real request and answer, not mocks.
+    request = ExplanationRequestDTO(OLDER, "Vegetation", "Vegetation")
+    facade.prepare_explanation.return_value = request
+    facade.explain_analysis_result.return_value = ExplanationDTO("## Summary\nGreen.", "gemini-test", True, request)
     facade.check_app_version.return_value = None
     facade.get_profile_photo.return_value = None
     home = home_window.HomeWindow(facade, user)
