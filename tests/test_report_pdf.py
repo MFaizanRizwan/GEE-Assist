@@ -188,3 +188,78 @@ def test_the_colour_bar_lines_up_with_the_picture_in_the_document():
         block = block.next()
     bar = next(frame for frame in document.rootFrame().childFrames() if isinstance(frame, QTextTable))
     assert bar.format().width().rawValue() == round(image_width)
+
+
+# ------------------------------------------------------------------ pages
+def picture_and_bar_positions(document):
+    """(picture x, picture width, bar x, bar width) as laid out in the document."""
+    from PyQt6.QtGui import QTextTable
+
+    layout = document.documentLayout()
+    block = document.begin()
+    while block.isValid():
+        pieces = block.begin()
+        while not pieces.atEnd():
+            fragment = pieces.fragment()
+            if fragment.charFormat().isImageFormat():
+                offset = fragment.position() - block.position()
+                line = block.layout().lineForTextPosition(offset)
+                x = layout.blockBoundingRect(block).x() + line.cursorToX(offset)[0]
+                width = fragment.charFormat().toImageFormat().width()
+                bar = next(frame for frame in document.rootFrame().childFrames() if isinstance(frame, QTextTable))
+                rect = layout.frameBoundingRect(bar)
+                return x, width, rect.x(), rect.width()
+            pieces += 1
+        block = block.next()
+    raise AssertionError("no picture")
+
+
+@pytest.mark.parametrize(("width", "height"), [(50, 40), (333, 200), (376, 250), (1400, 900)])
+def test_on_the_printed_page_the_colour_bar_lines_up_with_its_picture(width, height):
+    from frontend.report_pdf import paged_report_document
+
+    rgba = np.full((height, width, 4), 200, np.uint8)
+    image = ReportImageDTO("NDVI", rgba_to_png(rgba), width, height, "", SCALE)
+    document = paged_report_document(report(images=(image,)))
+    picture_x, picture_width, bar_x, bar_width = picture_and_bar_positions(document)
+    assert (bar_x, bar_width) == (picture_x, picture_width)  # same left edge, same width
+
+
+def test_every_page_has_its_number_and_black_text():
+    from PyQt6.QtGui import QColor, QImage, QPainter
+
+    from frontend.report_pdf import FOOTER_HEIGHT, draw_page, paged_report_document
+
+    long = report(markdown=MARKDOWN + "\n".join(f"Line {n} of a long explanation." for n in range(300)))
+    document = paged_report_document(long)
+    assert document.pageCount() >= 2
+    size = document.pageSize()
+    page = QImage(int(size.width()), int(size.height() + FOOTER_HEIGHT), QImage.Format.Format_ARGB32)
+    page.fill(QColor("white"))
+    painter = QPainter(page)
+    draw_page(painter, document, 1)
+    painter.end()
+    dark = sum(1 for x in range(0, page.width(), 3) for y in range(0, int(size.height()), 3)
+               if QColor(page.pixel(x, y)).lightness() < 100)
+    assert dark > 50  # the text is drawn dark on the white page, whatever the app's theme
+    footer = [QColor(page.pixel(x, y)).lightness() for x in range(page.width()) for y in
+              range(int(size.height()), page.height())]
+    assert min(footer) < 200  # "Page 2 of N" is drawn in the footer
+
+
+def test_the_pdf_has_one_page_per_document_page():
+    from frontend.report_pdf import paged_report_document
+
+    long = report(markdown=MARKDOWN + "\n".join(f"Line {n} of a long explanation." for n in range(300)))
+    pages = paged_report_document(long).pageCount()
+    pdf = render_report_pdf(long)
+    assert pdf.count(b"/Type /Page") - pdf.count(b"/Type /Pages") == pages
+
+
+def test_widths_are_split_into_whole_pixels_that_add_up():
+    from frontend.report_pdf import split_evenly
+
+    assert sum(split_evenly(10, 4)) == 10 and sorted(split_evenly(10, 4)) == [2, 2, 3, 3]
+    for total in (310, 333, 376, 620):
+        parts = split_evenly(total, 24)
+        assert len(parts) == 24 and sum(parts) == total and max(parts) - min(parts) <= 1

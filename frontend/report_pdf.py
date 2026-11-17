@@ -6,13 +6,16 @@ from __future__ import annotations
 
 import html
 
-from PyQt6.QtCore import QBuffer, QIODevice, QMarginsF, Qt, QUrl
+from PyQt6.QtCore import QBuffer, QIODevice, QMarginsF, QRectF, QSizeF, Qt, QUrl
 from PyQt6.QtGui import (
+    QAbstractTextDocumentLayout,
     QColor,
     QFont,
     QImage,
     QPageLayout,
     QPageSize,
+    QPainter,
+    QPalette,
     QPdfWriter,
     QTextBlockFormat,
     QTextCharFormat,
@@ -30,6 +33,8 @@ from frontend.widgets.raster_legend import format_value
 
 PAGE_MARGIN_MM = 18
 RESOLUTION_DPI = 300
+DOCUMENT_DPI = 96                               # the document's own units: pixels at 96 per inch
+FOOTER_HEIGHT = 24                              # room at the foot of each page for "Page n of N"
 IMAGE_WIDTH = 620                               # in document pixels: about the text width of an A4 page
 MUTED = "#5f6b6d"
 IMAGE_URL = "report-image://{}"
@@ -151,20 +156,65 @@ def _is_separator(line: str) -> bool:
     return bool(cells) and all(cell and set(cell) <= set("-:") and "-" in cell for cell in cells)
 
 
+def page_layout() -> QPageLayout:
+    """A4 portrait with the report's margins."""
+    return QPageLayout(QPageSize(QPageSize.PageSizeId.A4), QPageLayout.Orientation.Portrait,
+                       QMarginsF(*[PAGE_MARGIN_MM] * 4), QPageLayout.Unit.Millimeter)
+
+
+def paged_report_document(report: ReportDTO) -> QTextDocument:
+    """The report laid out in pages of the printable A4 area (less a footer line for the page number).
+
+    The pages are laid out here, not by ``QTextDocument.print``: that lays out a copy with 2 cm
+    margins of its own, and with those margins Qt centres tables further right than pictures,
+    which put each colour bar out of line with its picture."""
+    document = report_document(report)
+    area = page_layout().paintRect(QPageLayout.Unit.Point)  # 72 per inch; the document uses 96
+    document.setPageSize(QSizeF(area.width() * DOCUMENT_DPI / 72, area.height() * DOCUMENT_DPI / 72 - FOOTER_HEIGHT))
+    return document
+
+
 def render_report_pdf(report: ReportDTO) -> bytes:
-    """The report as the bytes of an A4 PDF."""
+    """The report as the bytes of an A4 PDF, with "Page n of N" at the foot of every page."""
+    document = paged_report_document(report)
     buffer = QBuffer()
     buffer.open(QIODevice.OpenModeFlag.WriteOnly)
     writer = QPdfWriter(buffer)
     writer.setTitle(report.title)
     writer.setCreator("GEE-Assist")
     writer.setResolution(RESOLUTION_DPI)
-    writer.setPageLayout(QPageLayout(QPageSize(QPageSize.PageSizeId.A4), QPageLayout.Orientation.Portrait,
-                                     QMarginsF(*[PAGE_MARGIN_MM] * 4), QPageLayout.Unit.Millimeter))
-    report_document(report).print(writer)
-    del writer  # finishes the PDF
+    writer.setPageLayout(page_layout())
+
+    pages = max(1, document.pageCount())
+    painter = QPainter(writer)
+    painter.scale(writer.logicalDpiX() / DOCUMENT_DPI, writer.logicalDpiY() / DOCUMENT_DPI)
+    for number in range(pages):
+        if number:
+            writer.newPage()
+        draw_page(painter, document, number)
+    painter.end()
     buffer.close()
     return bytes(buffer.data())
+
+
+def draw_page(painter: QPainter, document: QTextDocument, number: int) -> None:
+    """Page ``number`` (from 0) of a paged document, in its units, with "Page n of N" at its foot."""
+    page = document.pageSize()
+    context = QAbstractTextDocumentLayout.PaintContext()
+    context.palette.setColor(QPalette.ColorRole.Text, QColor("black"))  # never the app theme's text colour
+    context.clip = QRectF(0, number * page.height(), page.width(), page.height())
+    painter.save()
+    painter.translate(0, -number * page.height())
+    painter.setClipRect(context.clip)
+    document.documentLayout().draw(painter, context)
+    painter.restore()
+    painter.save()
+    painter.setPen(QColor(MUTED))
+    painter.setFont(QFont("Segoe UI", 8))
+    painter.drawText(QRectF(0, page.height(), page.width(), FOOTER_HEIGHT),
+                     Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignBottom,
+                     f"Page {number + 1} of {max(1, document.pageCount())}")
+    painter.restore()
 
 
 def colour_key_html(legend: LegendDTO | None, width: int = IMAGE_WIDTH) -> str:
@@ -175,9 +225,10 @@ def colour_key_html(legend: LegendDTO | None, width: int = IMAGE_WIDTH) -> str:
     if legend is None or not legend.colours:
         return ""
     if legend.kind == "scale":
-        cell = f"{100 / BAR_CELLS:.4f}%"
-        cells = "".join(f"<td width='{cell}' bgcolor='{colour}' style='font-size:5pt'>&nbsp;</td>"
-                        for colour in blend(legend.colours, BAR_CELLS))
+        # Whole-pixel cell widths that add up to exactly ``width``: Qt rounds each cell to a whole
+        # pixel, so equal shares (e.g. 376 / 24) would make the bar wider or narrower than its picture.
+        cells = "".join(f"<td width='{cell_width}' bgcolor='{colour}' style='font-size:5pt'>&nbsp;</td>"
+                        for cell_width, colour in zip(split_evenly(width, BAR_CELLS), blend(legend.colours, BAR_CELLS)))
         half = BAR_CELLS // 2
         label = f"style='color:{MUTED}; font-size:8pt'"
         return (f"<table width='{width}' cellspacing='0' cellpadding='0' border='0' align='center'>"
@@ -191,6 +242,12 @@ def colour_key_html(legend: LegendDTO | None, width: int = IMAGE_WIDTH) -> str:
                         for label, colour in zip(legend.labels, legend.colours))
         return f"<table cellspacing='0' cellpadding='1' align='center'><tr>{cells}</tr></table>"
     return ""
+
+
+def split_evenly(total: int, parts: int) -> list[int]:
+    """``parts`` whole numbers as equal as possible that add up to ``total``, e.g. 10 in 4 -> 3, 2, 3, 2."""
+    edges = [round(total * index / parts) for index in range(parts + 1)]
+    return [right - left for left, right in zip(edges, edges[1:])]
 
 
 def blend(colours: tuple[str, ...], count: int) -> list[str]:
