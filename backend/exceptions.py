@@ -60,3 +60,7 @@ class ProjectError(GeeAssistError):
 
 class ExplanationError(GeeAssistError):
     """An analysis result cannot be explained: it is not saved in the project, or its files are missing."""
+
+
+class ReportError(GeeAssistError):
+    """A report cannot be made or exported: the explanation is missing, or a file cannot be written."""
