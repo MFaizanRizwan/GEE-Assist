@@ -69,7 +69,8 @@ from frontend.gkonsol.ports import MemoryForm
 from frontend.views.user_admin_view import UserAdminDialog
 from frontend.widgets.menu_bar import AppMenuBar
 from frontend.widgets.side_bar import COLLAPSED_WIDTH, EXPANDED_WIDTH, LOGO_SIZE, SideBar
-from frontend.widgets.side_icons import AnalysisIcon, DownloadIcon, TerminalIcon, WritingIcon
+from frontend.widgets.side_icons import AnalysisIcon, DownloadIcon, ExplainIcon, TerminalIcon, WritingIcon
+from frontend.views.result_picker_dialog import choose_result
 
 PAGE_BACKGROUND = (
     "qlineargradient(x1:0, y1:0, x2:1, y2:1, "
@@ -81,6 +82,10 @@ AFTER_EXPLANATION = "Your AI explanation is ready. Was it useful?"
 BACK_FROM_EXPLANATION = "Thanks for trying the AI explanation."
 AFTER_ANALYSIS = "Your analysis is done. How did it go?"
 FEEDBACK_DELAY_MS = 800  # the explanation is drawn (and seen) before the modal opens
+
+# Why a project is needed (the first lines of the "A project is needed" message).
+DOWNLOAD_NEEDS_PROJECT = "Datasets are downloaded into a project's downloads folder."
+EXPLANATION_NEEDS_PROJECT = "AI explanations are made from the analysis results saved in a project."
 
 
 class SideBarHost(QWidget):
@@ -228,6 +233,9 @@ class HomeWindow(QMainWindow):
         self.downloads_button = self.side_bar.add_button("Downloads", "D", icon=DownloadIcon())
         self.analysis_button = self.side_bar.add_button("Analysis", "A", icon=AnalysisIcon())
         self.analysis_button.setToolTip("Analysis: run vegetation, water, burn, ... analyses on a dataset (Ctrl+5)")
+        self.explain_button = self.side_bar.add_button("AI Explanation", "AI", icon=ExplainIcon())
+        self.explain_button.setToolTip("AI Explanation: choose an analysis result of the open project and "
+                                       "let Gemini explain it")
         self.terminal_button = self.side_bar.add_button("Terminal", "T", icon=TerminalIcon())
         self.terminal_button.setCheckable(True)  # lit while the terminal is open
         self.terminal_button.setToolTip("Terminal: gkonsol, the GEE-Assist command line (Ctrl+`)")
@@ -330,6 +338,8 @@ class HomeWindow(QMainWindow):
         self.query_input_button.clicked.connect(self.show_query_input)
         self.downloads_button.clicked.connect(self.show_downloads)
         self.analysis_button.clicked.connect(self.show_analysis)
+        self.explain_button.clicked.connect(self.explain_saved_result)
+        self.result_chooser = choose_result  # (results, project name, parent) -> result or None; tests replace it
         self.terminal_button.clicked.connect(self.toggle_terminal)
         self.terminal_area.visibility_changed.connect(self._terminal_shown)
         app = QApplication.instance()
@@ -406,22 +416,21 @@ class HomeWindow(QMainWindow):
             self._project_shown = project.id if project is not None else None
             self.analysis.project_changed()  # only that project's datasets
 
-    def ensure_project(self) -> bool:
+    def ensure_project(self, why: str = DOWNLOAD_NEEDS_PROJECT) -> bool:
         """True once a project is open; asks the user to create or open one when none is."""
         if current_project(self._facade) is not None:
             return True
-        choice = self.ask_for_project()
+        choice = self.ask_for_project(why)
         if choice == "new":
             return self.projects.new_project() is not None
         if choice == "open":
             return self.projects.open_project() is not None
         return False
 
-    def ask_for_project(self) -> str | None:
-        """"new", "open" or None (cancelled): what to do when a download needs a project and none is open."""
+    def ask_for_project(self, why: str = DOWNLOAD_NEEDS_PROJECT) -> str | None:
+        """"new", "open" or None (cancelled): what to do when something needs a project and none is open."""
         box = QMessageBox(QMessageBox.Icon.Information, "A project is needed",
-                          "Datasets are downloaded into a project's downloads folder. "
-                          "Create a project, or open an existing one, first.", parent=self)
+                          f"{why} Create a project, or open an existing one, first.", parent=self)
         create = box.addButton("New project…", QMessageBox.ButtonRole.AcceptRole)
         existing = box.addButton("Open project…", QMessageBox.ButtonRole.ActionRole)
         box.addButton(QMessageBox.StandardButton.Cancel)
@@ -465,6 +474,37 @@ class HomeWindow(QMainWindow):
         self._show_page(self.reports)
         if explanation_path:
             self.reports.create_report(explanation_path)
+
+    def explain_saved_result(self) -> None:
+        """The side bar's AI Explanation: choose one of the open project's saved results and explain it."""
+        if not self.ensure_project(EXPLANATION_NEEDS_PROJECT):
+            return
+        project = current_project(self._facade)
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            results = list(self._facade.list_saved_results())
+        except GeeAssistError as exc:
+            QMessageBox.warning(self, "AI explanation", str(exc))
+            return
+        finally:
+            QApplication.restoreOverrideCursor()
+        if not results:
+            if self.offer_analysis(project.name if project else ""):
+                self.show_analysis()
+            return
+        chosen = self.result_chooser(results, project.name if project else "", self)
+        if chosen is not None:
+            self.show_explanation(chosen)
+
+    def offer_analysis(self, project_name: str) -> bool:
+        """No result to explain yet: True if the user wants to go and run an analysis."""
+        box = QMessageBox(QMessageBox.Icon.Information, "AI explanation",
+                          f"No analysis results are saved in {project_name or 'this project'} yet. Run an "
+                          "analysis and press Save result (or Explain with AI) first.", parent=self)
+        analyse = box.addButton("Open Analysis", QMessageBox.ButtonRole.AcceptRole)
+        box.addButton(QMessageBox.StandardButton.Close)
+        box.exec()
+        return box.clickedButton() is analyse
 
     def show_explanation(self, result) -> None:
         """The AI explanation page for an analysis result (saved in the project, then sent to Gemini)."""
@@ -563,6 +603,7 @@ class HomeWindow(QMainWindow):
         self.query_input_button.setVisible(page is not self.query_input)
         self.downloads_button.setVisible(page is not self.downloads)
         self.analysis_button.setVisible(page is not self.analysis)
+        self.explain_button.setVisible(page is not self.explanation)
         self.terminal.refresh_prompt()  # the prompt shows the page: ~/downloads
 
     # ------------------------------------------------------------- terminal

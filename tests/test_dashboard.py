@@ -213,7 +213,7 @@ def test_downloading_without_a_project_asks_to_create_one_first(home, monkeypatc
     started, asked = [], []
     monkeypatch.setattr(home.downloads, "start", started.append)
     home._facade.get_current_project.return_value = None
-    monkeypatch.setattr(home, "ask_for_project", lambda: asked.append(True))  # cancelled
+    monkeypatch.setattr(home, "ask_for_project", lambda why="": asked.append(why))  # cancelled
     home.query_input.download_requested.emit(FormDTO(dataset="sentinel2_sr", aoi="{}"))
     assert asked and started == [] and home.current_page() is not home.downloads
 
@@ -221,7 +221,7 @@ def test_downloading_without_a_project_asks_to_create_one_first(home, monkeypatc
         home._facade.get_current_project.return_value = PROJECT
         return PROJECT
 
-    monkeypatch.setattr(home, "ask_for_project", lambda: "new")
+    monkeypatch.setattr(home, "ask_for_project", lambda why="": "new")
     monkeypatch.setattr(home.projects, "new_project", create_one)
     home.query_input.download_requested.emit(FormDTO(dataset="sentinel2_sr", aoi="{}"))
     assert len(started) == 1 and home.current_page() is home.downloads
