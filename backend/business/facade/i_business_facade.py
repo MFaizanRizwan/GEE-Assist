@@ -10,6 +10,7 @@ from backend.dto.download_dto import DatasetDTO
 from backend.dto.explanation_dto import ExplanationDTO, ExplanationRequestDTO
 from backend.dto.map_dto import MapLayerDTO, RasterInfoDTO, RasterViewDTO, ViewPresetDTO
 from backend.dto.project_dto import AnalysisRecordDTO, ProjectDTO
+from backend.dto.report_dto import ExplanationFileDTO, ReportDTO
 from backend.dto.settings_dto import AppSettingsDTO, AppSettingsUpdateDTO
 from backend.dto.result_dto import ResultDTO
 from backend.dto.user_dto import (
@@ -317,3 +318,20 @@ class IBusinessFacade(ABC):
     def explain_analysis_result(self, request: ExplanationRequestDTO) -> ExplanationDTO:
         """Send the saved GeoTIFF, previews and prompt to Gemini; its answer is kept in the open
         project's ``explanation`` folder."""
+
+    # ------------------------------------------------------------- reports (UC-09)
+    @abstractmethod
+    def list_explanations(self) -> list[ExplanationFileDTO]:
+        """The AI explanations saved in the open project, newest first; none when no project is open."""
+
+    @abstractmethod
+    def build_report(self, explanation_path: str) -> ReportDTO:
+        """What the PDF report of a saved explanation holds: the analysis pictures, then the explanation."""
+
+    @abstractmethod
+    def save_report(self, report: ReportDTO, pdf: bytes) -> str:
+        """Keep the drawn PDF in the open project's reports folder; returns its path."""
+
+    @abstractmethod
+    def export_report(self, pdf_path: str, destination: str) -> str:
+        """Copy a report's PDF to a file the user chose on this computer; returns where it went."""
