@@ -309,6 +309,11 @@ class IBusinessFacade(ABC):
 
     # ------------------------------------------------------------- AI explanation (UC-08)
     @abstractmethod
+    def list_saved_results(self) -> list[ResultDTO]:
+        """The analysis results (GeoTIFFs) saved in the open project's analysis folder, newest first;
+        none when no project is open. Each can be explained with ``prepare_explanation``."""
+
+    @abstractmethod
     def prepare_explanation(self, result: ResultDTO) -> ExplanationRequestDTO:
         """Save the result's GeoTIFF in the open project's analysis folder (if it is not saved yet),
         then gather what Gemini is given: the analysis, the metadata before and after it, its numbers

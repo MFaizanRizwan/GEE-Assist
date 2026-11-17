@@ -382,6 +382,12 @@ class BusinessFacade(IBusinessFacade):
         return self._analysis_service
 
     # ------------------------------------------------------------- AI explanation (UC-08)
+    def list_saved_results(self) -> list[ResultDTO]:
+        project = self._request_service.get_current_project()
+        if project is None:
+            return []
+        return self._analysis().list_saved_results(project.analysis_dir)
+
     def prepare_explanation(self, result: ResultDTO) -> ExplanationRequestDTO:
         project = self._require_project("the result is saved in the project before it is sent to Gemini.")
         if not result.saved:  # the GeoTIFF sent to Gemini is always the one kept in the project
