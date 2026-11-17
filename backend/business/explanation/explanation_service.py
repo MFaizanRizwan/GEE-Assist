@@ -198,7 +198,7 @@ def explanation_markdown(explanation: ExplanationDTO) -> str:
     def table(title: str, metadata: RasterMetadataDTO | None) -> None:
         if metadata is None:
             return
-        lines.extend([f"## {title}", "", "| | |", "|---|---|"])
+        lines.extend([f"## {title}", "", "| Property | Value |", "|---|---|"])
         lines.extend(f"| {label} | {value} |" for label, value in metadata.rows())
         lines.append("")
 
@@ -207,7 +207,7 @@ def explanation_markdown(explanation: ExplanationDTO) -> str:
         table(f"Before the analysis: compared dataset {index}", other)
     table("After the analysis: result", request.after)
     if result.metrics:
-        lines.extend(["## Numbers", "", "| | |", "|---|---|"])
+        lines.extend(["## Numbers", "", "| Result | Value |", "|---|---|"])
         lines.extend(f"| {name} | {value:g} |" for name, value in result.metrics.items())
         lines.append("")
     lines.extend(["---", "", explanation.text.strip(), ""])

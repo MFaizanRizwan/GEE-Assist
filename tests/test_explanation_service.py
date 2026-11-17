@@ -135,6 +135,9 @@ def test_the_explanation_is_kept_in_the_projects_explanation_folder(service, pro
     text = open(saved, encoding="utf-8").read()
     assert text.startswith("# AI explanation: Vegetation health (NDVI)")
     assert "## Before the analysis: dataset" in text and "## After the analysis: result" in text
+    assert "## Before the analysis: dataset\n\n| Property | Value |\n|---|---|\n| File |" in text
+    assert "## Numbers\n\n| Result | Value |\n|---|---|\n| NDVI mean | 0.3 |" in text
+    assert "| | |" not in text  # no table without column names
     assert "| NDVI mean | 0.3 |" in text and text.rstrip().endswith("Green.")
 
 
