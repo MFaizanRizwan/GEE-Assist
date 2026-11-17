@@ -141,6 +141,7 @@ class AnalysisView(QWidget):
     open_in_viewer_requested = pyqtSignal(str)               # result GeoTIFF
     show_on_map_requested = pyqtSignal(bytes, object, str)   # PNG, (west, south, east, north), title
     explain_requested = pyqtSignal(object)                   # ResultDTO to explain with Gemini
+    analysis_finished = pyqtSignal(object)                   # ResultDTO of an analysis that ran successfully
 
     def __init__(self, facade: IBusinessFacade, parent: QWidget | None = None):
         super().__init__(parent)
@@ -663,6 +664,7 @@ class AnalysisView(QWidget):
         if self.result is not None and not self.result.saved:
             self._facade.discard_analysis_result(self.result)  # replaced before it was saved
         self.result = result
+        self.analysis_finished.emit(result)
         self._show_save_state()
         self.result_title.setText(f"{result.category}: {', '.join(result.processes)}")
         parts = [f"{result.device}", f"{result.seconds:.2f} s", Path(result.output_path).name]

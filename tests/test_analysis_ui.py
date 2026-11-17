@@ -451,3 +451,24 @@ def test_a_result_saved_for_the_explanation_shows_as_saved(page):
     view.set_saved_result(replace(view.result, output_path="C:/work/MyProject/analysis/result.tif", saved=True))
     assert view.result.saved and view.save_state.text() == "✓ Saved: result.tif"
     assert view.folder_button.isEnabled()
+
+
+def test_a_finished_analysis_is_announced(page):
+    view, facade = page
+    finished = []
+    view.analysis_finished.connect(finished.append)
+    view.run()
+    _wait(lambda: finished)
+    assert finished == [view.result]
+
+
+def test_a_failed_analysis_is_not_announced(page):
+    from backend.exceptions import AnalysisError
+
+    view, facade = page
+    facade.run_analysis.side_effect = AnalysisError("A band is missing.")
+    finished = []
+    view.analysis_finished.connect(finished.append)
+    view.run()
+    _wait(lambda: not view.running)
+    assert finished == [] and "band is missing" in view.banner.text()
