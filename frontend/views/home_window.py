@@ -402,11 +402,11 @@ class HomeWindow(QMainWindow):
 
     # ------------------------------------------------------------- projects
     def refresh_projects(self) -> None:
-        """Show the open project, the recent ones and their latest analysis results everywhere they appear."""
+        """Show the open project, its latest analysis results and the recent projects everywhere they appear."""
         project = current_project(self._facade)
         try:
             recent = [p for p in self._facade.list_projects() if isinstance(p, ProjectDTO)]
-            results = [(p, list(self._facade.get_analysis_results(p))) for p in recent[:3]]
+            results = list(self._facade.get_analysis_results(project)) if project is not None else []
         except GeeAssistError:
             recent, results = [], []
         self.dashboard.set_projects(project, recent, results)

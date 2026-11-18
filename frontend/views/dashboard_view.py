@@ -1,7 +1,7 @@
 """Dashboard shown right after signing in.
 
 On the left, from the top: a greeting, the open project's name as a heading right under it,
-and the latest analysis results. On the right edge of the page: the three most recent
+and that project's latest analysis results. On the right edge of the page: the three most recent
 projects. Everything starts at the top left; all text is left-aligned. The dashboard has no buttons: pages are
 opened from the side bar, projects are created, opened, renamed, moved and closed from the
 File menu, and clicking a recent project opens it.
@@ -29,7 +29,7 @@ from frontend import theme
 
 RECENT_PANEL_WIDTH = 300                        # the recent projects, on the right edge
 RECENT_PROJECTS = 3
-RESULTS_PER_PROJECT = 3
+RESULTS_SHOWN = 8                               # the open project's latest analysis results
 _CATEGORY_LABELS = {"LULC": "Land cover", "LST": "Surface temperature"}
 
 STYLESHEET = f"""
@@ -206,7 +206,7 @@ class DashboardView(QWidget):
         self.greeting = QLabel(objectName="Title")
         self.project_heading = ProjectHeading()
 
-        results_panel, _, self.results_list = _panel("Recent analysis results")
+        results_panel, _, self.results_list = _panel("Recent analysis results")  # of the open project
         self.results_panel = results_panel
         self.recent_panel, _, self.recent_list = _panel("Recent projects", RECENT_PANEL_WIDTH)
 
@@ -249,8 +249,8 @@ class DashboardView(QWidget):
         self.greeting.setText(f"Welcome, {first_name}")
 
     def set_projects(self, current: ProjectDTO | None, recent: list[ProjectDTO],
-                     results: list[tuple[ProjectDTO, list[AnalysisRecordDTO]]]) -> None:
-        """The open project, the user's recent projects and the latest analysis results of those."""
+                     results: list[AnalysisRecordDTO]) -> None:
+        """The open project with its latest analysis ``results`` (newest first), and the user's recent projects."""
         self.project_heading.show_project(current)
 
         _clear(self.recent_list)
@@ -265,16 +265,14 @@ class DashboardView(QWidget):
 
         _clear(self.results_list)
         self.result_rows = []
-        for project, records in results[:RECENT_PROJECTS]:
-            if not records:
-                continue
-            self.results_list.addWidget(QLabel(project.name, objectName="Overline"))
-            for record in records[:RESULTS_PER_PROJECT]:
-                row = ResultRow(record)
-                self.results_list.addWidget(row)
-                self.result_rows.append(row)
+        for record in (results if current is not None else [])[:RESULTS_SHOWN]:
+            row = ResultRow(record)
+            self.results_list.addWidget(row)
+            self.result_rows.append(row)
         if not self.result_rows:
-            self.results_list.addWidget(self._empty("Results of the analyses you run in your projects appear here."))
+            self.results_list.addWidget(self._empty(
+                f"Results of the analyses you run in {current.name} appear here." if current is not None
+                else "Open a project to see its analysis results here."))
 
     @staticmethod
     def _empty(text: str) -> QLabel:

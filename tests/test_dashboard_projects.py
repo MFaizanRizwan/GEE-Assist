@@ -60,7 +60,7 @@ def test_the_open_project_shows_its_name_and_folder(dashboard):
 def test_the_dashboard_has_no_buttons(dashboard):
     from PyQt6.QtWidgets import QAbstractButton
 
-    dashboard.set_projects(_project(1), [_project(1), _project(2)], [(_project(1), [_record(1)])])
+    dashboard.set_projects(_project(1), [_project(1), _project(2)], [_record(1)])
     assert dashboard.findChildren(QAbstractButton) == []
     dashboard.set_projects(None, [], [])
     assert dashboard.findChildren(QAbstractButton) == []
@@ -75,17 +75,17 @@ def test_only_the_last_three_projects_are_listed_with_their_folders(dashboard):
     assert opened == ["D:/work/Project 2"]
 
 
-def test_recent_results_of_the_last_three_projects(dashboard):
-    results = [(_project(n), [_record(10 * n + i) for i in range(5)]) for n in range(1, 5)]
-    dashboard.set_projects(_project(1), [p for p, _ in results], results)
-    assert len(dashboard.result_rows) == 3 * 3  # three projects, three results each
+def test_the_open_projects_recent_results_are_listed(dashboard):
+    records = [_record(n) for n in range(12)]
+    dashboard.set_projects(_project(1), [_project(1), _project(2)], records)
+    assert len(dashboard.result_rows) == 8  # the latest eight, of the open project only
     texts = [label.text() for label in dashboard.result_rows[0].findChildren(type(dashboard.greeting))]
     assert texts[0] == "Vegetation · NDVI, EVI"
     assert "14 Nov 2026, 12:30" in texts[1] and "NDVI mean: 0.421" in texts[1] and "saved" in texts[1]
 
 
 def test_updating_replaces_the_lists(dashboard):
-    dashboard.set_projects(None, [_project(1), _project(2)], [(_project(1), [_record(1)])])
+    dashboard.set_projects(_project(1), [_project(1), _project(2)], [_record(1)])
     dashboard.set_projects(None, [_project(3)], [])
     assert [item.project.name for item in dashboard.recent_items] == ["Project 3"] and dashboard.result_rows == []
 
@@ -142,3 +142,24 @@ def test_the_rest_starts_at_the_left_of_the_page(dashboard):
     lefts = {_left(w, dashboard) for w in (dashboard.greeting, dashboard.project_heading, dashboard.results_panel)}
     assert len(lefts) == 1 and lefts.pop() <= 40  # one left edge, at the page margin: not centred
     dashboard.hide()
+
+
+def test_the_results_come_right_under_the_projects_name(dashboard):
+    dashboard.set_projects(_project(1), [_project(1)], [_record(1), _record(2)])
+    dashboard.resize(1300, 820)
+    dashboard.show()
+    QApplication.processEvents()
+    heading, panel = dashboard.project_heading, dashboard.results_panel
+    heading_bottom = heading.mapTo(dashboard, heading.rect().bottomLeft()).y()
+    panel_top = panel.mapTo(dashboard, panel.rect().topLeft()).y()
+    assert 0 <= panel_top - heading_bottom <= 40
+    dashboard.hide()
+
+
+def test_without_a_project_no_results_are_listed(dashboard):
+    dashboard.set_projects(None, [_project(1)], [_record(1)])
+    assert dashboard.result_rows == []
+    note = dashboard.results_list.itemAt(0).widget().text()
+    assert note == "Open a project to see its analysis results here."
+    dashboard.set_projects(_project(1), [_project(1)], [])
+    assert dashboard.results_list.itemAt(0).widget().text() == "Results of the analyses you run in Project 1 appear here."

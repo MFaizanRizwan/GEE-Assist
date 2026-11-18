@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import QApplication, QLabel, QMainWindow, QPushButton, QToo
 
 from backend.business.facade import IBusinessFacade  # noqa: E402
 from backend.dto import FormDTO  # noqa: E402
-from backend.dto.project_dto import ProjectDTO  # noqa: E402
+from backend.dto.project_dto import AnalysisRecordDTO, ProjectDTO  # noqa: E402
 from backend.dto.user_dto import UserDTO  # noqa: E402
 from frontend.gkonsol.history import GkonsolStore  # noqa: E402
 from frontend.views import home_window  # noqa: E402
@@ -630,3 +630,12 @@ def test_the_terminal_is_not_a_page_and_keeps_its_own_open_state(home):
     assert home.downloads_button.is_current()
     home.terminal_button.click()
     home.hide()
+
+
+def test_the_dashboard_lists_the_open_projects_own_results(home):
+    record = AnalysisRecordDTO(id="r1", category="Water", processes=["NDWI"], created_at="2026-11-14T12:30:00")
+    home._facade.get_analysis_results.reset_mock()
+    home._facade.get_analysis_results.return_value = [record]
+    home.show_dashboard()
+    home._facade.get_analysis_results.assert_called_once_with(PROJECT)  # only the open project's
+    assert len(home.dashboard.result_rows) == 1
