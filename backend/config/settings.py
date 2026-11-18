@@ -16,14 +16,19 @@ except ImportError:  # python-dotenv is optional; plain environment variables st
 
 logger = logging.getLogger(__name__)
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-ASSETS_DIR = PROJECT_ROOT / "assets"
+from backend.config.paths import BUNDLE_ROOT, DATA_ROOT
+
+# Writable, persistent per-user data (project workspace, settings, .env). In a
+# frozen build this is %APPDATA%\GEE-Assist; in development it is the project root.
+PROJECT_ROOT = DATA_ROOT
+# Read-only bundled files (packaged inside the app when frozen).
+ASSETS_DIR = BUNDLE_ROOT / "assets"
 # Profile photos stay on this computer (never sent to the server), one file per user id.
-PROFILE_PHOTO_DIR = PROJECT_ROOT / "workspace" / "profile_photos"
+PROFILE_PHOTO_DIR = DATA_ROOT / "workspace" / "profile_photos"
 # Where the user's projects are on this computer (the recent ones shown on the dashboard).
-PROJECT_HISTORY_FILE = PROJECT_ROOT / "workspace" / "projects.json"
+PROJECT_HISTORY_FILE = DATA_ROOT / "workspace" / "projects.json"
 # The Earth Engine project and session length entered in the app (the Gemini key is in the credential store).
-APP_SETTINGS_FILE = PROJECT_ROOT / "workspace" / "app_settings.json"
+APP_SETTINGS_FILE = DATA_ROOT / "workspace" / "app_settings.json"
 # Suggested parent folder for a new project.
 DEFAULT_PROJECTS_DIR = Path.home() / "Documents" / "GEE-Assist Projects"
 

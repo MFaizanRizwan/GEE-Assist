@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from backend.config.paths import DATA_ROOT
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+# Writable, persistent per-user data root (%APPDATA%\GEE-Assist when frozen,
+# the project folder in development). Kept named PROJECT_ROOT for the modules
+# that import it from here.
+PROJECT_ROOT = DATA_ROOT
 
 # Where downloads go unless the user picks another folder.
 DEFAULT_DOWNLOAD_DIR = PROJECT_ROOT / "workspace" / "downloads"
