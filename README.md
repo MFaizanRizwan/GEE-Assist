@@ -141,6 +141,14 @@ As in other desktop apps, you work inside a project. A project is a folder:
   the name. Each result row shows what ran (when, saved or not, where it ran and how long it took),
   its dataset (satellite, dates and place) and its first numbers (point at the row for all of them).
   **See more** under them, when there are more, opens a window with every result of the project.
+  Scrolling down, after the results:
+  - **At a glance**: how many downloads, analyses, saved result maps, AI explanations and PDF
+    reports the project has;
+  - **Charts**: its analyses by type, and how the number most of them recorded (e.g. NDVI mean)
+    changed from run to run;
+  - **Result maps**: pictures of its six newest saved results, coloured as on the Analysis page,
+    drawn in the background; click one to open it in the GeoTIFF viewer.
+
   On the right edge: the **last 3 projects** (name and the folder they are in; click one to open
   it). Without an open project it says how to create or open one. Pages are opened from the side bar
   and projects are managed from the File menu, so the dashboard has no other buttons.
