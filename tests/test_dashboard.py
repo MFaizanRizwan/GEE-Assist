@@ -606,3 +606,38 @@ def test_every_pages_button_stays_in_the_side_bar_on_every_page(home):
     for show in pages:
         show()
         assert all(not button.isHidden() for button in buttons), show.__name__
+
+
+def test_the_current_pages_button_is_highlighted(home):
+    expected = {
+        home.show_query_input: home.query_input_button,
+        home.show_downloads: home.downloads_button,
+        home.show_analysis: home.analysis_button,
+    }
+    buttons = (home.query_input_button, home.downloads_button, home.analysis_button, home.explain_button)
+    for show, button in expected.items():
+        show()
+        assert [b for b in buttons if b.is_current()] == [button], show.__name__
+
+    for show in (home.show_dashboard, home.show_account, home.show_reports):  # pages without a button
+        show()
+        assert not any(b.is_current() for b in buttons), show.__name__
+
+
+def test_clicking_a_side_bar_button_highlights_it(home):
+    home.downloads_button.click()
+    assert home.downloads_button.is_current() and not home.analysis_button.is_current()
+    home.analysis_button.click()
+    assert home.analysis_button.is_current() and not home.downloads_button.is_current()
+    home.side_bar.logo.click()  # back to the dashboard: nothing highlighted
+    assert not home.analysis_button.is_current()
+
+
+def test_the_terminal_is_not_a_page_and_keeps_its_own_open_state(home):
+    home.show()
+    home.show_downloads()
+    home.terminal_button.click()  # opens the terminal under the Downloads page
+    assert home.terminal_button.isChecked() and not home.terminal_button.is_current()
+    assert home.downloads_button.is_current()
+    home.terminal_button.click()
+    home.hide()

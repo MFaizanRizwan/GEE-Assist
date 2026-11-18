@@ -123,3 +123,13 @@ def test_the_button_stays_in_the_side_bar_on_the_explanation_page(window):
     assert home.current_page() is home.explanation and home.explain_button.isVisibleTo(home)
     home.show_dashboard()
     assert home.explain_button.isVisibleTo(home)
+
+
+def test_the_explanation_pages_button_is_highlighted_on_it(window):
+    from frontend.views.home_window import HomeWindow
+
+    home, *_ = window
+    HomeWindow.show_explanation(home, OLDER)
+    assert home.explain_button.is_current() and not home.analysis_button.is_current()
+    home.show_analysis()  # e.g. "Back to analysis"
+    assert home.analysis_button.is_current() and not home.explain_button.is_current()

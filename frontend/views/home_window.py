@@ -301,6 +301,13 @@ class HomeWindow(QMainWindow):
         self.pages.addWidget(self.reports)
         self.pages.addWidget(self.analysis_table)
         self._account_page = account_page
+        # The side bar button of each page that has one: highlighted while its page is shown.
+        self.page_buttons = {
+            self.query_input: self.query_input_button,
+            self.downloads: self.downloads_button,
+            self.analysis: self.analysis_button,
+            self.explanation: self.explain_button,
+        }
 
         # ---- terminal (gkonsol) under the pages
         store = GkonsolStore()
@@ -599,7 +606,9 @@ class HomeWindow(QMainWindow):
         return self.pages.currentWidget()
 
     def _show_page(self, page: QWidget) -> None:
-        self.pages.setCurrentWidget(page)  # every page's button stays in the side bar
+        self.pages.setCurrentWidget(page)  # every page's button stays in the side bar ...
+        for shown, button in self.page_buttons.items():
+            button.set_current(shown is page)  # ... and the one of the page shown is highlighted
         self.terminal.refresh_prompt()  # the prompt shows the page: ~/downloads
 
     # ------------------------------------------------------------- terminal
