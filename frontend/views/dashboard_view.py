@@ -20,6 +20,7 @@ from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QPushButton,
     QScrollArea,
     QStackedWidget,
     QVBoxLayout,
@@ -32,7 +33,7 @@ from frontend import theme
 
 RECENT_PANEL_WIDTH = 300                        # the recent projects, on the right edge
 RECENT_PROJECTS = 3
-RESULTS_SHOWN = 8                               # the open project's latest analysis results
+RESULTS_SHOWN = 3                               # the open project's latest results; "See more" lists them all
 METRICS_SHOWN = 3                               # numbers shown in a result row; all of them in its tooltip
 _CATEGORY_LABELS = {"LULC": "Land cover", "LST": "Surface temperature"}
 
@@ -333,6 +334,12 @@ class DashboardView(QWidget):
 
         results_panel, _, self.results_list = _panel("Recent analysis results")  # of the open project
         self.results_panel = results_panel
+        self.see_more = QPushButton("See more", objectName="SecondaryButton")
+        self.see_more.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.see_more.clicked.connect(self.show_all_results)
+        results_panel.layout().addWidget(self.see_more, 0, Qt.AlignmentFlag.AlignLeft)  # under the latest ones
+        self._current: ProjectDTO | None = None
+        self._results: list[AnalysisRecordDTO] = []
         self.recent_panel, _, self.recent_list = _panel("Recent projects", RECENT_PANEL_WIDTH)
 
         # ---- left: the welcome, the open project, its results
@@ -390,7 +397,8 @@ class DashboardView(QWidget):
 
         _clear(self.results_list)
         self.result_rows = []
-        for record in (results if current is not None else [])[:RESULTS_SHOWN]:
+        self._current, self._results = current, (list(results) if current is not None else [])
+        for record in self._results[:RESULTS_SHOWN]:
             row = ResultRow(record)
             self.results_list.addWidget(row)
             self.result_rows.append(row)
@@ -398,6 +406,21 @@ class DashboardView(QWidget):
             self.results_list.addWidget(self._empty(
                 f"Results of the analyses you run in {current.name} appear here." if current is not None
                 else "Open a project to see its analysis results here."))
+        hidden = len(self._results) - len(self.result_rows)
+        self.see_more.setVisible(hidden > 0)
+        if hidden > 0:
+            self.see_more.setText(f"See more ({hidden} more)")
+            self.see_more.setToolTip(f"All {len(self._results)} analysis results of {current.name}")
+
+    def make_results_dialog(self) -> AnalysisResultsDialog:
+        """The modal with every analysis result of the open project."""
+        name = self._current.name if self._current is not None else ""
+        return AnalysisResultsDialog(name, self._results, self)
+
+    def show_all_results(self) -> None:
+        """See more: every analysis result of the open project, in a modal."""
+        if self._current is not None and self._results:
+            self.make_results_dialog().exec()
 
     @staticmethod
     def _empty(text: str) -> QLabel:

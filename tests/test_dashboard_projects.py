@@ -57,13 +57,14 @@ def test_the_open_project_shows_its_name_and_folder(dashboard):
     assert card.path.text() == "D:/work/Project 1"
 
 
-def test_the_dashboard_has_no_buttons(dashboard):
+def test_the_only_button_is_see_more_and_only_when_there_is_more(dashboard):
     from PyQt6.QtWidgets import QAbstractButton
 
+    assert dashboard.findChildren(QAbstractButton) == [dashboard.see_more]
     dashboard.set_projects(_project(1), [_project(1), _project(2)], [_record(1)])
-    assert dashboard.findChildren(QAbstractButton) == []
+    assert dashboard.see_more.isHidden()  # one result: nothing more to see
     dashboard.set_projects(None, [], [])
-    assert dashboard.findChildren(QAbstractButton) == []
+    assert dashboard.see_more.isHidden()
 
 
 def test_only_the_last_three_projects_are_listed_with_their_folders(dashboard):
@@ -78,7 +79,7 @@ def test_only_the_last_three_projects_are_listed_with_their_folders(dashboard):
 def test_the_open_projects_recent_results_are_listed(dashboard):
     records = [_record(n) for n in range(12)]
     dashboard.set_projects(_project(1), [_project(1), _project(2)], records)
-    assert len(dashboard.result_rows) == 8  # the latest eight, of the open project only
+    assert len(dashboard.result_rows) == 3  # the latest three, of the open project only
     texts = [label.text() for label in dashboard.result_rows[0].labels]
     assert texts[0] == "Vegetation · NDVI, EVI"
     assert texts[1] == "14 Nov 2026, 12:30  ·  saved" and "NDVI mean: 0.421" in texts
@@ -264,3 +265,40 @@ def test_the_results_dialog_scrolls_when_the_results_do_not_fit(app):
     QApplication.processEvents()
     assert dialog.findChild(QScrollArea).verticalScrollBar().maximum() > 0
     dialog.close()
+
+
+# ------------------------------------------------------------------ See more
+def test_only_the_latest_three_results_are_shown_and_see_more_counts_the_rest(dashboard):
+    records = [_full_record(id=f"r{n}") for n in range(12)]
+    dashboard.set_projects(_project(1), [_project(1)], records)
+    assert [row.labels[0].text() for row in dashboard.result_rows] == ["Water · NDWI"] * 3
+    assert not dashboard.see_more.isHidden() and dashboard.see_more.text() == "See more (9 more)"
+    assert dashboard.see_more.toolTip() == "All 12 analysis results of Project 1"
+
+    dashboard.set_projects(_project(1), [_project(1)], records[:3])  # exactly three: no See more
+    assert dashboard.see_more.isHidden()
+
+
+def test_see_more_opens_a_modal_with_all_the_results(dashboard, monkeypatch):
+    from frontend.views.dashboard_view import AnalysisResultsDialog
+
+    records = [_full_record(id=f"r{n}") for n in range(5)]
+    dashboard.set_projects(_project(1), [_project(1)], records)
+    shown = []
+    monkeypatch.setattr(AnalysisResultsDialog, "exec", lambda dialog: shown.append(dialog) or 0)
+    dashboard.see_more.click()
+    dialog = shown[0]
+    assert dialog.isModal() and dialog.parent() is dashboard
+    assert len(dialog.rows) == 5 and dialog.windowTitle() == "Analysis results — Project 1"
+
+
+def test_see_more_sits_under_the_results_on_the_left(dashboard):
+    dashboard.set_projects(_project(1), [_project(1)], [_full_record(id=f"r{n}") for n in range(5)])
+    dashboard.resize(1300, 820)
+    dashboard.show()
+    QApplication.processEvents()
+    last = dashboard.result_rows[-1]
+    button = dashboard.see_more
+    assert button.mapTo(dashboard, button.rect().topLeft()).y() >= last.mapTo(dashboard, last.rect().bottomLeft()).y()
+    assert abs(button.mapTo(dashboard, button.rect().topLeft()).x() - last.mapTo(dashboard, last.rect().topLeft()).x()) <= 2
+    dashboard.hide()

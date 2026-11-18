@@ -177,7 +177,7 @@ def test_the_dashboard_has_no_workspace_cards(home):
     texts = [label.text() for label in home.dashboard.findChildren(QLabel)]
     for name in ("Open Query Input", "Open Downloads", "Open Analysis", "Open Reports", "Coming soon"):
         assert all(name not in text for text in texts)
-    assert home.dashboard.findChildren(QPushButton) == []  # no buttons at all on the dashboard
+    assert home.dashboard.findChildren(QPushButton) == [home.dashboard.see_more]  # only "See more"
 
 
 def test_the_side_bar_opens_the_analysis_and_downloads_pages(home):
