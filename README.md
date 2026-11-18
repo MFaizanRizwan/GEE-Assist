@@ -63,9 +63,10 @@ whatever was never entered in the app.
   Manager (via `keyring`), so the next launch goes straight to the dashboard. The saved session
   lasts as long as chosen in **Options → Settings…** (7 days unless changed), counted from signing in; after that
   the app asks to sign in again.
-- After signing in the app opens on the **dashboard**. Its **Query Input** card opens the parameter
-  form (with the "Chat with Gemini" assistant). Clicking the **GEE-Assist logo** at the top of the
-  side bar returns to the dashboard from any page (there is no back arrow).
+- After signing in the app opens on the **dashboard**. The pages are opened from the side bar
+  (**Query Input** opens the parameter form with the "Chat with Gemini" assistant). Clicking the
+  **GEE-Assist logo** at the top of the side bar returns to the dashboard from any page (there is no
+  back arrow).
 - A menu bar runs along the top of every page, as in Word or Excel:
   - **File**: New project… (Ctrl+Shift+N), Open project… (Ctrl+Shift+O), Recent projects, Rename
     project…, Move project…, Close project, New request (Ctrl+N), Open GeoTIFF… (Ctrl+O), Sign out,
@@ -117,17 +118,17 @@ As in other desktop apps, you work inside a project. A project is a folder:
     reports/                     PDF reports made from the AI explanations
 ```
 
-- **Create** one from the dashboard (**New project**) or **File → New project…**: give it a name and
+- **Create** one with **File → New project…** (Ctrl+Shift+N): give it a name and
   the folder to create it in (by default next to your last project, else
   `Documents/GEE-Assist Projects`). The dialog shows the folder that will be made. Leave the name
   empty to get **Project 1**, then **Project 2**, **Project 3**, ... (the first number not already a
   folder in that location).
-- **Open** one with **Open project…** (choose its folder), a card under **Recent projects** on the
-  dashboard, or **File → Recent projects**.
-- **Rename** or **Move** the open project from the dashboard card or the File menu: its folder is
+- **Open** one with **File → Open project…** (choose its folder), by clicking it under **Recent
+  projects** on the dashboard, or with **File → Recent projects**.
+- **Rename** or **Move** the open project from the File menu: its folder is
   renamed or moved, with everything in it. Saved downloads, even paused ones, follow it; this is
   refused while one of its downloads is running (pause it first).
-- **Close** the open project from the dashboard card or the File menu; signing out closes it too.
+- **Close** the open project from the File menu; signing out closes it too.
 - A **download needs an open project**: the form's "Save to folder" always shows the project's
   `downloads` folder (use **Save to…** on the Downloads page to copy a dataset elsewhere). The
   parameter form only says what to download; analyses are chosen and run on the Analysis page. Starting a download without a project asks you to create or open one first.
@@ -135,14 +136,16 @@ As in other desktop apps, you work inside a project. A project is a folder:
   ran, when, its numbers, and the GeoTIFF if you saved it; paths inside the project are stored
   relative to it, so moving the project keeps them valid). **Save result** puts the GeoTIFF in the
   project's `analysis` folder.
-- The **dashboard** shows the open project, the **last 3 projects** (name and the folder they are
-  in; click one to open it) and the **latest analysis results of those 3 projects**.
+- The **dashboard** has no buttons and all its text is left-aligned. On the left: the welcome, the
+  **open project's name** (and folder) right under it, and the **latest analysis results of that
+  project** under the name. On the right edge: the **last 3 projects** (name and the folder they are
+  in; click one to open it). Without an open project it says how to create or open one.
 - Where your projects are is remembered on this computer in `workspace/projects.json` (per user).
   Forgetting a project there never deletes its folder.
 
 ## Analysis
 
-- **Analysis** (side bar, the dashboard's Analysis card, or View → Analysis): choose a dataset (a
+- **Analysis** (side bar, or View → Analysis): choose a dataset (a
   finished download, or any GeoTIFF with **Open GeoTIFF…**), one of the four analyses, its processes
   and their parameters, then **Run analysis**.
 - The four analyses (SRS FR-06 to FR-09) and their sub-types:
@@ -213,7 +216,7 @@ feedback or suggestion…** opens the same window at any time. The website's add
 
 ## PDF reports
 
-- The **Reports** page (the dashboard's **Reports** card, **View → Reports** or Ctrl+7) lists the AI
+- The **Reports** page (**View → Reports** or Ctrl+7) lists the AI
   explanations saved in the open project, newest first, and whether each already has a PDF.
 - **Create PDF report** makes the chosen explanation's report: first a picture of each layer of the
   analysis result it explains (the `.tif` in the project's `analysis` folder, coloured as on the
@@ -263,7 +266,7 @@ One-time setup:
 
 Then create or open a project, fill the parameter form (or let Gemini fill it), press **Submit
 Parameters**, and press **Start Download** under Kept Requests. The dataset is saved in the project's
-`downloads` folder. The **Downloads** page (dashboard card or side bar)
+`downloads` folder. The **Downloads** page (side bar, or View → Downloads)
 shows progress, speed and ETA, with Start / Pause / Cancel for every download.
 
 How it works:
