@@ -307,3 +307,9 @@ def test_a_file_that_is_not_an_image_is_refused(page, tmp_path):
     card.choose_photo()
     assert _wait(lambda: card.banner.text() == "This file is not a supported image.")
     assert not card.photo.has_photo
+
+
+def test_hovering_the_photo_shows_no_tooltip(page):
+    card, _ = page
+    assert card.photo.toolTip() == ""  # the hint under the photo says to click it
+    assert card.photo.accessibleName() == "Your photo: click to change or remove it"

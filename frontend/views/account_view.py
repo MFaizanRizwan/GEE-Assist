@@ -106,7 +106,9 @@ class PhotoButton(Avatar):
     def __init__(self, size: int, parent: QWidget | None = None):
         super().__init__(size, parent)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setToolTip("Change or remove your photo")
+        # No tooltip: the hint under the photo already says to click it (and a tooltip took on the
+        # photo's large circle style). Screen readers still hear what it does.
+        self.setAccessibleName("Your photo: click to change or remove it")
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:  # noqa: N802 (Qt API)
         if event.button() == Qt.MouseButton.LeftButton and self.rect().contains(event.position().toPoint()):
