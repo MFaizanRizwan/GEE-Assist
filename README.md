@@ -136,10 +136,14 @@ As in other desktop apps, you work inside a project. A project is a folder:
   ran, when, its numbers, and the GeoTIFF if you saved it; paths inside the project are stored
   relative to it, so moving the project keeps them valid). **Save result** puts the GeoTIFF in the
   project's `analysis` folder.
-- The **dashboard** has no buttons and all its text is left-aligned. On the left: the welcome, the
-  **open project's name** (and folder) right under it, and the **latest analysis results of that
-  project** under the name. On the right edge: the **last 3 projects** (name and the folder they are
-  in; click one to open it). Without an open project it says how to create or open one.
+- The **dashboard** has all its text left-aligned. On the left: the welcome, the **open project's
+  name** (and folder) right under it, and the **latest 3 analysis results of that project** under
+  the name. Each result row shows what ran (when, saved or not, where it ran and how long it took),
+  its dataset (satellite, dates and place) and its first numbers (point at the row for all of them).
+  **See more** under them, when there are more, opens a window with every result of the project.
+  On the right edge: the **last 3 projects** (name and the folder they are in; click one to open
+  it). Without an open project it says how to create or open one. Pages are opened from the side bar
+  and projects are managed from the File menu, so the dashboard has no other buttons.
 - Where your projects are is remembered on this computer in `workspace/projects.json` (per user).
   Forgetting a project there never deletes its folder.
 
