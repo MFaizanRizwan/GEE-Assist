@@ -9,6 +9,7 @@ File menu, and clicking a recent project opens it.
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 
 from PyQt6.QtCore import Qt, pyqtSignal
@@ -30,6 +31,7 @@ from frontend import theme
 RECENT_PANEL_WIDTH = 300                        # the recent projects, on the right edge
 RECENT_PROJECTS = 3
 RESULTS_SHOWN = 8                               # the open project's latest analysis results
+METRICS_SHOWN = 3                               # numbers shown in a result row; all of them in its tooltip
 _CATEGORY_LABELS = {"LULC": "Land cover", "LST": "Surface temperature"}
 
 STYLESHEET = f"""
@@ -42,6 +44,7 @@ QLabel#SectionTitle {{ color: {theme.INK}; font-weight: 600; font-size: 10.5pt; 
 QLabel#Overline {{ color: {theme.MUTED}; font-size: 8pt; font-weight: 600; letter-spacing: 1px; }}
 QLabel#ProjectName {{ font-family: "{theme.SERIF}"; font-size: 18pt; color: {theme.INK}; }}
 QLabel#ItemTitle {{ color: {theme.INK}; font-weight: 600; }}
+QLabel#ItemText {{ color: {theme.TEXT}; font-size: 9pt; }}
 QLabel#ItemPath, QLabel#ItemMeta {{ color: {theme.MUTED}; font-size: 8.5pt; }}
 QFrame#RecentProject {{
     background: {theme.FOAM}; border: 1px solid {theme.BORDER}; border-radius: 8px;
@@ -142,27 +145,105 @@ class RecentProjectItem(QFrame):
 
 
 class ResultRow(QFrame):
-    """One analysis result: what ran, when, its first number, and whether its GeoTIFF was saved."""
+    """One analysis result, in three left-aligned columns:
+
+    * what ran: the analysis and its processes; when, and whether its GeoTIFF was saved; where it
+      ran and how long it took;
+    * the dataset: its satellite and dates, then its place (read from the download's name);
+    * its numbers: the first few; all of them in the row's tooltip.
+    """
 
     def __init__(self, record: AnalysisRecordDTO, parent: QWidget | None = None):
         super().__init__(parent)
         self.setObjectName("ResultRow")
         processes = ", ".join(record.processes[:3]) + ("…" if len(record.processes) > 3 else "")
-        title = QLabel(f"{category_label(record.category)}" + (f" · {processes}" if processes else ""),
-                       objectName="ItemTitle")
-        details = [format_when(record.created_at)]
-        if record.metrics:
-            name, value = next(iter(record.metrics.items()))
-            details.append(f"{name}: {value:.3g}")
-        details.append("saved" if record.saved else "not saved")
-        meta = QLabel("  ·  ".join(details), objectName="ItemMeta")
-        meta.setWordWrap(True)
-        self.setToolTip("\n".join(f"{k}: {v:.4g}" for k, v in record.metrics.items()) or "No numbers recorded")
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 7, 0, 7)
-        layout.setSpacing(1)
-        layout.addWidget(title)
-        layout.addWidget(meta)
+        what = [QLabel(f"{category_label(record.category)}" + (f" · {processes}" if processes else ""),
+                       objectName="ItemTitle"),
+                _meta("  ·  ".join(part for part in (format_when(record.created_at),
+                                                     "saved" if record.saved else "not saved") if part))]
+        run = run_summary(record)
+        if run:
+            what.append(_meta(run))
+
+        satellite_and_dates, place = dataset_summary(record.dataset)
+        dataset = [QLabel(satellite_and_dates or "Dataset not recorded", objectName="ItemText")]
+        if place:
+            dataset.append(_meta(place))
+
+        numbers = [QLabel(f"{name}: {format_number(value)}", objectName="ItemText")
+                   for name, value in list(record.metrics.items())[:METRICS_SHOWN]]
+        if len(record.metrics) > METRICS_SHOWN:
+            numbers.append(_meta(f"+{len(record.metrics) - METRICS_SHOWN} more (point at the row)"))
+        if not numbers:
+            numbers = [_meta("No numbers recorded")]
+        self.setToolTip("\n".join(f"{k}: {format_number(v)}" for k, v in record.metrics.items())
+                        or "No numbers recorded")
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 8, 0, 8)
+        layout.setSpacing(18)
+        for labels, stretch in ((what, 4), (dataset, 4), (numbers, 3)):
+            column = QVBoxLayout()
+            column.setSpacing(1)
+            for label in labels:
+                label.setWordWrap(True)
+                column.addWidget(label)
+            column.addStretch(1)
+            layout.addLayout(column, stretch)
+        self.labels = what + dataset + numbers
+
+
+def _meta(text: str) -> QLabel:
+    return QLabel(text, objectName="ItemMeta")
+
+
+def run_summary(record: AnalysisRecordDTO) -> str:
+    """Where and how fast it ran, e.g. "Ran on the CPU in 2.5 s"; "" when neither was recorded."""
+    parts = []
+    if record.device.strip():
+        parts.append(f"on the {record.device.strip()}")
+    if record.seconds:
+        parts.append(f"in {record.seconds:.1f} s")
+    return "Ran " + " ".join(parts) if parts else ""
+
+
+# A download's name: <satellite>_<lon>_<lat>_<start date>_<end date> (see the download naming).
+_DATASET_NAME = re.compile(r"^(?P<satellite>.+?)_(?P<lon>-?\d+(?:\.\d+)?)_(?P<lat>-?\d+(?:\.\d+)?)_"
+                           r"(?P<start>\d{4}-\d{2}-\d{2})_(?P<end>\d{4}-\d{2}-\d{2})")
+
+
+def dataset_summary(path: str) -> tuple[str, str]:
+    """(satellite and dates, place) of the dataset analysed, read from its download name; the file
+    name alone, and no place, when it is not a download's name; ("", "") when none was recorded."""
+    if not path:
+        return "", ""
+    name = path.replace("\\", "/").rsplit("/", 1)[-1]
+    stem = name.rsplit(".", 1)[0] if "." in name else name
+    match = _DATASET_NAME.match(stem)
+    if not match:
+        return stem, ""
+    lat, lon = float(match["lat"]), float(match["lon"])
+    place = f"{abs(lat):.4f}° {'N' if lat >= 0 else 'S'}, {abs(lon):.4f}° {'E' if lon >= 0 else 'W'}"
+    return f"{match['satellite']}  ·  {format_date_range(match['start'], match['end'])}", place
+
+
+def format_date_range(start: str, end: str) -> str:
+    """e.g. "17 Aug – 17 Nov 2026" (the year once when both dates are in it)."""
+    try:
+        first, last = datetime.fromisoformat(start), datetime.fromisoformat(end)
+    except ValueError:
+        return f"{start} – {end}"
+    left = first.strftime("%d %b") if first.year == last.year else first.strftime("%d %b %Y")
+    return f"{left} – {last.strftime('%d %b %Y')}"
+
+
+def format_number(value: float) -> str:
+    """A result as briefly as it reads well (e.g. -0.428, 3.1, 1,530)."""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return str(value)
+    return f"{number:,.0f}" if abs(number) >= 1000 else f"{number:.3g}"
 
 
 def _panel(title: str, width: int | None = None) -> tuple[QFrame, QVBoxLayout, QVBoxLayout]:

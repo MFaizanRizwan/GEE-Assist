@@ -79,9 +79,9 @@ def test_the_open_projects_recent_results_are_listed(dashboard):
     records = [_record(n) for n in range(12)]
     dashboard.set_projects(_project(1), [_project(1), _project(2)], records)
     assert len(dashboard.result_rows) == 8  # the latest eight, of the open project only
-    texts = [label.text() for label in dashboard.result_rows[0].findChildren(type(dashboard.greeting))]
+    texts = [label.text() for label in dashboard.result_rows[0].labels]
     assert texts[0] == "Vegetation · NDVI, EVI"
-    assert "14 Nov 2026, 12:30" in texts[1] and "NDVI mean: 0.421" in texts[1] and "saved" in texts[1]
+    assert texts[1] == "14 Nov 2026, 12:30  ·  saved" and "NDVI mean: 0.421" in texts
 
 
 def test_updating_replaces_the_lists(dashboard):
@@ -176,3 +176,62 @@ def test_all_text_on_the_dashboard_is_left_aligned(dashboard, open_project):
     for label in labels:
         horizontal = label.alignment() & Qt.AlignmentFlag.AlignHorizontal_Mask
         assert horizontal in (Qt.AlignmentFlag.AlignLeft, Qt.AlignmentFlag.AlignLeading), label.text()
+
+
+# ------------------------------------------------------------------ a result row
+DATASET = "downloads/Sentinel-2_76.9812_14.1309_2026-08-17_2026-11-17/Sentinel-2_76.9812_14.1309_2026-08-17_2026-11-17.tif"
+
+
+def _full_record(**changes) -> AnalysisRecordDTO:
+    values = dict(id="r1", category="Water", processes=["NDWI"], saved=False, created_at="2026-11-18T15:08:00",
+                  metrics={"NDWI mean": -0.4281, "NDWI min": -0.91, "NDWI max": 0.62, "Water area (km²)": 3.1},
+                  dataset=DATASET, device="CPU", seconds=2.46)
+    values.update(changes)
+    return AnalysisRecordDTO(**values)
+
+
+def test_a_result_row_shows_what_ran_on_which_dataset_and_its_numbers(app):
+    from frontend.views.dashboard_view import ResultRow
+
+    row = ResultRow(_full_record())
+    texts = [label.text() for label in row.labels]
+    assert texts[:3] == ["Water · NDWI", "18 Nov 2026, 15:08  ·  not saved", "Ran on the CPU in 2.5 s"]
+    assert texts[3:5] == ["Sentinel-2  ·  17 Aug – 17 Nov 2026", "14.1309° N, 76.9812° E"]
+    assert texts[5:] == ["NDWI mean: -0.428", "NDWI min: -0.91", "NDWI max: 0.62", "+1 more (point at the row)"]
+    assert "Water area (km²): 3.1" in row.toolTip()  # all the numbers
+
+
+def test_a_result_row_with_little_recorded_still_reads_well(app):
+    from frontend.views.dashboard_view import ResultRow
+
+    row = ResultRow(_full_record(metrics={}, dataset="", device="", seconds=0.0))
+    texts = [label.text() for label in row.labels]
+    assert texts == ["Water · NDWI", "18 Nov 2026, 15:08  ·  not saved", "Dataset not recorded", "No numbers recorded"]
+    assert row.toolTip() == "No numbers recorded"
+
+
+def test_a_result_row_fills_its_width_in_three_columns(app):
+    from frontend.views.dashboard_view import ResultRow
+
+    row = ResultRow(_full_record())
+    row.resize(720, 90)
+    row.show()
+    QApplication.processEvents()
+    title, dataset, number = row.labels[0], row.labels[3], row.labels[5]
+    assert title.x() < dataset.x() < number.x()          # side by side, not one under the other
+    assert number.x() > row.width() // 2                  # the right half of the row is used
+    assert all(label.alignment() & Qt.AlignmentFlag.AlignLeft for label in row.labels)
+    row.hide()
+
+
+def test_dataset_names_and_numbers_are_summarised():
+    from frontend.views.dashboard_view import dataset_summary, format_date_range, format_number, run_summary
+
+    assert dataset_summary(r"C:\data\scene.tif") == ("scene", "")      # not a download's name
+    assert dataset_summary("") == ("", "")
+    assert dataset_summary("Landsat-8_-58.4_-34.6_2025-12-01_2026-01-31.tif") == (
+        "Landsat-8  ·  01 Dec 2025 – 31 Jan 2026", "34.6000° S, 58.4000° W")
+    assert format_date_range("2026-08-17", "2026-11-17") == "17 Aug – 17 Nov 2026"
+    assert [format_number(v) for v in (-0.42813, 1530.2, 3.1)] == ["-0.428", "1,530", "3.1"]
+    assert run_summary(AnalysisRecordDTO("r", "W", device="GPU: NVIDIA RTX 3060")) == "Ran on the GPU: NVIDIA RTX 3060"
+    assert run_summary(AnalysisRecordDTO("r", "W")) == ""
