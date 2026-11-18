@@ -1,6 +1,6 @@
 """Dashboard shown right after signing in.
 
-From the top: a greeting, the open project, and at the bottom the three most recent projects
+From the top: a greeting, the open project's name as a heading right under it, and at the bottom the three most recent projects
 and the latest analysis results of those projects. The dashboard has no buttons: pages are
 opened from the side bar, projects are created, opened, renamed, moved and closed from the
 File menu, and clicking a recent project opens it.
@@ -25,7 +25,6 @@ from PyQt6.QtWidgets import (
 from backend.dto.project_dto import AnalysisRecordDTO, ProjectDTO
 from backend.dto.user_dto import UserDTO
 from frontend import theme
-from frontend.widgets.form_widgets import add_soft_shadow
 
 TILE_WIDTH = 330
 RECENT_PROJECTS = 3
@@ -33,14 +32,14 @@ RESULTS_PER_PROJECT = 3
 _CATEGORY_LABELS = {"LULC": "Land cover", "LST": "Surface temperature"}
 
 STYLESHEET = f"""
-QFrame#ProjectCard, QFrame#DashboardPanel {{
+QFrame#DashboardPanel {{
     background: {theme.WHITE};
     border: 1px solid {theme.BORDER};
     border-radius: 16px;
 }}
 QLabel#SectionTitle {{ color: {theme.INK}; font-weight: 600; font-size: 10.5pt; }}
 QLabel#Overline {{ color: {theme.MUTED}; font-size: 8pt; font-weight: 600; letter-spacing: 1px; }}
-QLabel#ProjectName {{ font-family: "{theme.SERIF}"; font-size: 15pt; color: {theme.INK}; }}
+QLabel#ProjectName {{ font-family: "{theme.SERIF}"; font-size: 18pt; color: {theme.INK}; }}
 QLabel#ItemTitle {{ color: {theme.INK}; font-weight: 600; }}
 QLabel#ItemPath, QLabel#ItemMeta {{ color: {theme.MUTED}; font-size: 8.5pt; }}
 QFrame#RecentProject {{
@@ -63,14 +62,13 @@ def format_when(iso: str) -> str:
         return iso or ""
 
 
-class ProjectCard(QFrame):
-    """The open project (its name and folder), or a note on how to create or open one."""
+class ProjectHeading(QWidget):
+    """Right under the welcome: the open project's name and folder, or a note on how to create or
+    open one. Plain text, left-aligned, not a card."""
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
-        self.setObjectName("ProjectCard")
-        self.setFixedWidth(2 * TILE_WIDTH + 20)  # as wide as the two columns of cards below
-        add_soft_shadow(self, blur=32, alpha=24, y_offset=8)
+        self.setObjectName("ProjectHeading")
         self.pages = QStackedWidget()
 
         # ---- no project open
@@ -102,7 +100,7 @@ class ProjectCard(QFrame):
         self.pages.addWidget(empty)
         self.pages.addWidget(open_page)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(22, 18, 22, 18)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.pages)
         self.show_project(None)
 
@@ -204,7 +202,7 @@ class DashboardView(QWidget):
         self.result_rows: list[ResultRow] = []
 
         self.greeting = QLabel(objectName="Title")
-        self.project_card = ProjectCard()
+        self.project_heading = ProjectHeading()
 
         # ---- bottom: recent projects | their latest analysis results
         recent_panel, _, self.recent_list = _panel("Recent projects")
@@ -217,8 +215,8 @@ class DashboardView(QWidget):
         column = QVBoxLayout()
         column.setSpacing(6)
         column.addWidget(self.greeting)
-        column.addSpacing(16)
-        column.addWidget(self.project_card)
+        column.addSpacing(10)
+        column.addWidget(self.project_heading)  # just after the welcome
         column.addSpacing(20)
         column.addLayout(bottom)
 
@@ -253,7 +251,7 @@ class DashboardView(QWidget):
     def set_projects(self, current: ProjectDTO | None, recent: list[ProjectDTO],
                      results: list[tuple[ProjectDTO, list[AnalysisRecordDTO]]]) -> None:
         """The open project, the user's recent projects and the latest analysis results of those."""
-        self.project_card.show_project(current)
+        self.project_heading.show_project(current)
 
         _clear(self.recent_list)
         self.recent_items = []

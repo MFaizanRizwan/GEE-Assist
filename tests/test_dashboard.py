@@ -218,7 +218,7 @@ def test_downloading_without_a_project_asks_to_create_one_first(home, monkeypatc
 
 def test_the_open_project_shows_in_the_title_dashboard_and_menu(home):
     assert home.windowTitle() == "GEE-Assist — MyProject"
-    assert home.dashboard.project_card.name.text() == "MyProject"
+    assert home.dashboard.project_heading.name.text() == "MyProject"
     assert [item.project for item in home.dashboard.recent_items] == [PROJECT]
     assert home.menu_bar.close_project.isEnabled()
     home._facade.get_current_project.return_value = None

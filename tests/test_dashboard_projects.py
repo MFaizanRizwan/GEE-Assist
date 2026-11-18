@@ -44,15 +44,15 @@ def _click(widget) -> None:
 
 
 def test_without_a_project_it_says_how_to_create_or_open_one(dashboard):
-    assert dashboard.project_card.pages.currentIndex() == 0
-    assert "File → New project…" in dashboard.project_card.empty_text.text()
-    assert "File → Open project…" in dashboard.project_card.empty_text.text()
+    assert dashboard.project_heading.pages.currentIndex() == 0
+    assert "File → New project…" in dashboard.project_heading.empty_text.text()
+    assert "File → Open project…" in dashboard.project_heading.empty_text.text()
     assert dashboard.recent_items == [] and dashboard.result_rows == []
 
 
 def test_the_open_project_shows_its_name_and_folder(dashboard):
     dashboard.set_projects(_project(1), [_project(1)], [])
-    card = dashboard.project_card
+    card = dashboard.project_heading
     assert card.pages.currentIndex() == 1 and card.name.text() == "Project 1"
     assert card.path.text() == "D:/work/Project 1"
 
@@ -92,3 +92,20 @@ def test_updating_replaces_the_lists(dashboard):
 
 def test_category_labels():
     assert category_label("LULC") == "Land cover" and category_label("Water") == "Water"
+
+
+def test_the_open_projects_name_comes_right_after_the_welcome(dashboard):
+    from backend.dto.user_dto import UserDTO
+
+    dashboard.set_user(UserDTO(id="u1", username="ayesha", email="a@example.com", full_name="Ayesha Khan",
+                               role="user", is_active=True, email_verified=True))
+    dashboard.set_projects(_project(1), [_project(1)], [])
+    dashboard.resize(1200, 800)
+    dashboard.show()
+    QApplication.processEvents()
+    greeting, name = dashboard.greeting, dashboard.project_heading.name
+    below = name.mapTo(dashboard, name.rect().topLeft()).y() - greeting.mapTo(dashboard, greeting.rect().bottomLeft()).y()
+    assert greeting.text() == "Welcome, Ayesha" and name.text() == "Project 1"
+    assert 0 <= below <= 60  # the next thing under the welcome
+    assert name.mapTo(dashboard, name.rect().topLeft()).x() == greeting.mapTo(dashboard, greeting.rect().topLeft()).x()
+    dashboard.hide()
