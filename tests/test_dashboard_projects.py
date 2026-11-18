@@ -163,3 +163,16 @@ def test_without_a_project_no_results_are_listed(dashboard):
     assert note == "Open a project to see its analysis results here."
     dashboard.set_projects(_project(1), [_project(1)], [])
     assert dashboard.results_list.itemAt(0).widget().text() == "Results of the analyses you run in Project 1 appear here."
+
+
+@pytest.mark.parametrize("open_project", [True, False])
+def test_all_text_on_the_dashboard_is_left_aligned(dashboard, open_project):
+    from PyQt6.QtWidgets import QLabel
+
+    current = _project(1) if open_project else None
+    dashboard.set_projects(current, [_project(1), _project(2)], [_record(1), _record(2)])
+    labels = [label for label in dashboard.findChildren(QLabel) if label.text()]
+    assert len(labels) > 5
+    for label in labels:
+        horizontal = label.alignment() & Qt.AlignmentFlag.AlignHorizontal_Mask
+        assert horizontal in (Qt.AlignmentFlag.AlignLeft, Qt.AlignmentFlag.AlignLeading), label.text()
