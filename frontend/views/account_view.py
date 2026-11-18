@@ -82,10 +82,13 @@ class Avatar(QLabel):
         self.has_photo = False
         self.setFixedSize(size, size)
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.setObjectName("Avatar")
+        # Scoped to the avatar itself: unscoped, the circle style also applied to the avatar's tooltip,
+        # drawing it as a huge gradient banner.
         self.setStyleSheet(
-            f"border-radius: {size // 2}px; color: {theme.WHITE}; font-family: '{theme.SERIF}';"
+            f"QLabel#Avatar {{ border-radius: {size // 2}px; color: {theme.WHITE}; font-family: '{theme.SERIF}';"
             f"font-size: {max(9, size // 4)}pt;"
-            f"background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {theme.LEAF}, stop:1 {theme.OCEAN});"
+            f"background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {theme.LEAF}, stop:1 {theme.OCEAN}); }}"
         )
 
     def set_user(self, user: UserDTO, photo: bytes | None = None) -> None:
