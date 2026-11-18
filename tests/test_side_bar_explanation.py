@@ -115,11 +115,11 @@ def test_a_listing_error_is_shown(window, monkeypatch):
     assert warned == ["Analysis is not set up in this build."] and explained == []
 
 
-def test_the_button_is_hidden_on_the_explanation_page(window):
+def test_the_button_stays_in_the_side_bar_on_the_explanation_page(window):
     from frontend.views.home_window import HomeWindow
 
     home, *_ = window
     HomeWindow.show_explanation(home, OLDER)  # the real page, not the test's stand-in
-    assert home.current_page() is home.explanation and not home.explain_button.isVisibleTo(home)
+    assert home.current_page() is home.explanation and home.explain_button.isVisibleTo(home)
     home.show_dashboard()
     assert home.explain_button.isVisibleTo(home)

@@ -599,11 +599,7 @@ class HomeWindow(QMainWindow):
         return self.pages.currentWidget()
 
     def _show_page(self, page: QWidget) -> None:
-        self.pages.setCurrentWidget(page)
-        self.query_input_button.setVisible(page is not self.query_input)
-        self.downloads_button.setVisible(page is not self.downloads)
-        self.analysis_button.setVisible(page is not self.analysis)
-        self.explain_button.setVisible(page is not self.explanation)
+        self.pages.setCurrentWidget(page)  # every page's button stays in the side bar
         self.terminal.refresh_prompt()  # the prompt shows the page: ~/downloads
 
     # ------------------------------------------------------------- terminal

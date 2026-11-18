@@ -195,7 +195,7 @@ def test_download_card_opens_the_downloads_page(home):
     home.dashboard.download_tile.button.click()
 
     assert home.current_page() is home.downloads
-    assert home.downloads_button.isHidden()
+    assert not home.downloads_button.isHidden()  # it stays in the side bar on its own page
 
 
 def test_start_download_in_query_input_starts_the_job_and_shows_downloads(home, monkeypatch):
@@ -387,11 +387,11 @@ def test_side_bar_offers_query_input_and_downloads_with_animated_icons(home):
 
     home.query_input_button.click()
     assert isinstance(home.current_page(), StubQueryWorkspace)
-    assert home.query_input_button.isHidden() and not home.downloads_button.isHidden()  # not its own page
+    assert not home.query_input_button.isHidden() and not home.downloads_button.isHidden()
 
     home.downloads_button.click()
     assert home.current_page() is home.downloads
-    assert not home.query_input_button.isHidden() and home.downloads_button.isHidden()
+    assert not home.query_input_button.isHidden() and not home.downloads_button.isHidden()
 
 
 # ------------------------------------------------------------------ terminal (gkonsol)
@@ -596,3 +596,13 @@ def test_show_on_map_lays_the_picture_over_the_query_input_map(home):
 
     assert home.query_input.form_view.map_widget.images == [(b"png", (73.0, 31.0, 73.2, 31.1), "x · NDVI")]
     assert isinstance(home.current_page(), StubQueryWorkspace)
+
+
+def test_every_pages_button_stays_in_the_side_bar_on_every_page(home):
+    buttons = (home.query_input_button, home.downloads_button, home.analysis_button, home.explain_button,
+               home.terminal_button)
+    pages = (home.show_dashboard, home.show_query_input, home.show_downloads, home.show_analysis,
+             home.show_account, home.show_reports, home.show_analysis_table)
+    for show in pages:
+        show()
+        assert all(not button.isHidden() for button in buttons), show.__name__
