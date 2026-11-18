@@ -281,6 +281,9 @@ class AnalysisResultsDialog(QDialog):
 
         self.buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         self.buttons.rejected.connect(self.reject)
+        close = self.buttons.button(QDialogButtonBox.StandardButton.Close)
+        close.setObjectName("SecondaryButton")  # styled as the app's other buttons, not flat text
+        close.setCursor(Qt.CursorShape.PointingHandCursor)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 20, 24, 16)
