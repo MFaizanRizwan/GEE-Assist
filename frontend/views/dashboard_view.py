@@ -1,7 +1,8 @@
 """Dashboard shown right after signing in.
 
-From the top: a greeting, the open project's name as a heading right under it, and at the bottom the three most recent projects
-and the latest analysis results of those projects. The dashboard has no buttons: pages are
+On the left, from the top: a greeting, the open project's name as a heading right under it,
+and the latest analysis results. On the right edge of the page: the three most recent
+projects. Everything starts at the top left; all text is left-aligned. The dashboard has no buttons: pages are
 opened from the side bar, projects are created, opened, renamed, moved and closed from the
 File menu, and clicking a recent project opens it.
 """
@@ -26,7 +27,7 @@ from backend.dto.project_dto import AnalysisRecordDTO, ProjectDTO
 from backend.dto.user_dto import UserDTO
 from frontend import theme
 
-TILE_WIDTH = 330
+RECENT_PANEL_WIDTH = 300                        # the recent projects, on the right edge
 RECENT_PROJECTS = 3
 RESULTS_PER_PROJECT = 3
 _CATEGORY_LABELS = {"LULC": "Land cover", "LST": "Surface temperature"}
@@ -164,10 +165,11 @@ class ResultRow(QFrame):
         layout.addWidget(meta)
 
 
-def _panel(title: str) -> tuple[QFrame, QVBoxLayout, QVBoxLayout]:
-    """A titled panel; returns (panel, header row layout, body layout)."""
+def _panel(title: str, width: int | None = None) -> tuple[QFrame, QVBoxLayout, QVBoxLayout]:
+    """A titled panel, ``width`` wide or as wide as its column; returns (panel, header row layout, body layout)."""
     panel = QFrame(objectName="DashboardPanel")
-    panel.setFixedWidth(TILE_WIDTH)
+    if width is not None:
+        panel.setFixedWidth(width)
     layout = QVBoxLayout(panel)
     layout.setContentsMargins(18, 16, 18, 16)
     layout.setSpacing(10)
@@ -204,33 +206,31 @@ class DashboardView(QWidget):
         self.greeting = QLabel(objectName="Title")
         self.project_heading = ProjectHeading()
 
-        # ---- bottom: recent projects | their latest analysis results
-        recent_panel, _, self.recent_list = _panel("Recent projects")
         results_panel, _, self.results_list = _panel("Recent analysis results")
-        bottom = QHBoxLayout()
-        bottom.setSpacing(20)
-        bottom.addWidget(recent_panel, 0, Qt.AlignmentFlag.AlignTop)
-        bottom.addWidget(results_panel, 0, Qt.AlignmentFlag.AlignTop)
+        self.results_panel = results_panel
+        self.recent_panel, _, self.recent_list = _panel("Recent projects", RECENT_PANEL_WIDTH)
 
+        # ---- left: the welcome, the open project, its results
         column = QVBoxLayout()
         column.setSpacing(6)
         column.addWidget(self.greeting)
         column.addSpacing(10)
         column.addWidget(self.project_heading)  # just after the welcome
         column.addSpacing(20)
-        column.addLayout(bottom)
+        column.addWidget(results_panel)
+        column.addStretch(1)
 
+        # ---- the two columns: the left one takes the room, the recent projects keep to the right edge
         row = QHBoxLayout()
-        row.addStretch(1)
-        row.addLayout(column)
-        row.addStretch(1)
+        row.setSpacing(28)
+        row.addLayout(column, 1)
+        row.addWidget(self.recent_panel, 0, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
 
         content = QWidget()
         content_layout = QVBoxLayout(content)
-        content_layout.setContentsMargins(28, 28, 28, 28)
-        content_layout.addStretch(1)
+        content_layout.setContentsMargins(36, 32, 36, 32)
         content_layout.addLayout(row)
-        content_layout.addStretch(2)
+        content_layout.addStretch(1)  # from the top, not centred
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)

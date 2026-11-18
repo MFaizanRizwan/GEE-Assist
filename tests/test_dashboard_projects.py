@@ -109,3 +109,36 @@ def test_the_open_projects_name_comes_right_after_the_welcome(dashboard):
     assert 0 <= below <= 60  # the next thing under the welcome
     assert name.mapTo(dashboard, name.rect().topLeft()).x() == greeting.mapTo(dashboard, greeting.rect().topLeft()).x()
     dashboard.hide()
+
+
+def _shown(dashboard, width=1300, height=820):
+    dashboard.set_projects(_project(1), [_project(n) for n in range(1, 4)], [])
+    dashboard.resize(width, height)
+    dashboard.show()
+    QApplication.processEvents()
+
+
+def _left(widget, dashboard) -> int:
+    return widget.mapTo(dashboard, widget.rect().topLeft()).x()
+
+
+def _right(widget, dashboard) -> int:
+    return widget.mapTo(dashboard, widget.rect().topRight()).x()
+
+
+@pytest.mark.parametrize("width", [1100, 1600])
+def test_recent_projects_are_on_the_right_edge_of_the_dashboard(dashboard, width):
+    _shown(dashboard, width)
+    panel, margin = dashboard.recent_panel, 36
+    assert dashboard.width() - _right(panel, dashboard) <= margin + 20  # against the right edge (scroll bar room)
+    assert _left(panel, dashboard) > _right(dashboard.project_heading, dashboard)  # to the right of the rest
+    assert panel.mapTo(dashboard, panel.rect().topLeft()).y() <= dashboard.greeting.mapTo(
+        dashboard, dashboard.greeting.rect().bottomLeft()).y()  # level with the top of the page
+    dashboard.hide()
+
+
+def test_the_rest_starts_at_the_left_of_the_page(dashboard):
+    _shown(dashboard, 1600)
+    lefts = {_left(w, dashboard) for w in (dashboard.greeting, dashboard.project_heading, dashboard.results_panel)}
+    assert len(lefts) == 1 and lefts.pop() <= 40  # one left edge, at the page margin: not centred
+    dashboard.hide()
