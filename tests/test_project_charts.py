@@ -56,3 +56,39 @@ def test_the_chart_draws_in_every_state():
     for counts in ([], [("Vegetation", 3), ("Water", 1)]):
         chart.set_counts(counts)
         assert _drawn(chart)
+
+
+# ------------------------------------------------------------------ a number over time
+def test_the_trend_goes_left_to_right_and_higher_values_are_higher():
+    from frontend.widgets.project_charts import MetricTrendChart
+
+    chart = MetricTrendChart()
+    chart.resize(600, chart.height())
+    chart.set_series("NDVI mean", [("1 Nov", 0.2), ("8 Nov", 0.5), ("15 Nov", 0.35)])
+    first, second, third = chart.point_positions()
+    assert first.x() < second.x() < third.x()
+    assert second.y() < third.y() < first.y()  # 0.5 highest, 0.2 lowest (y grows downwards)
+    plot = chart.plot_rect()
+    assert first.x() == pytest.approx(plot.left()) and third.x() == pytest.approx(plot.right())
+    assert chart.toolTip().splitlines()[0] == "1 Nov: 0.2"
+    assert chart.accessibleDescription() == "NDVI mean over 3 analyses"
+
+
+def test_equal_values_sit_on_the_middle_line():
+    from frontend.widgets.project_charts import MetricTrendChart
+
+    chart = MetricTrendChart()
+    chart.resize(600, chart.height())
+    chart.set_series("NDVI mean", [("1 Nov", 0.4), ("8 Nov", 0.4)])
+    plot = chart.plot_rect()
+    assert all(point.y() == pytest.approx(plot.center().y()) for point in chart.point_positions())
+
+
+def test_the_trend_draws_with_none_one_or_many_values():
+    from frontend.widgets.project_charts import MetricTrendChart
+
+    chart = MetricTrendChart()
+    chart.resize(500, chart.height())
+    for points in ([], [("1 Nov", 0.3)], [("1 Nov", 0.3), ("2 Nov", 0.6), ("3 Nov", -0.1)]):
+        chart.set_series("NDVI mean", points)
+        assert _drawn(chart)
