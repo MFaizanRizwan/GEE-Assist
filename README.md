@@ -85,8 +85,9 @@ whatever was never entered in the app.
   sweeping magnifying lens; lines appearing in a speech bubble with a twinkling sparkle; a prompt
   typing). It is collapsed (icons only) and opens by itself (icons and names) while the pointer rests
   on it, sliding over the page, and closes again when the pointer leaves; no click is needed.
-  **View → Side bar** (Ctrl+B) keeps it open beside the page. **Terminal** opens gkonsol (see below)
-  and stays highlighted while it is open.
+  **View → Side bar** (Ctrl+B) keeps it open beside the page. Every option is always there, and the
+  one of the page being shown is highlighted (mint with a green outline). **Terminal** opens gkonsol
+  (see below) and stays mint while it is open.
 - Clicking your name or avatar in the side bar opens the account menu: **Manage account**
   (the account page), **Sign-up details** and **Sign out**.
 - The **account page** shows your details on the left and your photo on the right. Click your
