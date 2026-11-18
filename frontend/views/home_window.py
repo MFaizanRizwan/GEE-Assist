@@ -21,6 +21,7 @@ opens that tab of the website's community page in the browser.
 
 from __future__ import annotations
 
+from PyQt6 import sip
 from PyQt6.QtCore import QPoint, Qt, QTimer, QUrl, pyqtSignal
 from PyQt6.QtGui import QAction, QCloseEvent, QDesktopServices, QMouseEvent
 from PyQt6.QtWidgets import (
@@ -363,7 +364,7 @@ class HomeWindow(QMainWindow):
         self.explanation.report_requested.connect(self.show_reports)
         self.dashboard.open_reports.connect(self.show_reports)
         self.explanation.explanation_ready.connect(
-            lambda _explanation: QTimer.singleShot(FEEDBACK_DELAY_MS, lambda: self.ask_for_feedback(AFTER_EXPLANATION)))
+            lambda _explanation: self.later(FEEDBACK_DELAY_MS, lambda: self.ask_for_feedback(AFTER_EXPLANATION)))
         self.feedback_prompt = ask_for_feedback  # (parent, reason) -> tab opened or None; tests replace it
         self._asking_feedback = False
         self._analysis_since_dashboard = False  # an analysis ran since the dashboard was last shown
@@ -376,9 +377,14 @@ class HomeWindow(QMainWindow):
         self.refresh_projects()
         self.show_dashboard()
         # A new copy of the app: ask for the Earth Engine project and Gemini key once the window is up.
-        QTimer.singleShot(0, self.check_first_run)
+        self.later(0, self.check_first_run)
         # Check if a new version of the app is available (runs in background off UI thread)
-        QTimer.singleShot(500, self.check_for_updates)
+        self.later(500, self.check_for_updates)
+
+    def later(self, msec: int, action) -> None:
+        """Run ``action`` after ``msec`` ms, unless the window has been deleted by then (e.g. the user
+        signed out): calling into a deleted window from a timer would end the app."""
+        QTimer.singleShot(msec, lambda: None if sip.isdeleted(self) else action())
 
     def check_for_updates(self) -> None:
         run_task(self, self._facade.check_app_version, on_success=self._on_version_checked)
@@ -450,7 +456,7 @@ class HomeWindow(QMainWindow):
         self.refresh_projects()  # e.g. results of analyses run since
         self._show_page(self.dashboard)
         if reason:  # once the dashboard is drawn
-            QTimer.singleShot(0, lambda: self.ask_for_feedback(reason))
+            self.later(0, lambda: self.ask_for_feedback(reason))
 
     def _feedback_reason_for_dashboard(self) -> str:
         """Why to ask for feedback on reaching the dashboard ("" = don't): coming from the AI

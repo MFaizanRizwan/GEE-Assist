@@ -191,3 +191,27 @@ def test_no_analysis_no_question(window):
     home.show_dashboard()
     QTest.qWait(30)
     assert asked == []
+
+
+def test_a_feedback_question_due_after_the_window_is_gone_is_dropped():
+    """E.g. signing out just after an explanation: the delayed question must not run on the deleted window."""
+    from PyQt6 import sip
+
+    from frontend.views import home_window
+
+    user = UserDTO(id="u1", username="ayesha", email="a@example.com", full_name="Ayesha Khan", role="user",
+                   is_active=True, email_verified=True)
+    facade = MagicMock(spec=IBusinessFacade)
+    facade.get_current_user.return_value = user
+    facade.get_current_project.return_value = ProjectDTO("p1", "P", "C:/work/P")
+    facade.list_projects.return_value = []
+    facade.check_app_version.return_value = None
+    facade.get_profile_photo.return_value = None
+    home = home_window.HomeWindow(facade, user)
+    asked = []
+    home.feedback_prompt = lambda parent, reason: asked.append(reason)
+    home.later(50, lambda: home.ask_for_feedback("too late"))
+    home.terminal.shutdown()
+    sip.delete(home)  # the window is gone before the question is due
+    QTest.qWait(200)  # the timer fires: nothing happens, nothing crashes
+    assert asked == []
