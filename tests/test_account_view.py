@@ -307,3 +307,33 @@ def test_a_file_that_is_not_an_image_is_refused(page, tmp_path):
     card.choose_photo()
     assert _wait(lambda: card.banner.text() == "This file is not a supported image.")
     assert not card.photo.has_photo
+
+
+def test_hovering_the_photo_shows_no_tooltip(page):
+    card, _ = page
+    assert card.photo.toolTip() == ""  # the hint under the photo says to click it
+    assert card.photo.accessibleName() == "Your photo: click to change or remove it"
+
+
+def test_the_avatar_style_stays_on_the_avatar(app):
+    from PyQt6.QtGui import QColor
+    from PyQt6.QtWidgets import QLabel
+
+    from frontend import theme
+    from frontend.views.account_view import Avatar
+
+    avatar = Avatar(96)
+    avatar.set_user(_user(), None)
+    avatar.show()
+    QApplication.processEvents()
+    image = avatar.grab().toImage()
+    middle = QColor(image.pixel(10, 48))  # inside the circle, left of the initials
+    assert middle.saturation() > 60  # still the green-blue gradient
+    assert avatar.styleSheet().startswith("QLabel#Avatar {")
+
+    inner = QLabel("hint", avatar)  # e.g. a tooltip or any label shown from the avatar
+    inner.show()
+    QApplication.processEvents()
+    assert inner.font().pointSize() != max(9, 96 // 4)  # not the avatar's large initials font
+    assert QColor(inner.grab().toImage().pixel(1, 1)) != QColor(theme.LEAF)
+    avatar.deleteLater()

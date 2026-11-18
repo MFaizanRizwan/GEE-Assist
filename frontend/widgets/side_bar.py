@@ -5,7 +5,9 @@ full names ("Downloads"); collapsed, only a short label ("D"). It opens by itsel
 pointer is over it and closes again shortly after the pointer leaves (not while one of its
 menus, e.g. the account menu, is open). ``set_pinned(True)`` keeps it open. It starts
 collapsed unless created with ``expanded=True``, which also pins it. The logo at the top is the way home: clicking it emits
-``home_requested`` (the signed-in window shows the dashboard).
+``home_requested`` (the signed-in window shows the dashboard). A button marked with
+``set_current(True)`` is highlighted as the page being shown (mint with a green outline,
+unlike the plain mint of a checked button such as Terminal while it is open).
 Any widget added with a ``set_compact(bool)`` method follows the same switch.
 
 Sliding open, the names appear first and are uncovered as the bar widens; sliding
@@ -59,6 +61,9 @@ QPushButton#SideButton[hasIcon="true"] {{ padding-left: {ICON_LEFT + ICON_SIZE +
 QPushButton#SideButton[compact="true"] {{ text-align: center; padding: 0; border-radius: {BUTTON_HEIGHT // 2}px; }}
 QPushButton#SideButton:hover {{ background: {theme.FOAM}; }}
 QPushButton#SideButton:pressed, QPushButton#SideButton:checked {{ background: {theme.MINT}; }}
+QPushButton#SideButton[current="true"], QPushButton#SideButton[current="true"]:hover {{
+    background: {theme.MINT}; border: 1px solid {theme.LEAF};
+}}
 """
 
 
@@ -85,6 +90,18 @@ class SideButton(QPushButton):
         self.setFixedHeight(BUTTON_HEIGHT)
         # Narrower than its text while the bar slides: the text is clipped, not the bar held open.
         self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+
+    def set_current(self, current: bool) -> None:
+        """Mark the button as the page being shown (highlighted), or not."""
+        if self.is_current() == current:
+            return
+        self.setProperty("current", current)
+        self.setAccessibleDescription("Current page" if current else "")
+        self.style().unpolish(self)
+        self.style().polish(self)
+
+    def is_current(self) -> bool:
+        return bool(self.property("current"))
 
     def set_compact(self, compact: bool) -> None:
         self._compact = compact

@@ -21,6 +21,7 @@ opens that tab of the website's community page in the browser.
 
 from __future__ import annotations
 
+from PyQt6 import sip
 from PyQt6.QtCore import QPoint, Qt, QTimer, QUrl, pyqtSignal
 from PyQt6.QtGui import QAction, QCloseEvent, QDesktopServices, QMouseEvent
 from PyQt6.QtWidgets import (
@@ -257,7 +258,7 @@ class HomeWindow(QMainWindow):
         self.account_menu.addAction(self.sign_out_action)
 
         # ---- pages
-        self.dashboard = DashboardView()
+        self.dashboard = DashboardView(facade)
 
         # The query-input workspace (parameter form + kept requests) is a QMainWindow
         # of its own; shown as a page it is embedded as a plain widget.
@@ -301,6 +302,13 @@ class HomeWindow(QMainWindow):
         self.pages.addWidget(self.reports)
         self.pages.addWidget(self.analysis_table)
         self._account_page = account_page
+        # The side bar button of each page that has one: highlighted while its page is shown.
+        self.page_buttons = {
+            self.query_input: self.query_input_button,
+            self.downloads: self.downloads_button,
+            self.analysis: self.analysis_button,
+            self.explanation: self.explain_button,
+        }
 
         # ---- terminal (gkonsol) under the pages
         store = GkonsolStore()
@@ -322,19 +330,11 @@ class HomeWindow(QMainWindow):
         self.manage_account_action.triggered.connect(self.manage_account)
         self.account.user_changed.connect(self.set_user)  # e.g. a new name or photo shows in the side bar
         self.signup_details_action.triggered.connect(self.show_signup_details)
-        self.dashboard.open_query_input.connect(self.show_query_input)
         self.projects = ProjectActions(facade, self)
         self.projects.project_changed.connect(lambda _project: self.refresh_projects())
         dashboard = self.dashboard
-        dashboard.new_project.connect(self.projects.new_project)
-        dashboard.open_project.connect(self.projects.open_project)
         dashboard.open_recent.connect(self.projects.open_folder)
-        dashboard.rename_project.connect(self.projects.rename_project)
-        dashboard.move_project.connect(self.projects.move_project)
-        dashboard.show_project_folder.connect(self.projects.show_project_folder)
-        dashboard.close_project.connect(self.projects.close_project)
-        self.dashboard.open_downloads.connect(self.show_downloads)
-        self.dashboard.open_analysis.connect(self.show_analysis)
+        dashboard.open_result.connect(self.show_viewer)  # a result map on the dashboard
         self.query_input_button.clicked.connect(self.show_query_input)
         self.downloads_button.clicked.connect(self.show_downloads)
         self.analysis_button.clicked.connect(self.show_analysis)
@@ -354,9 +354,8 @@ class HomeWindow(QMainWindow):
         self.explanation.back_requested.connect(self.show_analysis)
         self.explanation.result_saved.connect(self.analysis.set_saved_result)
         self.explanation.report_requested.connect(self.show_reports)
-        self.dashboard.open_reports.connect(self.show_reports)
         self.explanation.explanation_ready.connect(
-            lambda _explanation: QTimer.singleShot(FEEDBACK_DELAY_MS, lambda: self.ask_for_feedback(AFTER_EXPLANATION)))
+            lambda _explanation: self.later(FEEDBACK_DELAY_MS, lambda: self.ask_for_feedback(AFTER_EXPLANATION)))
         self.feedback_prompt = ask_for_feedback  # (parent, reason) -> tab opened or None; tests replace it
         self._asking_feedback = False
         self._analysis_since_dashboard = False  # an analysis ran since the dashboard was last shown
@@ -369,9 +368,14 @@ class HomeWindow(QMainWindow):
         self.refresh_projects()
         self.show_dashboard()
         # A new copy of the app: ask for the Earth Engine project and Gemini key once the window is up.
-        QTimer.singleShot(0, self.check_first_run)
+        self.later(0, self.check_first_run)
         # Check if a new version of the app is available (runs in background off UI thread)
-        QTimer.singleShot(500, self.check_for_updates)
+        self.later(500, self.check_for_updates)
+
+    def later(self, msec: int, action) -> None:
+        """Run ``action`` after ``msec`` ms, unless the window has been deleted by then (e.g. the user
+        signed out): calling into a deleted window from a timer would end the app."""
+        QTimer.singleShot(msec, lambda: None if sip.isdeleted(self) else action())
 
     def check_for_updates(self) -> None:
         run_task(self, self._facade.check_app_version, on_success=self._on_version_checked)
@@ -399,11 +403,11 @@ class HomeWindow(QMainWindow):
 
     # ------------------------------------------------------------- projects
     def refresh_projects(self) -> None:
-        """Show the open project, the recent ones and their latest analysis results everywhere they appear."""
+        """Show the open project, its latest analysis results and the recent projects everywhere they appear."""
         project = current_project(self._facade)
         try:
             recent = [p for p in self._facade.list_projects() if isinstance(p, ProjectDTO)]
-            results = [(p, list(self._facade.get_analysis_results(p))) for p in recent[:3]]
+            results = list(self._facade.get_analysis_results(project)) if project is not None else []
         except GeeAssistError:
             recent, results = [], []
         self.dashboard.set_projects(project, recent, results)
@@ -443,7 +447,7 @@ class HomeWindow(QMainWindow):
         self.refresh_projects()  # e.g. results of analyses run since
         self._show_page(self.dashboard)
         if reason:  # once the dashboard is drawn
-            QTimer.singleShot(0, lambda: self.ask_for_feedback(reason))
+            self.later(0, lambda: self.ask_for_feedback(reason))
 
     def _feedback_reason_for_dashboard(self) -> str:
         """Why to ask for feedback on reaching the dashboard ("" = don't): coming from the AI
@@ -599,11 +603,9 @@ class HomeWindow(QMainWindow):
         return self.pages.currentWidget()
 
     def _show_page(self, page: QWidget) -> None:
-        self.pages.setCurrentWidget(page)
-        self.query_input_button.setVisible(page is not self.query_input)
-        self.downloads_button.setVisible(page is not self.downloads)
-        self.analysis_button.setVisible(page is not self.analysis)
-        self.explain_button.setVisible(page is not self.explanation)
+        self.pages.setCurrentWidget(page)  # every page's button stays in the side bar ...
+        for shown, button in self.page_buttons.items():
+            button.set_current(shown is page)  # ... and the one of the page shown is highlighted
         self.terminal.refresh_prompt()  # the prompt shows the page: ~/downloads
 
     # ------------------------------------------------------------- terminal

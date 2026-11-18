@@ -329,7 +329,7 @@ def test_side_bar_has_an_animated_analysis_button(window):
     assert isinstance(window.analysis_button.icon_drawing, AnalysisIcon)
     window.analysis_button.click()
     assert window.current_page() is window.analysis
-    assert not window.analysis_button.isVisibleTo(window)  # like the other pages' buttons
+    assert window.analysis_button.isVisibleTo(window)  # it stays in the side bar on its own page
     window.show_dashboard()
     assert window.analysis_button.isVisibleTo(window)
 

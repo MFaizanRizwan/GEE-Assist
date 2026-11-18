@@ -43,28 +43,28 @@ def _click(widget) -> None:
                                                    Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier))
 
 
-def test_without_a_project_it_offers_to_create_or_open_one(dashboard):
-    asked = []
-    dashboard.new_project.connect(lambda: asked.append("new"))
-    dashboard.open_project.connect(lambda: asked.append("open"))
-    assert dashboard.project_card.pages.currentIndex() == 0
-    dashboard.project_card.new_button.click()
-    dashboard.project_card.open_button.click()
-    assert asked == ["new", "open"]
+def test_without_a_project_it_says_how_to_create_or_open_one(dashboard):
+    assert dashboard.project_heading.pages.currentIndex() == 0
+    assert "File → New project…" in dashboard.project_heading.empty_text.text()
+    assert "File → Open project…" in dashboard.project_heading.empty_text.text()
     assert dashboard.recent_items == [] and dashboard.result_rows == []
 
 
-def test_the_open_project_and_its_actions(dashboard):
-    asked = []
-    for name in ("rename_project", "move_project", "show_project_folder", "close_project"):
-        getattr(dashboard, name).connect(lambda name=name: asked.append(name))
+def test_the_open_project_shows_its_name_and_folder(dashboard):
     dashboard.set_projects(_project(1), [_project(1)], [])
-    card = dashboard.project_card
+    card = dashboard.project_heading
     assert card.pages.currentIndex() == 1 and card.name.text() == "Project 1"
     assert card.path.text() == "D:/work/Project 1"
-    for button in (card.rename_button, card.move_button, card.folder_button, card.close_button):
-        button.click()
-    assert asked == ["rename_project", "move_project", "show_project_folder", "close_project"]
+
+
+def test_the_only_button_is_see_more_and_only_when_there_is_more(dashboard):
+    from PyQt6.QtWidgets import QAbstractButton
+
+    assert dashboard.findChildren(QAbstractButton) == [dashboard.see_more]
+    dashboard.set_projects(_project(1), [_project(1), _project(2)], [_record(1)])
+    assert dashboard.see_more.isHidden()  # one result: nothing more to see
+    dashboard.set_projects(None, [], [])
+    assert dashboard.see_more.isHidden()
 
 
 def test_only_the_last_three_projects_are_listed_with_their_folders(dashboard):
@@ -76,20 +76,419 @@ def test_only_the_last_three_projects_are_listed_with_their_folders(dashboard):
     assert opened == ["D:/work/Project 2"]
 
 
-def test_recent_results_of_the_last_three_projects(dashboard):
-    results = [(_project(n), [_record(10 * n + i) for i in range(5)]) for n in range(1, 5)]
-    dashboard.set_projects(_project(1), [p for p, _ in results], results)
-    assert len(dashboard.result_rows) == 3 * 3  # three projects, three results each
-    texts = [label.text() for label in dashboard.result_rows[0].findChildren(type(dashboard.greeting))]
+def test_the_open_projects_recent_results_are_listed(dashboard):
+    records = [_record(n) for n in range(12)]
+    dashboard.set_projects(_project(1), [_project(1), _project(2)], records)
+    assert len(dashboard.result_rows) == 3  # the latest three, of the open project only
+    texts = [label.text() for label in dashboard.result_rows[0].labels]
     assert texts[0] == "Vegetation · NDVI, EVI"
-    assert "14 Nov 2026, 12:30" in texts[1] and "NDVI mean: 0.421" in texts[1] and "saved" in texts[1]
+    assert texts[1] == "14 Nov 2026, 12:30  ·  saved" and "NDVI mean: 0.421" in texts
 
 
 def test_updating_replaces_the_lists(dashboard):
-    dashboard.set_projects(None, [_project(1), _project(2)], [(_project(1), [_record(1)])])
+    dashboard.set_projects(_project(1), [_project(1), _project(2)], [_record(1)])
     dashboard.set_projects(None, [_project(3)], [])
     assert [item.project.name for item in dashboard.recent_items] == ["Project 3"] and dashboard.result_rows == []
 
 
 def test_category_labels():
     assert category_label("LULC") == "Land cover" and category_label("Water") == "Water"
+
+
+def test_the_open_projects_name_comes_right_after_the_welcome(dashboard):
+    from backend.dto.user_dto import UserDTO
+
+    dashboard.set_user(UserDTO(id="u1", username="ayesha", email="a@example.com", full_name="Ayesha Khan",
+                               role="user", is_active=True, email_verified=True))
+    dashboard.set_projects(_project(1), [_project(1)], [])
+    dashboard.resize(1200, 800)
+    dashboard.show()
+    QApplication.processEvents()
+    greeting, name = dashboard.greeting, dashboard.project_heading.name
+    below = name.mapTo(dashboard, name.rect().topLeft()).y() - greeting.mapTo(dashboard, greeting.rect().bottomLeft()).y()
+    assert greeting.text() == "Welcome, Ayesha" and name.text() == "Project 1"
+    assert 0 <= below <= 60  # the next thing under the welcome
+    assert name.mapTo(dashboard, name.rect().topLeft()).x() == greeting.mapTo(dashboard, greeting.rect().topLeft()).x()
+    dashboard.hide()
+
+
+def _shown(dashboard, width=1300, height=820):
+    dashboard.set_projects(_project(1), [_project(n) for n in range(1, 4)], [])
+    dashboard.resize(width, height)
+    dashboard.show()
+    QApplication.processEvents()
+
+
+def _left(widget, dashboard) -> int:
+    return widget.mapTo(dashboard, widget.rect().topLeft()).x()
+
+
+def _right(widget, dashboard) -> int:
+    return widget.mapTo(dashboard, widget.rect().topRight()).x()
+
+
+@pytest.mark.parametrize("width", [1100, 1600])
+def test_recent_projects_are_on_the_right_edge_of_the_dashboard(dashboard, width):
+    _shown(dashboard, width)
+    panel, margin = dashboard.recent_panel, 36
+    assert dashboard.width() - _right(panel, dashboard) <= margin + 20  # against the right edge (scroll bar room)
+    assert _left(panel, dashboard) > _right(dashboard.project_heading, dashboard)  # to the right of the rest
+    assert panel.mapTo(dashboard, panel.rect().topLeft()).y() <= dashboard.greeting.mapTo(
+        dashboard, dashboard.greeting.rect().bottomLeft()).y()  # level with the top of the page
+    dashboard.hide()
+
+
+def test_the_rest_starts_at_the_left_of_the_page(dashboard):
+    _shown(dashboard, 1600)
+    lefts = {_left(w, dashboard) for w in (dashboard.greeting, dashboard.project_heading, dashboard.results_panel)}
+    assert len(lefts) == 1 and lefts.pop() <= 40  # one left edge, at the page margin: not centred
+    dashboard.hide()
+
+
+def test_the_results_come_right_under_the_projects_name(dashboard):
+    dashboard.set_projects(_project(1), [_project(1)], [_record(1), _record(2)])
+    dashboard.resize(1300, 820)
+    dashboard.show()
+    QApplication.processEvents()
+    heading, panel = dashboard.project_heading, dashboard.results_panel
+    heading_bottom = heading.mapTo(dashboard, heading.rect().bottomLeft()).y()
+    panel_top = panel.mapTo(dashboard, panel.rect().topLeft()).y()
+    assert 0 <= panel_top - heading_bottom <= 40
+    dashboard.hide()
+
+
+def test_without_a_project_no_results_are_listed(dashboard):
+    dashboard.set_projects(None, [_project(1)], [_record(1)])
+    assert dashboard.result_rows == []
+    note = dashboard.results_list.itemAt(0).widget().text()
+    assert note == "Open a project to see its analysis results here."
+    dashboard.set_projects(_project(1), [_project(1)], [])
+    assert dashboard.results_list.itemAt(0).widget().text() == "Results of the analyses you run in Project 1 appear here."
+
+
+@pytest.mark.parametrize("open_project", [True, False])
+def test_all_text_on_the_dashboard_is_left_aligned(dashboard, open_project):
+    from PyQt6.QtWidgets import QLabel
+
+    current = _project(1) if open_project else None
+    dashboard.set_projects(current, [_project(1), _project(2)], [_record(1), _record(2)])
+    labels = [label for label in dashboard.findChildren(QLabel) if label.text()]
+    assert len(labels) > 5
+    for label in labels:
+        horizontal = label.alignment() & Qt.AlignmentFlag.AlignHorizontal_Mask
+        assert horizontal in (Qt.AlignmentFlag.AlignLeft, Qt.AlignmentFlag.AlignLeading), label.text()
+
+
+# ------------------------------------------------------------------ a result row
+DATASET = "downloads/Sentinel-2_76.9812_14.1309_2026-08-17_2026-11-17/Sentinel-2_76.9812_14.1309_2026-08-17_2026-11-17.tif"
+
+
+def _full_record(**changes) -> AnalysisRecordDTO:
+    values = dict(id="r1", category="Water", processes=["NDWI"], saved=False, created_at="2026-11-18T15:08:00",
+                  metrics={"NDWI mean": -0.4281, "NDWI min": -0.91, "NDWI max": 0.62, "Water area (km²)": 3.1},
+                  dataset=DATASET, device="CPU", seconds=2.46)
+    values.update(changes)
+    return AnalysisRecordDTO(**values)
+
+
+def test_a_result_row_shows_what_ran_on_which_dataset_and_its_numbers(app):
+    from frontend.views.dashboard_view import ResultRow
+
+    row = ResultRow(_full_record())
+    texts = [label.text() for label in row.labels]
+    assert texts[:3] == ["Water · NDWI", "18 Nov 2026, 15:08  ·  not saved", "Ran on the CPU in 2.5 s"]
+    assert texts[3:5] == ["Sentinel-2  ·  17 Aug – 17 Nov 2026", "14.1309° N, 76.9812° E"]
+    assert texts[5:] == ["NDWI mean: -0.428", "NDWI min: -0.91", "NDWI max: 0.62", "+1 more (point at the row)"]
+    assert "Water area (km²): 3.1" in row.toolTip()  # all the numbers
+
+
+def test_a_result_row_with_little_recorded_still_reads_well(app):
+    from frontend.views.dashboard_view import ResultRow
+
+    row = ResultRow(_full_record(metrics={}, dataset="", device="", seconds=0.0))
+    texts = [label.text() for label in row.labels]
+    assert texts == ["Water · NDWI", "18 Nov 2026, 15:08  ·  not saved", "Dataset not recorded", "No numbers recorded"]
+    assert row.toolTip() == "No numbers recorded"
+
+
+def test_a_result_row_fills_its_width_in_three_columns(app):
+    from frontend.views.dashboard_view import ResultRow
+
+    row = ResultRow(_full_record())
+    row.resize(720, 90)
+    row.show()
+    QApplication.processEvents()
+    title, dataset, number = row.labels[0], row.labels[3], row.labels[5]
+    assert title.x() < dataset.x() < number.x()          # side by side, not one under the other
+    assert number.x() > row.width() // 2                  # the right half of the row is used
+    assert all(label.alignment() & Qt.AlignmentFlag.AlignLeft for label in row.labels)
+    row.hide()
+
+
+def test_dataset_names_and_numbers_are_summarised():
+    from frontend.views.dashboard_view import dataset_summary, format_date_range, format_number, run_summary
+
+    assert dataset_summary(r"C:\data\scene.tif") == ("scene", "")      # not a download's name
+    assert dataset_summary("") == ("", "")
+    assert dataset_summary("Landsat-8_-58.4_-34.6_2025-12-01_2026-01-31.tif") == (
+        "Landsat-8  ·  01 Dec 2025 – 31 Jan 2026", "34.6000° S, 58.4000° W")
+    assert format_date_range("2026-08-17", "2026-11-17") == "17 Aug – 17 Nov 2026"
+    assert [format_number(v) for v in (-0.42813, 1530.2, 3.1)] == ["-0.428", "1,530", "3.1"]
+    assert run_summary(AnalysisRecordDTO("r", "W", device="GPU: NVIDIA RTX 3060")) == "Ran on the GPU: NVIDIA RTX 3060"
+    assert run_summary(AnalysisRecordDTO("r", "W")) == ""
+
+
+# ------------------------------------------------------------------ all the results
+def test_the_results_dialog_lists_every_result_of_the_project_newest_first(app):
+    from PyQt6.QtWidgets import QDialog, QDialogButtonBox
+
+    from frontend.views.dashboard_view import AnalysisResultsDialog
+
+    records = [_full_record(id=f"r{n}", created_at=f"2026-11-{18 - n:02d}T10:00:00") for n in range(7)]
+    dialog = AnalysisResultsDialog("Lahore 2024", records)
+    assert dialog.isModal() and dialog.windowTitle() == "Analysis results — Lahore 2024"
+    assert [row.labels[1].text().split("  ·  ")[0] for row in dialog.rows][:2] == ["18 Nov 2026, 10:00",
+                                                                                  "17 Nov 2026, 10:00"]
+    assert len(dialog.rows) == 7
+    dialog.buttons.button(QDialogButtonBox.StandardButton.Close).click()
+    assert dialog.result() == QDialog.DialogCode.Rejected
+
+
+def test_the_results_dialog_scrolls_when_the_results_do_not_fit(app):
+    from PyQt6.QtWidgets import QScrollArea
+
+    from frontend.views.dashboard_view import AnalysisResultsDialog
+
+    dialog = AnalysisResultsDialog("Lahore 2024", [_full_record(id=f"r{n}") for n in range(30)])
+    dialog.resize(800, 480)
+    dialog.show()
+    QApplication.processEvents()
+    assert dialog.findChild(QScrollArea).verticalScrollBar().maximum() > 0
+    dialog.close()
+
+
+# ------------------------------------------------------------------ See more
+def test_only_the_latest_three_results_are_shown_and_see_more_counts_the_rest(dashboard):
+    records = [_full_record(id=f"r{n}") for n in range(12)]
+    dashboard.set_projects(_project(1), [_project(1)], records)
+    assert [row.labels[0].text() for row in dashboard.result_rows] == ["Water · NDWI"] * 3
+    assert not dashboard.see_more.isHidden() and dashboard.see_more.text() == "See more (9 more)"
+    assert dashboard.see_more.toolTip() == "All 12 analysis results of Project 1"
+
+    dashboard.set_projects(_project(1), [_project(1)], records[:3])  # exactly three: no See more
+    assert dashboard.see_more.isHidden()
+
+
+def test_see_more_opens_a_modal_with_all_the_results(dashboard, monkeypatch):
+    from frontend.views.dashboard_view import AnalysisResultsDialog
+
+    records = [_full_record(id=f"r{n}") for n in range(5)]
+    dashboard.set_projects(_project(1), [_project(1)], records)
+    shown = []
+    monkeypatch.setattr(AnalysisResultsDialog, "exec", lambda dialog: shown.append(dialog) or 0)
+    dashboard.see_more.click()
+    dialog = shown[0]
+    assert dialog.isModal() and dialog.parent() is dashboard
+    assert len(dialog.rows) == 5 and dialog.windowTitle() == "Analysis results — Project 1"
+
+
+def test_see_more_sits_under_the_results_on_the_left(dashboard):
+    dashboard.set_projects(_project(1), [_project(1)], [_full_record(id=f"r{n}") for n in range(5)])
+    dashboard.resize(1300, 820)
+    dashboard.show()
+    QApplication.processEvents()
+    last = dashboard.result_rows[-1]
+    button = dashboard.see_more
+    assert button.mapTo(dashboard, button.rect().topLeft()).y() >= last.mapTo(dashboard, last.rect().bottomLeft()).y()
+    assert abs(button.mapTo(dashboard, button.rect().topLeft()).x() - last.mapTo(dashboard, last.rect().topLeft()).x()) <= 2
+    dashboard.hide()
+
+
+# ------------------------------------------------------------------ charts, further down
+def _dated(n: int, category: str, metrics: dict) -> AnalysisRecordDTO:
+    return AnalysisRecordDTO(id=f"r{n}", category=category, metrics=metrics, created_at=f"2026-11-{n:02d}T10:00:00")
+
+
+def test_analyses_are_counted_by_type_most_frequent_first():
+    from frontend.views.dashboard_view import analyses_by_type
+
+    records = [_dated(1, "Water", {}), _dated(2, "Vegetation", {}), _dated(3, "Vegetation", {}),
+               _dated(4, "LULC", {}), _dated(5, "Vegetation", {})]
+    assert analyses_by_type(records) == [("Vegetation", 3), ("Water", 1), ("Land cover", 1)]
+    assert analyses_by_type([]) == []
+
+
+def test_the_trend_follows_the_number_most_analyses_recorded_oldest_first():
+    from frontend.views.dashboard_view import main_metric_series
+
+    records = [_dated(3, "Vegetation", {"NDVI mean": 0.5}), _dated(1, "Vegetation", {"NDVI mean": 0.2}),
+               _dated(2, "Water", {"NDWI mean": -0.4}), _dated(4, "Vegetation", {"NDVI mean": 0.35})]
+    assert main_metric_series(records) == ("NDVI mean", [("01 Nov", 0.2), ("03 Nov", 0.5), ("04 Nov", 0.35)])
+    assert main_metric_series([_dated(1, "Water", {})]) == ("", [])
+
+
+def test_a_tie_is_decided_by_the_newest_analysis():
+    from frontend.views.dashboard_view import main_metric_series
+
+    records = [_dated(1, "Vegetation", {"NDVI mean": 0.2}), _dated(2, "Water", {"NDWI mean": -0.4})]
+    assert main_metric_series(records)[0] == "NDWI mean"
+
+
+def test_the_charts_come_after_the_recent_results_and_show_the_projects_analyses(dashboard):
+    records = [_dated(n, "Vegetation", {"NDVI mean": 0.1 * n}) for n in range(1, 6)] + [_dated(6, "Water", {})]
+    dashboard.set_projects(_project(1), [_project(1)], list(reversed(records)))
+    dashboard.resize(1300, 820)
+    dashboard.show()
+    QApplication.processEvents()
+    results, charts = dashboard.results_panel, dashboard.charts_panel
+    assert charts.mapTo(dashboard, charts.rect().topLeft()).y() > results.mapTo(dashboard, results.rect().bottomLeft()).y()
+    assert charts.mapTo(dashboard, charts.rect().topLeft()).x() == results.mapTo(dashboard, results.rect().topLeft()).x()
+    assert dashboard.types_chart.counts == [("Vegetation", 5), ("Water", 1)]
+    assert dashboard.trend_title.text() == "NDVI mean over time" and len(dashboard.trend_chart.points) == 5
+    dashboard.hide()
+
+
+def test_without_a_project_there_are_no_charts(dashboard):
+    dashboard.set_projects(None, [_project(1)], [])
+    assert dashboard.charts_panel.isHidden()
+    dashboard.set_projects(_project(1), [_project(1)], [])  # a project without results: empty charts
+    assert not dashboard.charts_panel.isHidden() and dashboard.trend_title.text() == "Numbers over time"
+
+
+# ------------------------------------------------------------------ result maps, further down
+def _wait(condition, timeout_ms=3000):
+    from PyQt6.QtTest import QTest
+
+    waited = 0
+    while not condition() and waited < timeout_ms:
+        QTest.qWait(10)
+        waited += 10
+    assert condition()
+
+
+def _maps_facade(count=2, drawn=True):
+    from unittest.mock import MagicMock
+
+    import numpy as np
+
+    from backend.business.facade import IBusinessFacade
+    from backend.dto.map_dto import LegendDTO, MapLayerDTO
+    from backend.dto.result_dto import ResultDTO
+
+    facade = MagicMock(spec=IBusinessFacade)
+    facade.list_saved_results.return_value = [
+        ResultDTO(f"r{n}", "Vegetation", ["NDVI"], output_path=f"D:/work/Project 1/analysis/r{n}.tif",
+                  created_at=f"2026-11-1{n}T10:00:00", saved=True) for n in range(count)]
+    rgba = np.zeros((30, 40, 4), np.uint8)
+    rgba[..., 1], rgba[..., 3] = 160, 255
+    layer = MapLayerDTO("NDVI", "NDVI", "vegetation", rgba, LegendDTO("scale", "NDVI"), 40, 30)
+    facade.get_map_layers.return_value = [layer] if drawn else []
+    return facade
+
+
+def test_the_projects_result_maps_are_drawn_below_the_charts(app):
+    facade = _maps_facade(count=8)
+    view = DashboardView(facade)
+    view.set_projects(_project(1), [_project(1)], [_record(1)])
+    _wait(lambda: len(view.gallery.tiles) == 6 and all(t.has_picture() for t in view.gallery.tiles.values()))
+    assert facade.get_map_layers.call_count == 6  # only the newest six are drawn
+    tile = next(iter(view.gallery.tiles.values()))
+    assert tile.title.text() == "Vegetation · NDVI" and tile.subtitle.text() == "10 Nov 2026, 10:00"
+    view.resize(1300, 1400)
+    view.show()
+    QApplication.processEvents()
+    charts, maps = view.charts_panel, view.maps_panel
+    assert maps.mapTo(view, maps.rect().topLeft()).y() > charts.mapTo(view, charts.rect().bottomLeft()).y()
+    view.hide()
+    view.deleteLater()
+
+
+def test_maps_are_drawn_once_and_reused_when_the_dashboard_is_shown_again(app):
+    facade = _maps_facade()
+    view = DashboardView(facade)
+    view.set_projects(_project(1), [_project(1)], [])
+    _wait(lambda: len(view.gallery.tiles) == 2 and all(t.has_picture() for t in view.gallery.tiles.values()))
+    view.set_projects(_project(1), [_project(1)], [])  # e.g. back to the dashboard
+    _wait(lambda: facade.list_saved_results.call_count == 2 and all(t.has_picture() for t in view.gallery.tiles.values()))
+    assert facade.get_map_layers.call_count == 2
+    view.deleteLater()
+
+
+def test_clicking_a_map_asks_to_open_it(app):
+    view = DashboardView(_maps_facade())
+    view.set_projects(_project(1), [_project(1)], [])
+    _wait(lambda: len(view.gallery.tiles) == 2)
+    opened = []
+    view.open_result.connect(opened.append)
+    _click(view.gallery.tiles["D:/work/Project 1/analysis/r1.tif"])
+    assert opened == ["D:/work/Project 1/analysis/r1.tif"]
+    view.deleteLater()
+
+
+def test_a_project_without_saved_results_says_how_to_get_maps(app):
+    view = DashboardView(_maps_facade(count=0))
+    view.set_projects(_project(1), [_project(1)], [])
+    _wait(lambda: view.maps_note.text().startswith("Save an analysis result of Project 1"))
+    assert view.gallery.tiles == {}
+    view.deleteLater()
+
+
+def test_a_map_that_cannot_be_drawn_says_so(app):
+    view = DashboardView(_maps_facade(count=1, drawn=False))
+    view.set_projects(_project(1), [_project(1)], [])
+    _wait(lambda: view.gallery.tiles and next(iter(view.gallery.tiles.values())).picture.text() == "No picture")
+    view.deleteLater()
+
+
+def test_without_a_project_or_a_facade_there_are_no_maps(app):
+    facade = _maps_facade()
+    view = DashboardView(facade)
+    view.set_projects(None, [_project(1)], [])
+    assert view.maps_panel.isHidden() and facade.list_saved_results.call_count == 0
+    plain = DashboardView()  # e.g. in tests of other parts: nothing to draw them with
+    plain.set_projects(_project(1), [_project(1)], [])
+    assert plain.maps_panel.isHidden()
+    view.deleteLater()
+    plain.deleteLater()
+
+
+# ------------------------------------------------------------------ the project at a glance
+def test_the_project_is_counted_at_a_glance(app):
+    from backend.dto.report_dto import ExplanationFileDTO
+
+    facade = _maps_facade(count=4)
+    facade.list_analysis_datasets.return_value = ["a", "b", "c"]  # three finished downloads
+    facade.list_explanations.return_value = [ExplanationFileDTO("x.md", "X", report_path="x.pdf"),
+                                             ExplanationFileDTO("y.md", "Y")]
+    view = DashboardView(facade)
+    view.set_projects(_project(1), [_project(1)], [_record(n) for n in range(5)])
+    assert view.glance["analyses"].value.text() == "5"  # known at once
+    _wait(lambda: view.glance["reports"].value.text() != "–" and view.glance["maps"].value.text() != "–"
+          and view.glance["downloads"].value.text() != "–")
+    values = {key: tile.value.text() for key, tile in view.glance.items()}
+    assert values == {"downloads": "3", "analyses": "5", "maps": "4", "explanations": "2", "reports": "1"}
+    assert [tile.label.text() for tile in view.glance.values()] == [
+        "Downloads", "Analyses run", "Saved result maps", "AI explanations", "PDF reports"]
+    view.deleteLater()
+
+
+def test_at_a_glance_comes_right_after_the_recent_results_and_before_the_charts(app):
+    view = DashboardView(_maps_facade())
+    view.set_projects(_project(1), [_project(1)], [_record(1)])
+    view.resize(1300, 1600)
+    view.show()
+    QApplication.processEvents()
+
+    def top(widget):
+        return widget.mapTo(view, widget.rect().topLeft()).y()
+
+    assert top(view.results_panel) < top(view.glance_panel) < top(view.charts_panel) < top(view.maps_panel)
+    view.hide()
+    view.deleteLater()
+
+
+def test_without_a_project_nothing_is_counted(app):
+    view = DashboardView(_maps_facade())
+    view.set_projects(None, [], [])
+    assert view.glance_panel.isHidden() and all(t.value.text() == "–" for t in view.glance.values())
+    view.deleteLater()

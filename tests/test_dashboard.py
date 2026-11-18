@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import QApplication, QLabel, QMainWindow, QPushButton, QToo
 
 from backend.business.facade import IBusinessFacade  # noqa: E402
 from backend.dto import FormDTO  # noqa: E402
-from backend.dto.project_dto import ProjectDTO  # noqa: E402
+from backend.dto.project_dto import AnalysisRecordDTO, ProjectDTO  # noqa: E402
 from backend.dto.user_dto import UserDTO  # noqa: E402
 from frontend.gkonsol.history import GkonsolStore  # noqa: E402
 from frontend.views import home_window  # noqa: E402
@@ -68,7 +68,7 @@ def test_opens_on_the_dashboard_with_a_greeting(home):
 
 
 def test_query_input_button_opens_the_parameter_form(home):
-    home.dashboard.query_tile.button.click()
+    home.query_input_button.click()
 
     assert isinstance(home.current_page(), StubQueryWorkspace)
 
@@ -172,30 +172,19 @@ def test_signup_details_open_for_the_signed_in_user(home, monkeypatch):
     assert opened == ["ayesha"]
 
 
-def test_every_workspace_card_is_built(home):
-    grid = home.dashboard.findChildren(type(home.dashboard.query_tile))
-    assert len(grid) == 4 and all(tile.isEnabled() and tile.button is not None for tile in grid)
+def test_the_dashboard_has_no_workspace_cards(home):
+    """The pages are opened from the side bar: the dashboard does not repeat them."""
+    texts = [label.text() for label in home.dashboard.findChildren(QLabel)]
+    for name in ("Open Query Input", "Open Downloads", "Open Analysis", "Open Reports", "Coming soon"):
+        assert all(name not in text for text in texts)
+    assert home.dashboard.findChildren(QPushButton) == [home.dashboard.see_more]  # only "See more"
 
 
-def test_reports_card_asks_for_the_reports_page(home):
-    asked = []
-    home.dashboard.open_reports.connect(lambda: asked.append(True))
-    home.dashboard.reports_tile.button.click()
-    assert asked == [True]
-
-
-def test_analysis_card_opens_the_analysis_page(home):
-    assert home.dashboard.analysis_tile.isEnabled()
-    home.dashboard.analysis_tile.button.click()
-
+def test_the_side_bar_opens_the_analysis_and_downloads_pages(home):
+    home.analysis_button.click()
     assert home.current_page() is home.analysis
-
-
-def test_download_card_opens_the_downloads_page(home):
-    home.dashboard.download_tile.button.click()
-
+    home.downloads_button.click()
     assert home.current_page() is home.downloads
-    assert home.downloads_button.isHidden()
 
 
 def test_start_download_in_query_input_starts_the_job_and_shows_downloads(home, monkeypatch):
@@ -229,7 +218,7 @@ def test_downloading_without_a_project_asks_to_create_one_first(home, monkeypatc
 
 def test_the_open_project_shows_in_the_title_dashboard_and_menu(home):
     assert home.windowTitle() == "GEE-Assist — MyProject"
-    assert home.dashboard.project_card.name.text() == "MyProject"
+    assert home.dashboard.project_heading.name.text() == "MyProject"
     assert [item.project for item in home.dashboard.recent_items] == [PROJECT]
     assert home.menu_bar.close_project.isEnabled()
     home._facade.get_current_project.return_value = None
@@ -387,11 +376,11 @@ def test_side_bar_offers_query_input_and_downloads_with_animated_icons(home):
 
     home.query_input_button.click()
     assert isinstance(home.current_page(), StubQueryWorkspace)
-    assert home.query_input_button.isHidden() and not home.downloads_button.isHidden()  # not its own page
+    assert not home.query_input_button.isHidden() and not home.downloads_button.isHidden()
 
     home.downloads_button.click()
     assert home.current_page() is home.downloads
-    assert not home.query_input_button.isHidden() and home.downloads_button.isHidden()
+    assert not home.query_input_button.isHidden() and not home.downloads_button.isHidden()
 
 
 # ------------------------------------------------------------------ terminal (gkonsol)
@@ -596,3 +585,64 @@ def test_show_on_map_lays_the_picture_over_the_query_input_map(home):
 
     assert home.query_input.form_view.map_widget.images == [(b"png", (73.0, 31.0, 73.2, 31.1), "x · NDVI")]
     assert isinstance(home.current_page(), StubQueryWorkspace)
+
+
+def test_every_pages_button_stays_in_the_side_bar_on_every_page(home):
+    buttons = (home.query_input_button, home.downloads_button, home.analysis_button, home.explain_button,
+               home.terminal_button)
+    pages = (home.show_dashboard, home.show_query_input, home.show_downloads, home.show_analysis,
+             home.show_account, home.show_reports, home.show_analysis_table)
+    for show in pages:
+        show()
+        assert all(not button.isHidden() for button in buttons), show.__name__
+
+
+def test_the_current_pages_button_is_highlighted(home):
+    expected = {
+        home.show_query_input: home.query_input_button,
+        home.show_downloads: home.downloads_button,
+        home.show_analysis: home.analysis_button,
+    }
+    buttons = (home.query_input_button, home.downloads_button, home.analysis_button, home.explain_button)
+    for show, button in expected.items():
+        show()
+        assert [b for b in buttons if b.is_current()] == [button], show.__name__
+
+    for show in (home.show_dashboard, home.show_account, home.show_reports):  # pages without a button
+        show()
+        assert not any(b.is_current() for b in buttons), show.__name__
+
+
+def test_clicking_a_side_bar_button_highlights_it(home):
+    home.downloads_button.click()
+    assert home.downloads_button.is_current() and not home.analysis_button.is_current()
+    home.analysis_button.click()
+    assert home.analysis_button.is_current() and not home.downloads_button.is_current()
+    home.side_bar.logo.click()  # back to the dashboard: nothing highlighted
+    assert not home.analysis_button.is_current()
+
+
+def test_the_terminal_is_not_a_page_and_keeps_its_own_open_state(home):
+    home.show()
+    home.show_downloads()
+    home.terminal_button.click()  # opens the terminal under the Downloads page
+    assert home.terminal_button.isChecked() and not home.terminal_button.is_current()
+    assert home.downloads_button.is_current()
+    home.terminal_button.click()
+    home.hide()
+
+
+def test_the_dashboard_lists_the_open_projects_own_results(home):
+    record = AnalysisRecordDTO(id="r1", category="Water", processes=["NDWI"], created_at="2026-11-14T12:30:00")
+    home._facade.get_analysis_results.reset_mock()
+    home._facade.get_analysis_results.return_value = [record]
+    home.show_dashboard()
+    home._facade.get_analysis_results.assert_called_once_with(PROJECT)  # only the open project's
+    assert len(home.dashboard.result_rows) == 1
+
+
+def test_a_result_map_clicked_on_the_dashboard_opens_in_the_viewer(home, monkeypatch):
+    opened = []
+    monkeypatch.setattr(home.viewer, "open", opened.append)
+    home.dashboard.open_result.emit("D:/work/MyProject/analysis/result.tif")
+    assert opened == ["D:/work/MyProject/analysis/result.tif"] and home.current_page() is home.viewer
