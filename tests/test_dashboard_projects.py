@@ -302,3 +302,54 @@ def test_see_more_sits_under_the_results_on_the_left(dashboard):
     assert button.mapTo(dashboard, button.rect().topLeft()).y() >= last.mapTo(dashboard, last.rect().bottomLeft()).y()
     assert abs(button.mapTo(dashboard, button.rect().topLeft()).x() - last.mapTo(dashboard, last.rect().topLeft()).x()) <= 2
     dashboard.hide()
+
+
+# ------------------------------------------------------------------ charts, further down
+def _dated(n: int, category: str, metrics: dict) -> AnalysisRecordDTO:
+    return AnalysisRecordDTO(id=f"r{n}", category=category, metrics=metrics, created_at=f"2026-11-{n:02d}T10:00:00")
+
+
+def test_analyses_are_counted_by_type_most_frequent_first():
+    from frontend.views.dashboard_view import analyses_by_type
+
+    records = [_dated(1, "Water", {}), _dated(2, "Vegetation", {}), _dated(3, "Vegetation", {}),
+               _dated(4, "LULC", {}), _dated(5, "Vegetation", {})]
+    assert analyses_by_type(records) == [("Vegetation", 3), ("Water", 1), ("Land cover", 1)]
+    assert analyses_by_type([]) == []
+
+
+def test_the_trend_follows_the_number_most_analyses_recorded_oldest_first():
+    from frontend.views.dashboard_view import main_metric_series
+
+    records = [_dated(3, "Vegetation", {"NDVI mean": 0.5}), _dated(1, "Vegetation", {"NDVI mean": 0.2}),
+               _dated(2, "Water", {"NDWI mean": -0.4}), _dated(4, "Vegetation", {"NDVI mean": 0.35})]
+    assert main_metric_series(records) == ("NDVI mean", [("01 Nov", 0.2), ("03 Nov", 0.5), ("04 Nov", 0.35)])
+    assert main_metric_series([_dated(1, "Water", {})]) == ("", [])
+
+
+def test_a_tie_is_decided_by_the_newest_analysis():
+    from frontend.views.dashboard_view import main_metric_series
+
+    records = [_dated(1, "Vegetation", {"NDVI mean": 0.2}), _dated(2, "Water", {"NDWI mean": -0.4})]
+    assert main_metric_series(records)[0] == "NDWI mean"
+
+
+def test_the_charts_come_after_the_recent_results_and_show_the_projects_analyses(dashboard):
+    records = [_dated(n, "Vegetation", {"NDVI mean": 0.1 * n}) for n in range(1, 6)] + [_dated(6, "Water", {})]
+    dashboard.set_projects(_project(1), [_project(1)], list(reversed(records)))
+    dashboard.resize(1300, 820)
+    dashboard.show()
+    QApplication.processEvents()
+    results, charts = dashboard.results_panel, dashboard.charts_panel
+    assert charts.mapTo(dashboard, charts.rect().topLeft()).y() > results.mapTo(dashboard, results.rect().bottomLeft()).y()
+    assert charts.mapTo(dashboard, charts.rect().topLeft()).x() == results.mapTo(dashboard, results.rect().topLeft()).x()
+    assert dashboard.types_chart.counts == [("Vegetation", 5), ("Water", 1)]
+    assert dashboard.trend_title.text() == "NDVI mean over time" and len(dashboard.trend_chart.points) == 5
+    dashboard.hide()
+
+
+def test_without_a_project_there_are_no_charts(dashboard):
+    dashboard.set_projects(None, [_project(1)], [])
+    assert dashboard.charts_panel.isHidden()
+    dashboard.set_projects(_project(1), [_project(1)], [])  # a project without results: empty charts
+    assert not dashboard.charts_panel.isHidden() and dashboard.trend_title.text() == "Numbers over time"

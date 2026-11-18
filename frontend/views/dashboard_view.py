@@ -30,6 +30,7 @@ from PyQt6.QtWidgets import (
 from backend.dto.project_dto import AnalysisRecordDTO, ProjectDTO
 from backend.dto.user_dto import UserDTO
 from frontend import theme
+from frontend.widgets.project_charts import CategoryBarChart, MetricTrendChart
 
 RECENT_PANEL_WIDTH = 300                        # the recent projects, on the right edge
 RECENT_PROJECTS = 3
@@ -294,6 +295,38 @@ class AnalysisResultsDialog(QDialog):
         layout.addWidget(self.buttons)
 
 
+def analyses_by_type(records: list[AnalysisRecordDTO]) -> list[tuple[str, int]]:
+    """(type, number of analyses) for the project's records, the most frequent first."""
+    counts: dict[str, int] = {}
+    for record in records:
+        label = category_label(record.category) or "Other"
+        counts[label] = counts.get(label, 0) + 1
+    return sorted(counts.items(), key=lambda item: -item[1])  # stable: ties keep their first appearance
+
+
+def main_metric_series(records: list[AnalysisRecordDTO]) -> tuple[str, list[tuple[str, float]]]:
+    """The number recorded by the most analyses (the newest analysis decides a tie) and its values,
+    oldest first, as (date shown, value) pairs; ("", []) when no analysis recorded a number."""
+    newest_first = sorted(records, key=lambda record: record.created_at, reverse=True)
+    counts: dict[str, int] = {}
+    for record in newest_first:
+        for name in record.metrics:
+            counts[name] = counts.get(name, 0) + 1
+    if not counts:
+        return "", []
+    name = max(counts, key=counts.get)  # max keeps the first (newest) name among equals
+    points = [(_short_date(record.created_at), float(record.metrics[name]))
+              for record in reversed(newest_first) if name in record.metrics]
+    return name, points
+
+
+def _short_date(iso: str) -> str:
+    try:
+        return datetime.fromisoformat(iso).strftime("%d %b")
+    except (TypeError, ValueError):
+        return iso or ""
+
+
 def _panel(title: str, width: int | None = None) -> tuple[QFrame, QVBoxLayout, QVBoxLayout]:
     """A titled panel, ``width`` wide or as wide as its column; returns (panel, header row layout, body layout)."""
     panel = QFrame(objectName="DashboardPanel")
@@ -353,6 +386,19 @@ class DashboardView(QWidget):
         column.addWidget(self.project_heading)  # just after the welcome
         column.addSpacing(20)
         column.addWidget(results_panel)
+        # ---- further down (scrolling): charts of the project's analyses
+        self.charts_panel, _, charts = _panel("Charts")
+        self.types_title = QLabel("Analyses by type", objectName="ItemTitle")
+        self.types_chart = CategoryBarChart()
+        self.trend_title = QLabel(objectName="ItemTitle")
+        self.trend_chart = MetricTrendChart()
+        for widget in (self.types_title, self.types_chart):
+            charts.addWidget(widget)
+        charts.addSpacing(8)
+        for widget in (self.trend_title, self.trend_chart):
+            charts.addWidget(widget)
+        column.addSpacing(16)
+        column.addWidget(self.charts_panel)
         column.addStretch(1)
 
         # ---- the two columns: the left one takes the room, the recent projects keep to the right edge
@@ -409,11 +455,20 @@ class DashboardView(QWidget):
             self.results_list.addWidget(self._empty(
                 f"Results of the analyses you run in {current.name} appear here." if current is not None
                 else "Open a project to see its analysis results here."))
+        self._show_charts()
         hidden = len(self._results) - len(self.result_rows)
         self.see_more.setVisible(hidden > 0)
         if hidden > 0:
             self.see_more.setText(f"See more ({hidden} more)")
             self.see_more.setToolTip(f"All {len(self._results)} analysis results of {current.name}")
+
+    def _show_charts(self) -> None:
+        """The charts of the open project's analyses (hidden without an open project)."""
+        self.charts_panel.setVisible(self._current is not None)
+        self.types_chart.set_counts(analyses_by_type(self._results))
+        name, points = main_metric_series(self._results)
+        self.trend_title.setText(f"{name} over time" if name else "Numbers over time")
+        self.trend_chart.set_series(name, points)
 
     def make_results_dialog(self) -> AnalysisResultsDialog:
         """The modal with every analysis result of the open project."""
