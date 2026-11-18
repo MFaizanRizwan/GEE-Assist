@@ -68,7 +68,7 @@ def test_opens_on_the_dashboard_with_a_greeting(home):
 
 
 def test_query_input_button_opens_the_parameter_form(home):
-    home.dashboard.query_tile.button.click()
+    home.query_input_button.click()
 
     assert isinstance(home.current_page(), StubQueryWorkspace)
 
@@ -172,30 +172,20 @@ def test_signup_details_open_for_the_signed_in_user(home, monkeypatch):
     assert opened == ["ayesha"]
 
 
-def test_every_workspace_card_is_built(home):
-    grid = home.dashboard.findChildren(type(home.dashboard.query_tile))
-    assert len(grid) == 4 and all(tile.isEnabled() and tile.button is not None for tile in grid)
+def test_the_dashboard_has_no_workspace_cards(home):
+    """The pages are opened from the side bar: the dashboard does not repeat them."""
+    texts = [label.text() for label in home.dashboard.findChildren(QLabel)]
+    for name in ("Open Query Input", "Open Downloads", "Open Analysis", "Open Reports", "Coming soon"):
+        assert all(name not in text for text in texts)
+    cards = ("Open Query Input", "Open Downloads", "Open Analysis", "Open Reports")
+    assert not any(button.text() in cards for button in home.dashboard.findChildren(QPushButton))
 
 
-def test_reports_card_asks_for_the_reports_page(home):
-    asked = []
-    home.dashboard.open_reports.connect(lambda: asked.append(True))
-    home.dashboard.reports_tile.button.click()
-    assert asked == [True]
-
-
-def test_analysis_card_opens_the_analysis_page(home):
-    assert home.dashboard.analysis_tile.isEnabled()
-    home.dashboard.analysis_tile.button.click()
-
+def test_the_side_bar_opens_the_analysis_and_downloads_pages(home):
+    home.analysis_button.click()
     assert home.current_page() is home.analysis
-
-
-def test_download_card_opens_the_downloads_page(home):
-    home.dashboard.download_tile.button.click()
-
+    home.downloads_button.click()
     assert home.current_page() is home.downloads
-    assert not home.downloads_button.isHidden()  # it stays in the side bar on its own page
 
 
 def test_start_download_in_query_input_starts_the_job_and_shows_downloads(home, monkeypatch):

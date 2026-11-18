@@ -39,9 +39,9 @@ def window():
     home.deleteLater()
 
 
-def test_the_dashboard_card_opens_the_reports_page(window):
+def test_show_reports_opens_the_reports_page_without_creating_one(window):
     home, created = window
-    home.dashboard.reports_tile.button.click()
+    home.show_reports()
     assert home.current_page() is home.reports and created == []
 
 
