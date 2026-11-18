@@ -55,6 +55,8 @@ QLabel#Overline {{ color: {theme.MUTED}; font-size: 8pt; font-weight: 600; lette
 QLabel#ProjectName {{ font-family: "{theme.SERIF}"; font-size: 18pt; color: {theme.INK}; }}
 QLabel#ItemTitle {{ color: {theme.INK}; font-weight: 600; }}
 QLabel#ItemText {{ color: {theme.TEXT}; font-size: 9pt; }}
+QFrame#GlanceTile {{ background: {theme.FOAM}; border: 1px solid {theme.BORDER}; border-radius: 10px; }}
+QLabel#GlanceValue {{ font-family: "{theme.SERIF}"; font-size: 20pt; color: {theme.INK}; }}
 QLabel#ItemPath, QLabel#ItemMeta {{ color: {theme.MUTED}; font-size: 8.5pt; }}
 QFrame#RecentProject {{
     background: {theme.FOAM}; border: 1px solid {theme.BORDER}; border-radius: 8px;
@@ -340,6 +342,29 @@ def _short_date(iso: str) -> str:
         return iso or ""
 
 
+class GlanceTile(QFrame):
+    """One count of the project at a glance: the number, and what it counts under it (left-aligned)."""
+
+    def __init__(self, label: str, parent: QWidget | None = None):
+        super().__init__(parent)
+        self.setObjectName("GlanceTile")
+        self.value = QLabel("–", objectName="GlanceValue")
+        self.label = QLabel(label, objectName="ItemMeta")
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(14, 10, 14, 10)
+        layout.setSpacing(0)
+        layout.addWidget(self.value)
+        layout.addWidget(self.label)
+
+    def set_value(self, value: int | None) -> None:
+        """The count, or "–" while it is not known (yet)."""
+        self.value.setText("–" if value is None else f"{value:,}")
+
+
+GLANCE = (("downloads", "Downloads"), ("analyses", "Analyses run"), ("maps", "Saved result maps"),
+          ("explanations", "AI explanations"), ("reports", "PDF reports"))
+
+
 def _panel(title: str, width: int | None = None) -> tuple[QFrame, QVBoxLayout, QVBoxLayout]:
     """A titled panel, ``width`` wide or as wide as its column; returns (panel, header row layout, body layout)."""
     panel = QFrame(objectName="DashboardPanel")
@@ -405,7 +430,17 @@ class DashboardView(QWidget):
         column.addWidget(self.project_heading)  # just after the welcome
         column.addSpacing(20)
         column.addWidget(results_panel)
-        # ---- further down (scrolling): charts of the project's analyses
+        # ---- further down (scrolling): the project at a glance
+        self.glance_panel, _, glance = _panel("At a glance")
+        self.glance: dict[str, GlanceTile] = {key: GlanceTile(label) for key, label in GLANCE}
+        tiles = QHBoxLayout()
+        tiles.setSpacing(10)
+        for tile in self.glance.values():
+            tiles.addWidget(tile, 1)
+        glance.addLayout(tiles)
+        column.addSpacing(16)
+        column.addWidget(self.glance_panel)
+        # ---- charts of the project's analyses
         self.charts_panel, _, charts = _panel("Charts")
         self.types_title = QLabel("Analyses by type", objectName="ItemTitle")
         self.types_chart = CategoryBarChart()
@@ -485,6 +520,7 @@ class DashboardView(QWidget):
                 f"Results of the analyses you run in {current.name} appear here." if current is not None
                 else "Open a project to see its analysis results here."))
         self._show_charts()
+        self._load_glance()
         self._load_maps()
         hidden = len(self._results) - len(self.result_rows)
         self.see_more.setVisible(hidden > 0)
@@ -499,6 +535,35 @@ class DashboardView(QWidget):
         name, points = main_metric_series(self._results)
         self.trend_title.setText(f"{name} over time" if name else "Numbers over time")
         self.trend_chart.set_series(name, points)
+
+    # ------------------------------------------------------------- at a glance
+    def _load_glance(self) -> None:
+        """The project's counts: its analyses at once, the rest from the facade in the background
+        (the saved maps are counted when they are listed for the gallery)."""
+        project = self._current
+        self.glance_panel.setVisible(project is not None)
+        for tile in self.glance.values():
+            tile.set_value(None)
+        if project is None:
+            return
+        self.glance["analyses"].set_value(len(self._results))
+        if self._facade is None:
+            return
+        wanted = project.id
+        run_task(self, self._facade.list_analysis_datasets,
+                 on_success=lambda datasets: self._set_glance(wanted, downloads=len(list(datasets))))
+        run_task(self, self._facade.list_explanations,
+                 on_success=lambda files: self._set_glance(wanted, explanations=files))
+
+    def _set_glance(self, project_id: str, downloads: int | None = None, explanations=None) -> None:
+        if self._current is None or project_id != self._current.id:
+            return  # another project was opened meanwhile
+        if downloads is not None:
+            self.glance["downloads"].set_value(downloads)
+        if explanations is not None:
+            files = list(explanations)
+            self.glance["explanations"].set_value(len(files))
+            self.glance["reports"].set_value(sum(1 for item in files if item.report_path))
 
     # ------------------------------------------------------------- result maps
     def _load_maps(self) -> None:
@@ -518,7 +583,9 @@ class DashboardView(QWidget):
     def _on_saved_results(self, project_id: str, results) -> None:
         if project_id != self._maps_for:
             return  # another project was opened meanwhile
-        shown = list(results)[:MAPS_SHOWN]
+        results = list(results)
+        self.glance["maps"].set_value(len(results))
+        shown = results[:MAPS_SHOWN]
         name = self._current.name if self._current is not None else "the project"
         self.maps_note.setText(
             "" if shown else f"Save an analysis result of {name} (Save result, or Explain with AI) to see its map here.")

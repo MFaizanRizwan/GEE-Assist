@@ -450,3 +450,45 @@ def test_without_a_project_or_a_facade_there_are_no_maps(app):
     assert plain.maps_panel.isHidden()
     view.deleteLater()
     plain.deleteLater()
+
+
+# ------------------------------------------------------------------ the project at a glance
+def test_the_project_is_counted_at_a_glance(app):
+    from backend.dto.report_dto import ExplanationFileDTO
+
+    facade = _maps_facade(count=4)
+    facade.list_analysis_datasets.return_value = ["a", "b", "c"]  # three finished downloads
+    facade.list_explanations.return_value = [ExplanationFileDTO("x.md", "X", report_path="x.pdf"),
+                                             ExplanationFileDTO("y.md", "Y")]
+    view = DashboardView(facade)
+    view.set_projects(_project(1), [_project(1)], [_record(n) for n in range(5)])
+    assert view.glance["analyses"].value.text() == "5"  # known at once
+    _wait(lambda: view.glance["reports"].value.text() != "–" and view.glance["maps"].value.text() != "–"
+          and view.glance["downloads"].value.text() != "–")
+    values = {key: tile.value.text() for key, tile in view.glance.items()}
+    assert values == {"downloads": "3", "analyses": "5", "maps": "4", "explanations": "2", "reports": "1"}
+    assert [tile.label.text() for tile in view.glance.values()] == [
+        "Downloads", "Analyses run", "Saved result maps", "AI explanations", "PDF reports"]
+    view.deleteLater()
+
+
+def test_at_a_glance_comes_right_after_the_recent_results_and_before_the_charts(app):
+    view = DashboardView(_maps_facade())
+    view.set_projects(_project(1), [_project(1)], [_record(1)])
+    view.resize(1300, 1600)
+    view.show()
+    QApplication.processEvents()
+
+    def top(widget):
+        return widget.mapTo(view, widget.rect().topLeft()).y()
+
+    assert top(view.results_panel) < top(view.glance_panel) < top(view.charts_panel) < top(view.maps_panel)
+    view.hide()
+    view.deleteLater()
+
+
+def test_without_a_project_nothing_is_counted(app):
+    view = DashboardView(_maps_facade())
+    view.set_projects(None, [], [])
+    assert view.glance_panel.isHidden() and all(t.value.text() == "–" for t in view.glance.values())
+    view.deleteLater()
