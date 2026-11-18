@@ -235,3 +235,32 @@ def test_dataset_names_and_numbers_are_summarised():
     assert [format_number(v) for v in (-0.42813, 1530.2, 3.1)] == ["-0.428", "1,530", "3.1"]
     assert run_summary(AnalysisRecordDTO("r", "W", device="GPU: NVIDIA RTX 3060")) == "Ran on the GPU: NVIDIA RTX 3060"
     assert run_summary(AnalysisRecordDTO("r", "W")) == ""
+
+
+# ------------------------------------------------------------------ all the results
+def test_the_results_dialog_lists_every_result_of_the_project_newest_first(app):
+    from PyQt6.QtWidgets import QDialog, QDialogButtonBox
+
+    from frontend.views.dashboard_view import AnalysisResultsDialog
+
+    records = [_full_record(id=f"r{n}", created_at=f"2026-11-{18 - n:02d}T10:00:00") for n in range(7)]
+    dialog = AnalysisResultsDialog("Lahore 2024", records)
+    assert dialog.isModal() and dialog.windowTitle() == "Analysis results — Lahore 2024"
+    assert [row.labels[1].text().split("  ·  ")[0] for row in dialog.rows][:2] == ["18 Nov 2026, 10:00",
+                                                                                  "17 Nov 2026, 10:00"]
+    assert len(dialog.rows) == 7
+    dialog.buttons.button(QDialogButtonBox.StandardButton.Close).click()
+    assert dialog.result() == QDialog.DialogCode.Rejected
+
+
+def test_the_results_dialog_scrolls_when_the_results_do_not_fit(app):
+    from PyQt6.QtWidgets import QScrollArea
+
+    from frontend.views.dashboard_view import AnalysisResultsDialog
+
+    dialog = AnalysisResultsDialog("Lahore 2024", [_full_record(id=f"r{n}") for n in range(30)])
+    dialog.resize(800, 480)
+    dialog.show()
+    QApplication.processEvents()
+    assert dialog.findChild(QScrollArea).verticalScrollBar().maximum() > 0
+    dialog.close()

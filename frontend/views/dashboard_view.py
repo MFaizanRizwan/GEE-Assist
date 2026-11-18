@@ -15,6 +15,8 @@ from datetime import datetime
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QMouseEvent
 from PyQt6.QtWidgets import (
+    QDialog,
+    QDialogButtonBox,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -244,6 +246,48 @@ def format_number(value: float) -> str:
     except (TypeError, ValueError):
         return str(value)
     return f"{number:,.0f}" if abs(number) >= 1000 else f"{number:.3g}"
+
+
+class AnalysisResultsDialog(QDialog):
+    """A modal listing every analysis result of a project, newest first, in the same rows as the
+    dashboard (which shows only the latest few); it scrolls when they do not fit."""
+
+    def __init__(self, project_name: str, records: list[AnalysisRecordDTO], parent: QWidget | None = None):
+        super().__init__(parent)
+        self.setWindowTitle(f"Analysis results — {project_name}")
+        self.setModal(True)
+        self.setMinimumSize(760, 460)
+        self.setStyleSheet(STYLESHEET + f"QDialog {{ background: {theme.WHITE}; }}")
+        self.rows: list[ResultRow] = []
+
+        title = QLabel(f"Analysis results of {project_name}", objectName="ProjectName")
+        count = len(records)
+        summary = QLabel(f"{count} result{'s' if count != 1 else ''}, newest first. Point at a row to see all "
+                         "its numbers.", objectName="ItemMeta")
+        rows = QWidget()
+        rows_layout = QVBoxLayout(rows)
+        rows_layout.setContentsMargins(0, 0, 8, 0)
+        rows_layout.setSpacing(0)
+        for record in records:
+            row = ResultRow(record)
+            rows_layout.addWidget(row)
+            self.rows.append(row)
+        rows_layout.addStretch(1)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setWidget(rows)
+
+        self.buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        self.buttons.rejected.connect(self.reject)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(24, 20, 24, 16)
+        layout.setSpacing(8)
+        layout.addWidget(title)
+        layout.addWidget(summary)
+        layout.addWidget(scroll, 1)
+        layout.addWidget(self.buttons)
 
 
 def _panel(title: str, width: int | None = None) -> tuple[QFrame, QVBoxLayout, QVBoxLayout]:
