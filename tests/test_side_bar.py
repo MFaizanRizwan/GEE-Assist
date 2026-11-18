@@ -305,3 +305,33 @@ def test_a_bar_created_expanded_is_pinned(app):
     side = SideBar(QPixmap(48, 48), expanded=True)
     assert side.is_expanded() and side.is_pinned()
     side.deleteLater()
+
+
+# ------------------------------------------------------------------ the current page
+def test_a_button_can_be_highlighted_as_the_current_page(bar):
+    downloads = bar.add_button("Downloads", "D", icon=DownloadIcon())
+    bar.show()
+    QApplication.processEvents()
+    plain = downloads.grab().toImage()
+    assert not downloads.is_current()
+
+    downloads.set_current(True)
+    QApplication.processEvents()
+    assert downloads.is_current() and downloads.property("current") is True
+    assert downloads.accessibleDescription() == "Current page"
+    assert downloads.grab().toImage() != plain  # drawn highlighted
+
+    downloads.set_current(False)
+    QApplication.processEvents()
+    assert not downloads.is_current() and downloads.grab().toImage() == plain
+
+
+def test_the_current_page_looks_different_from_a_checked_button(bar):
+    current = bar.add_button("Downloads", "D")
+    checked = bar.add_button("Downloads", "D")  # same text, so only the highlight differs
+    checked.setCheckable(True)
+    checked.setChecked(True)  # e.g. Terminal while it is open
+    current.set_current(True)
+    bar.show()
+    QApplication.processEvents()
+    assert current.grab().toImage() != checked.grab().toImage()
