@@ -18,12 +18,21 @@ logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 ASSETS_DIR = PROJECT_ROOT / "assets"
+# Profile photos stay on this computer (never sent to the server), one file per user id.
+PROFILE_PHOTO_DIR = PROJECT_ROOT / "workspace" / "profile_photos"
+# Where the user's projects are on this computer (the recent ones shown on the dashboard).
+PROJECT_HISTORY_FILE = PROJECT_ROOT / "workspace" / "projects.json"
+# The Earth Engine project and session length entered in the app (the Gemini key is in the credential store).
+APP_SETTINGS_FILE = PROJECT_ROOT / "workspace" / "app_settings.json"
+# Suggested parent folder for a new project.
+DEFAULT_PROJECTS_DIR = Path.home() / "Documents" / "GEE-Assist Projects"
 
 
 @dataclass(frozen=True)
 class Settings:
-    # Base URL of the GEE-Assist authentication server (GEE-Assist-Backend).
-    auth_api_url: str = "http://localhost:8000"
+    # Base URL of the GEE-Assist authentication server (GEE-Assist-Backend), as deployed.
+    # AUTH_API_URL overrides it, e.g. http://localhost:8000 for a server running on this computer.
+    auth_api_url: str = "https://gee-assist-backend.vercel.app"
     # Seconds to wait for the authentication server before giving up.
     auth_api_timeout: float = 15.0
     # Name under which the refresh token is kept in the OS credential store.
@@ -32,6 +41,9 @@ class Settings:
     session_duration: float = 7 * 24 * 3600
     # Google Cloud project registered for Earth Engine (dataset downloads).
     gee_project: str = ""
+    # Base URL of the GEE-Assist website (GEE-Assist-Web): its community page takes ratings,
+    # feedback and suggestions.
+    web_app_url: str = "http://localhost:5173"
 
 
 _UNIT_SECONDS = {"s": 1, "m": 60, "h": 3600, "d": 86400}
@@ -66,4 +78,5 @@ def get_settings() -> Settings:
         keyring_service=os.getenv("KEYRING_SERVICE", Settings.keyring_service),
         session_duration=_session_duration(),
         gee_project=os.getenv("GEE_PROJECT", Settings.gee_project).strip(),
+        web_app_url=(os.getenv("WEB_APP_URL", "").strip() or Settings.web_app_url).rstrip("/"),
     )

@@ -41,3 +41,26 @@ class PlaceSearchError(GeeAssistError):
     """A city / region / country could not be looked up, or has no boundary to use as an AOI."""
 class MapError(GeeAssistError):
     """A GeoTIFF cannot be shown: it is missing, unreadable, or has no bands for the chosen view."""
+
+
+class AnalysisError(GeeAssistError):
+    """An analysis cannot run: no dataset, a band it needs is missing, or the files cannot be read."""
+
+
+class ProjectError(GeeAssistError):
+    """A project cannot be created, opened, renamed or moved, or there is none open when one is needed.
+
+    ``field`` names the form field the problem is about (``name`` or ``location``), when there is one.
+    """
+
+    def __init__(self, message: str, field: str | None = None):
+        super().__init__(message)
+        self.field = field
+
+
+class ExplanationError(GeeAssistError):
+    """An analysis result cannot be explained: it is not saved in the project, or its files are missing."""
+
+
+class ReportError(GeeAssistError):
+    """A report cannot be made or exported: the explanation is missing, or a file cannot be written."""

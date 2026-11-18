@@ -287,7 +287,7 @@ def test_diagnose_without_the_library(monkeypatch):
     monkeypatch.setattr(GEEClient, "_ee", staticmethod(missing))
     checks = GEEClient(project="p").diagnose()
     assert _statuses(checks) == [
-        ("Earth Engine library", "fail"), ("Cloud project (GEE_PROJECT)", "ok"),
+        ("Earth Engine library", "fail"), ("Cloud project", "ok"),
         ("Sign-in on this computer", "skip"), ("Connection", "skip"), ("Test request", "skip"),
     ]
     assert "pip install earthengine-api" in checks[0].hint
@@ -299,10 +299,10 @@ def test_diagnose_without_a_project(fake_ee, tmp_path, monkeypatch):
     ee.oauth.get_credentials_path.return_value = str(tmp_path / "credentials")
     checks = GEEClient(project="").diagnose()
     assert _statuses(checks)[1:] == [
-        ("Cloud project (GEE_PROJECT)", "fail"), ("Sign-in on this computer", "warn"),
+        ("Cloud project", "fail"), ("Sign-in on this computer", "warn"),
         ("Connection", "skip"), ("Test request", "skip"),
     ]
-    assert "GEE_PROJECT" in checks[1].hint and str(tmp_path / "credentials") in checks[2].detail
+    assert "Options → Settings" in checks[1].hint and str(tmp_path / "credentials") in checks[2].detail
     ee.Initialize.assert_not_called()
 
 
@@ -357,7 +357,7 @@ def test_signing_in_connects_again_with_the_new_credentials(fake_ee):
 
 # ------------------------------------------------------------------ access and errors
 def test_missing_project_is_reported():
-    with pytest.raises(GEESetupError, match="GEE_PROJECT"):
+    with pytest.raises(GEESetupError, match="Options → Settings"):
         GEEClient(project="")._initialize()
     assert GEEClient(project="").validate_access() is False
 

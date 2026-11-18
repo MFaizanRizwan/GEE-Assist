@@ -1,4 +1,5 @@
-"""Admin-only user management: list users page by page, change roles, enable / disable accounts."""
+"""Admin-only user management: list users page by page, find one by email, add, edit and delete
+accounts, change roles, reset passwords, enable / disable accounts."""
 
 from __future__ import annotations
 
@@ -13,6 +14,7 @@ from PyQt6.QtWidgets import (
     QHeaderView,
     QLabel,
     QLineEdit,
+    QMessageBox,
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
@@ -24,6 +26,7 @@ from backend.auth_exceptions import AuthError, SessionExpiredError
 from backend.business.facade import IBusinessFacade
 from backend.dto.user_dto import UserDTO, UserPageDTO
 from frontend import theme
+from frontend.views.account_dialogs import ChangePasswordDialog, CreateUserDialog, EditDetailsDialog
 from frontend.views.account_view import Avatar, format_date
 from frontend.widgets.form_widgets import Banner, BusyButton
 from frontend.workers.task_worker import run_task
@@ -52,9 +55,10 @@ QComboBox QAbstractItemView {{ background: {theme.WHITE}; selection-background-c
 
 
 class UserDetailsPanel(QFrame):
-    """Right-hand panel: the selected user plus the role / status actions."""
+    """Right-hand panel: the selected user plus the actions an admin can take on their account."""
 
     changed = pyqtSignal(object)  # updated UserDTO
+    deleted = pyqtSignal(object)  # the deleted UserDTO
     session_expired = pyqtSignal()
 
     def __init__(self, facade: IBusinessFacade, parent: QWidget | None = None):
@@ -62,7 +66,7 @@ class UserDetailsPanel(QFrame):
         self._facade = facade
         self._user: UserDTO | None = None
         self.setObjectName("AuthCard")
-        self.setFixedWidth(330)
+        self.setFixedWidth(340)
 
         self.avatar = Avatar(56)
         self.name = QLabel("Select a user")
@@ -73,33 +77,52 @@ class UserDetailsPanel(QFrame):
         self.meta.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         self.banner = Banner()
 
+        self.role_label = QLabel("Role", objectName="FieldLabel")
         self.role = QComboBox()
         self.role.addItem("User", "user")
         self.role.addItem("Administrator", "admin")
         self.apply_role = BusyButton("Save role", "Saving…", object_name="SecondaryButton")
         self.toggle_status = BusyButton("Disable account", "Saving…", object_name="SecondaryButton")
-        self.self_note = QLabel("This is your own account. Another admin must change it.", objectName="FieldHint")
+        self.edit_details = QPushButton("Edit details", objectName="SecondaryButton")
+        self.reset_password = QPushButton("Reset password", objectName="SecondaryButton")
+        self.delete_account = BusyButton("Delete account", "Deleting…", object_name="DangerButton")
+        for button in (self.edit_details, self.reset_password):
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+            button.setMinimumHeight(44)
+        self.self_note = QLabel("This is your own account. Change your details from your account page; "
+                                "another admin must change your role or status.", objectName="FieldHint")
         self.self_note.setWordWrap(True)
 
-        role_label = QLabel("Role", objectName="FieldLabel")
+        role_row = QHBoxLayout()
+        role_row.addWidget(self.role, 1)
+        role_row.addWidget(self.apply_role)
+        account_row = QHBoxLayout()
+        account_row.addWidget(self.edit_details)
+        account_row.addWidget(self.reset_password)
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 24, 24, 24)
-        layout.setSpacing(12)
+        layout.setSpacing(10)
         layout.addWidget(self.avatar)
         layout.addWidget(self.name)
         layout.addWidget(self.meta)
         layout.addWidget(self.banner)
-        layout.addSpacing(6)
-        layout.addWidget(role_label)
-        layout.addWidget(self.role)
-        layout.addWidget(self.apply_role)
-        layout.addSpacing(6)
+        layout.addSpacing(4)
+        layout.addWidget(self.role_label)
+        layout.addLayout(role_row)
         layout.addWidget(self.toggle_status)
+        layout.addLayout(account_row)
+        layout.addWidget(self.delete_account)
         layout.addWidget(self.self_note)
         layout.addStretch(1)
 
+        self._actions = (self.role_label, self.role, self.apply_role, self.toggle_status, self.edit_details,
+                         self.reset_password, self.delete_account)
         self.apply_role.clicked.connect(self._save_role)
         self.toggle_status.clicked.connect(self._toggle_status)
+        self.edit_details.clicked.connect(self.open_edit_details)
+        self.reset_password.clicked.connect(self.open_reset_password)
+        self.delete_account.clicked.connect(self._delete)
         self.show_user(None)
 
     def show_user(self, user: UserDTO | None) -> None:
@@ -108,31 +131,78 @@ class UserDetailsPanel(QFrame):
         has_user = user is not None
         current = self._facade.get_current_user()
         is_self = has_user and current is not None and current.id == user.id
-        for widget in (self.avatar, self.role, self.apply_role, self.toggle_status):
-            widget.setVisible(has_user)
+        self.avatar.setVisible(has_user)
+        for widget in self._actions:
+            widget.setVisible(has_user and not is_self)
         self.self_note.setVisible(bool(is_self))
         if not has_user:
             self.name.setText("Select a user")
-            self.meta.setText("Choose someone in the list to see their details and manage their access.")
+            self.meta.setText("Choose someone in the list to see their details and manage their account.")
             return
-        self.avatar.set_user(user)
+        self.avatar.set_user(user, self._facade.get_profile_photo(user.id))  # only if it is on this computer
         self.name.setText(user.full_name)
         lines = [
             f"@{user.username}",
-            user.email or "No email",
+            (user.email or "No email") + ("" if user.email_verified else "  (not verified)"),
             user.phone_number or "No phone number",
+            f"Signs in with {'Google' if user.auth_provider == 'google' else 'a password'}",
             f"Last sign-in: {format_date(user.last_login_at)}",
         ]
         self.meta.setText("\n".join(lines))
         self.role.setCurrentIndex(1 if user.is_admin else 0)
         self.toggle_status.set_idle_text("Disable account" if user.is_active else "Enable account")
-        for widget in (self.role, self.apply_role, self.toggle_status):
-            widget.setEnabled(not is_self)
+        google = user.auth_provider == "google"
+        self.reset_password.setEnabled(not google)
+        self.reset_password.setToolTip("They sign in with Google, so there is no password." if google
+                                       else "Choose a new password for them")
 
     def load(self, user_id: str) -> None:
         """Fetch fresh details (GET /admin/users/{id})."""
         run_task(self, self._facade.get_user, user_id, on_success=self.show_user, on_error=self._on_error)
 
+    # ------------------------------------------------------------- details, password, delete
+    def open_edit_details(self) -> None:
+        if self._user is None:
+            return
+        dialog = EditDetailsDialog(self._facade, self._user, allow_email=True, parent=self)
+        dialog.session_expired.connect(self.session_expired)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            message = dialog.result_message
+            run_task(self, self._facade.get_user, self._user.id,
+                     on_success=lambda user: self._on_changed(user, None, message), on_error=self._on_error)
+
+    def open_reset_password(self) -> None:
+        if self._user is None:
+            return
+        dialog = ChangePasswordDialog(self._facade, self._user, own=False, parent=self)
+        dialog.session_expired.connect(self.session_expired)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.banner.show_success(dialog.result_message)
+
+    def confirm_delete(self, user: UserDTO) -> bool:
+        answer = QMessageBox.question(
+            self, "Delete account",
+            f"Delete the account of {user.full_name} (@{user.username})?\n\n"
+            "They can no longer sign in, and this cannot be undone.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel, QMessageBox.StandardButton.Cancel,
+        )
+        return answer == QMessageBox.StandardButton.Yes
+
+    def _delete(self) -> None:
+        user = self._user
+        if user is None or not self.confirm_delete(user):
+            return
+        self.delete_account.set_busy(True)
+        run_task(self, self._facade.delete_user, user.id,
+                 on_success=lambda _: self._on_deleted(user),
+                 on_error=lambda e: self._on_error(e, self.delete_account))
+
+    def _on_deleted(self, user: UserDTO) -> None:
+        self.delete_account.set_busy(False)
+        self.show_user(None)
+        self.deleted.emit(user)
+
+    # ------------------------------------------------------------- role and status
     def _save_role(self) -> None:
         if self._user is None:
             return
@@ -155,8 +225,9 @@ class UserDetailsPanel(QFrame):
                      u, self.toggle_status, "Account enabled." if active else "Account disabled."),
                  on_error=lambda e: self._on_error(e, self.toggle_status))
 
-    def _on_changed(self, user: UserDTO, button: BusyButton, message: str) -> None:
-        button.set_busy(False)
+    def _on_changed(self, user: UserDTO, button: BusyButton | None, message: str) -> None:
+        if button is not None:
+            button.set_busy(False)
         self.show_user(user)
         self.banner.show_success(message)
         self.changed.emit(user)
@@ -185,10 +256,14 @@ class UserAdminDialog(QDialog):
         title = QLabel("User management", objectName="Title")
         self.count = QLabel("", objectName="Subtitle")
         self.search = QLineEdit()
-        self.search.setPlaceholderText("Filter this page by name, username or email")
+        self.search.setPlaceholderText("Filter this page, or type an email and press Enter")
+        self.search.setToolTip("Filters the users on this page as you type. Press Enter on an email "
+                               "address to find that user among all users.")
         self.search.setFixedWidth(340)
         self.refresh = BusyButton("Refresh", "Loading…", object_name="SecondaryButton")
         self.refresh.setFixedWidth(120)
+        self.add_user = QPushButton("Add user", objectName="PrimaryButton")
+        self.add_user.setCursor(Qt.CursorShape.PointingHandCursor)
         head = QHBoxLayout()
         head_text = QVBoxLayout()
         head_text.setSpacing(2)
@@ -198,6 +273,7 @@ class UserAdminDialog(QDialog):
         head.addStretch(1)
         head.addWidget(self.search)
         head.addWidget(self.refresh)
+        head.addWidget(self.add_user)
 
         self.banner = Banner()
 
@@ -249,10 +325,13 @@ class UserAdminDialog(QDialog):
 
         self.refresh.clicked.connect(self.reload)
         self.search.textChanged.connect(self._apply_filter)
+        self.search.returnPressed.connect(self.find_by_email)
+        self.add_user.clicked.connect(self.open_create_user)
         self.prev_button.clicked.connect(lambda: self._go(self._skip - PAGE_SIZE))
         self.next_button.clicked.connect(lambda: self._go(self._skip + PAGE_SIZE))
         self.table.itemSelectionChanged.connect(self._on_selection)
         self.details.changed.connect(self._on_user_changed)
+        self.details.deleted.connect(self._on_user_deleted)
         self.details.session_expired.connect(self._expired)
 
         self.reload()
@@ -337,3 +416,32 @@ class UserAdminDialog(QDialog):
                 self._fill_row(row, user)
                 self.table.blockSignals(False)
                 break
+
+    def _on_user_deleted(self, user: UserDTO) -> None:
+        self.reload()
+        self.banner.show_success(f"The account of {user.full_name} (@{user.username}) was deleted.")
+
+    # ------------------------------------------------------------------ add / find
+    def open_create_user(self) -> None:
+        dialog = CreateUserDialog(self._facade, self)
+        dialog.session_expired.connect(self._expired)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self._skip = 0  # newest first: the new account is on the first page
+            self.reload()
+            self.banner.show_success(dialog.result_message)
+
+    def find_by_email(self) -> None:
+        """Enter on an email address looks it up among all users, not only this page."""
+        email = self.search.text().strip()
+        if "@" not in email:
+            return
+        self.banner.clear()
+        run_task(self, self._facade.find_user_by_email, email,
+                 on_success=lambda user: self._on_found(email, user), on_error=self._on_error)
+
+    def _on_found(self, email: str, user: UserDTO | None) -> None:
+        if user is None:
+            self.banner.show_info(f"No user has the email address {email}.")
+            return
+        self.table.clearSelection()
+        self.details.show_user(user)

@@ -183,6 +183,63 @@ class DownloadService(IDownloadService):
                 self._delete_files(current)
             return self._snapshot(current)
 
+    def save_copy(self, job: DownloadJobDTO, folder: str) -> str:
+        with self._lock:
+            current = self._job(job)
+            dataset = current.dataset
+        if current.status != JOB_COMPLETED or dataset is None:
+            raise ValidationError("Only a finished download can be saved to another folder.")
+        source = Path(dataset.path)
+        if not source.is_file():
+            raise ValidationError(f"{source.name} is no longer there: it may have been moved or deleted.")
+        target_folder = Path(folder).expanduser()
+        if not str(folder).strip():
+            raise ValidationError("Choose a folder to save the dataset in.")
+        target = target_folder / source.name
+        number = 2
+        while target.exists():
+            if target.resolve() == source.resolve():
+                return str(target)  # it is already there
+            target = target_folder / f"{source.stem}_{number}{source.suffix}"
+            number += 1
+        try:
+            target_folder.mkdir(parents=True, exist_ok=True)
+            temporary = target.with_name(target.name + ".part")
+            shutil.copyfile(source, temporary)  # a half-copied file is never left under the real name
+            os.replace(temporary, target)
+        except OSError as exc:
+            Path(str(target) + ".part").unlink(missing_ok=True)
+            raise ValidationError(f"Could not save to {target_folder}: {exc.strerror or exc}") from exc
+        return str(target)
+
+    def is_busy_in(self, folder: str) -> bool:
+        with self._lock:
+            return any(job.status in (JOB_RUNNING, JOB_QUEUED) and _is_under(job.folder, folder)
+                       for job in self._jobs.values())
+
+    def relocate(self, old_folder: str, new_folder: str) -> None:
+        with self._lock:
+            for job in self._jobs.values():
+                if not _is_under(job.folder, old_folder):
+                    continue
+                if job.status in (JOB_RUNNING, JOB_QUEUED):
+                    raise ValidationError("A download in this folder is still running.")
+                previous = job.folder
+
+                def moved(path: str) -> str:
+                    return _moved(path, old_folder, new_folder)
+
+                job.folder = moved(job.folder)
+                job.merged_path = moved(job.merged_path)
+                for chunk in job.chunks:
+                    chunk.file_path = moved(chunk.file_path)
+                if job.request is not None:
+                    job.request.output_dir = moved(job.request.output_dir)
+                if job.dataset is not None:
+                    job.dataset.path = moved(job.dataset.path)
+                self._store.forget_folder(previous)
+                self._store.save(job)
+
     def list_jobs(self) -> list[DownloadJobDTO]:
         with self._lock:
             for job in self._jobs.values():
@@ -458,3 +515,20 @@ def _folder_size(folder: Path) -> int:
 
 def _now() -> str:
     return datetime.now().isoformat(timespec="seconds")
+
+
+def _is_under(path: str, folder: str) -> bool:
+    if not path or not folder:
+        return False
+    try:
+        Path(path).resolve().relative_to(Path(folder).resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def _moved(path: str, old_folder: str, new_folder: str) -> str:
+    """``path`` with ``old_folder`` swapped for ``new_folder`` when it is inside it; otherwise unchanged."""
+    if not _is_under(path, old_folder):
+        return path
+    return str(Path(new_folder) / Path(path).resolve().relative_to(Path(old_folder).resolve()))

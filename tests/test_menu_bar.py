@@ -33,14 +33,16 @@ def test_has_the_classic_menus_in_order(bar):
 
 
 def test_menus_hold_the_expected_items(bar):
-    assert _items(bar.file_menu) == ["&New request", "&Open GeoTIFF…", "Sign &out", "E&xit"]
+    assert _items(bar.file_menu) == ["New &project…", "Open pro&ject…", "Recen&t projects", "Rena&me project…",
+                                     "Mo&ve project…", "C&lose project", "&New request", "&Open GeoTIFF…",
+                                     "Sign &out", "E&xit"]
     assert _items(bar.edit_menu) == ["&Undo", "&Redo", "Cu&t", "&Copy", "&Paste", "Select &all"]
-    assert _items(bar.view_menu) == ["&Dashboard", "&Query Input", "Do&wnloads", "&Account", "&Side bar",
-                                     "&Terminal", "&Full screen", "&Theme"]
+    assert _items(bar.view_menu) == ["&Dashboard", "&Query Input", "Do&wnloads", "&Account", "A&nalysis",
+                                     "&Reports", "Show analysis ta&ble", "&Side bar", "&Terminal", "&Full screen", "&Theme"]
     assert _items(bar.terminal_menu)[:4] == ["&Show terminal	Ctrl+`", "&Maximise terminal", "&Clear terminal",
                                              "S&top running command"]
-    assert _items(bar.options_menu) == ["Download &chunk size…", "&Manage users…"]
-    assert _items(bar.help_menu) == ["&About GEE-Assist"]
+    assert _items(bar.options_menu) == ["&Settings…", "Download &chunk size…", "&Manage users…"]
+    assert _items(bar.help_menu) == ["&Rate, feedback or suggestion…", "&About GEE-Assist"]
 
 
 def test_shortcuts_are_the_familiar_ones(bar):
@@ -148,3 +150,46 @@ def test_terminal_menu_items_run_gkonsol_commands(bar):
 def test_terminal_menu_mnemonics_differ(bar):
     letters = [text.split("&")[1][0].lower() for text in _items(bar.terminal_menu) if "&" in text]
     assert len(letters) == len(set(letters))  # Alt+T, then one letter per item
+
+
+def test_project_items_follow_the_open_project(bar):
+    from backend.dto.project_dto import ProjectDTO
+
+    assert bar.new_project.shortcut().toString() == "Ctrl+Shift+N"
+    assert bar.open_project.shortcut().toString() == "Ctrl+Shift+O"
+    bar.set_projects(None, [])
+    assert not bar.rename_project.isEnabled() and not bar.close_project.isEnabled()
+    assert _items(bar.recent_projects_menu) == ["No recent projects"]
+
+    project = ProjectDTO(id="p1", name="MyProject", folder="D:/work/MyProject")
+    bar.set_projects(project, [project])
+    assert bar.rename_project.isEnabled() and bar.move_project.isEnabled() and bar.close_project.isEnabled()
+    chosen = []
+    bar.recent_project_chosen.connect(chosen.append)
+    bar.recent_projects_menu.actions()[0].trigger()
+    assert chosen == ["D:/work/MyProject"]
+
+
+def test_update_badge_visibility_and_text(bar):
+    from backend.dto.version_dto import AppVersionDTO
+
+    # Hidden by default
+    assert bar.update_button.isHidden()
+
+    # Show badge when update is available
+    info = AppVersionDTO(
+        latest_version="1.2.0",
+        minimum_supported_version="1.0.0",
+        download_url="https://example.com/download",
+        release_notes="Bug fixes",
+        force_update=False,
+        update_available=True,
+    )
+    bar.set_update_info(info)
+    assert not bar.update_button.isHidden()
+    assert "1.2.0" in bar.update_button.text()
+
+    # Clear/hide badge when up to date
+    bar.clear_update_info()
+    assert bar.update_button.isHidden()
+

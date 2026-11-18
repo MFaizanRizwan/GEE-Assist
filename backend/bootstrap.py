@@ -2,35 +2,52 @@
 
 from __future__ import annotations
 
+import os
+
+from backend.business.analysis import AnalysisService
 from backend.business.download import Chunker, ChunkMerger, DownloadService
+from backend.business.explanation import ExplanationService
 from backend.business.facade import BusinessFacade, IBusinessFacade
 from backend.business.map import MapService
+from backend.business.report import ReportService
 from backend.business.request import RequestService
+from backend.business.settings import SettingsService
 from backend.business.user import UserService
 from backend.config import DEFAULT_DOWNLOAD_DIR, DownloadSettingsStore
 from backend.config.llm import load_llm_settings
-from backend.config.settings import get_settings
+from backend.config.settings import APP_SETTINGS_FILE, PROFILE_PHOTO_DIR, PROJECT_HISTORY_FILE, get_settings
+from backend.data.auth_session import AuthSession
 from backend.data.clients.auth_api_client import AuthApiClient
 from backend.data.clients.gee_client import GEEClient
 from backend.data.clients.gemini_client import GeminiClient
 from backend.data.clients.nominatim_client import NominatimClient
+from backend.data.dao.project_dao import ProjectDAO
+from backend.data.dao.user_dao import UserDAO
 from backend.data.data_facade import DataFacade
 from backend.data.session_store import KeyringSessionStore
+from backend.data.settings_store import LocalSettingsStore
 
 
 def build_business_facade() -> IBusinessFacade:
     settings = get_settings()
-    user_service = UserService(
-        api=AuthApiClient(settings.auth_api_url, timeout=settings.auth_api_timeout),
-        session_store=KeyringSessionStore(settings.keyring_service),
-        session_duration=settings.session_duration,
-    )
+    auth_api = AuthApiClient(settings.auth_api_url, timeout=settings.auth_api_timeout)
+    session_store = KeyringSessionStore(settings.keyring_service)
+    session = AuthSession(auth_api, session_store)  # the sign-in tokens, shared by UserService and UserDAO
 
     llm = load_llm_settings()
     data_facade = DataFacade(
         gemini_client=GeminiClient(api_key=llm.api_key, model=llm.model),
         gee_client=GEEClient(project=settings.gee_project),
+        user_dao=UserDAO(auth_api, session, PROFILE_PHOTO_DIR),
+        project_dao=ProjectDAO(PROJECT_HISTORY_FILE),  # project folders and their history, on this computer
         geocoding_client=NominatimClient(),
+    )
+    user_service = UserService(
+        api=auth_api,
+        session_store=session_store,
+        session_duration=settings.session_duration,
+        session=session,
+        data_facade=data_facade,
     )
     request_service = RequestService(data_facade=data_facade)
 
@@ -44,9 +61,23 @@ def build_business_facade() -> IBusinessFacade:
         settings=download_settings,
     )
 
+    # What each user of a deployed copy enters (Options > Settings, or at first sign-in); .env fills the rest.
+    settings_service = SettingsService(
+        LocalSettingsStore(APP_SETTINGS_FILE, settings.keyring_service),
+        data_facade,
+        env_defaults={"gee_project": settings.gee_project, "gemini_api_key": llm.api_key,
+                      "session_duration": settings.session_duration if os.getenv("SESSION_DURATION") else None},
+        on_session_duration=user_service.set_session_duration,
+    )
+
+    map_service = MapService()
     return BusinessFacade(
         user_service=user_service,
         request_service=request_service,
         download_service=download_service,
-        map_service=MapService(),
+        map_service=map_service,
+        analysis_service=AnalysisService(data_facade=data_facade),
+        settings_service=settings_service,
+        explanation_service=ExplanationService(data_facade=data_facade, map_service=map_service),
+        report_service=ReportService(map_service=map_service),
     )

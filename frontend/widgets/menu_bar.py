@@ -9,10 +9,21 @@ are given their meaning by the window the menu bar belongs to (see ``HomeWindow`
 
 from __future__ import annotations
 
-from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QAction, QActionGroup, QKeySequence
-from PyQt6.QtWidgets import QApplication, QComboBox, QLineEdit, QMenu, QMenuBar, QPlainTextEdit, QTextEdit, QWidget
+from PyQt6.QtWidgets import (
+    QApplication,
+    QComboBox,
+    QLineEdit,
+    QMenu,
+    QMenuBar,
+    QPlainTextEdit,
+    QPushButton,
+    QTextEdit,
+    QWidget,
+)
 
+from backend.dto.version_dto import AppVersionDTO
 from frontend import appearance, palette, theme
 
 STYLESHEET = f"""
@@ -23,6 +34,24 @@ QMenuBar {{
 QMenuBar::item {{ background: transparent; padding: 5px 12px; border-radius: 4px; }}
 QMenuBar::item:selected {{ background: {theme.FOAM}; }}
 QMenuBar::item:pressed {{ background: {theme.MINT}; }}
+QPushButton#UpdateBadge {{
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #E05638, stop:1 #D35400);
+    color: #FFFFFF;
+    font-size: 11px;
+    font-weight: 600;
+    border: none;
+    border-radius: 11px;
+    padding: 3px 12px;
+    margin-top: 2px;
+    margin-bottom: 2px;
+    margin-right: 8px;
+}}
+QPushButton#UpdateBadge:hover {{
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #D35400, stop:1 #BA4A00);
+}}
+QPushButton#UpdateBadge:pressed {{
+    background: #A04000;
+}}
 """ + theme.MENU_STYLE
 
 
@@ -48,12 +77,21 @@ TERMINAL_COMMANDS: tuple[tuple[tuple[str, str], ...], ...] = (
 class AppMenuBar(QMenuBar):
     theme_chosen = pyqtSignal(str)  # a theme other than the current one, e.g. "dark-green"
     terminal_command = pyqtSignal(str)  # a gkonsol command to run in the terminal, e.g. "gee verify"
+    recent_project_chosen = pyqtSignal(str)  # the folder of a project in File > Recent projects
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self.setStyleSheet(STYLESHEET)
 
         self.file_menu = self._menu("&File")
+        self.new_project = self._action(self.file_menu, "New &project…", "Ctrl+Shift+N")
+        self.open_project = self._action(self.file_menu, "Open pro&ject…", "Ctrl+Shift+O")
+        self.recent_projects_menu = self.file_menu.addMenu("Recen&t projects")
+        self.recent_projects_menu.setStyleSheet(theme.MENU_STYLE)
+        self.rename_project = self._action(self.file_menu, "Rena&me project…")
+        self.move_project = self._action(self.file_menu, "Mo&ve project…")
+        self.close_project = self._action(self.file_menu, "C&lose project")
+        self.file_menu.addSeparator()
         self.new_request = self._action(self.file_menu, "&New request", "Ctrl+N")
         self.open_geotiff = self._action(self.file_menu, "&Open GeoTIFF…", "Ctrl+O")
         self.file_menu.addSeparator()
@@ -83,6 +121,11 @@ class AppMenuBar(QMenuBar):
         self.view_query_input = self._action(self.view_menu, "&Query Input", "Ctrl+2")
         self.view_downloads = self._action(self.view_menu, "Do&wnloads", "Ctrl+3")
         self.view_account = self._action(self.view_menu, "&Account", "Ctrl+4")
+        self.view_analysis = self._action(self.view_menu, "A&nalysis", "Ctrl+5")
+        self.view_reports = self._action(self.view_menu, "&Reports", "Ctrl+7")
+        self.view_menu.addSeparator()
+        # The analysis table (formulas and use cases of every index) is opened only from here.
+        self.view_analysis_table = self._action(self.view_menu, "Show analysis ta&ble", "Ctrl+6")
         self.view_menu.addSeparator()
         self.toggle_side_bar = self._action(self.view_menu, "&Side bar", "Ctrl+B", checkable=True)
         self.toggle_terminal = self._action(self.view_menu, "&Terminal", "Ctrl+`", checkable=True)
@@ -121,11 +164,45 @@ class AppMenuBar(QMenuBar):
         self.command_reference.setToolTip("Every gkonsol command, with examples (docs/GKONSOL.md)")
 
         self.options_menu = self._menu("&Options")
+        self.app_settings = self._action(self.options_menu, "&Settings…", "Ctrl+,")
+        self.app_settings.setToolTip("Earth Engine project, Gemini API key, how long you stay signed in")
         self.chunk_size = self._action(self.options_menu, "Download &chunk size…")
         self.manage_users = self._action(self.options_menu, "&Manage users…")
 
         self.help_menu = self._menu("&Help")
+        self.give_feedback = self._action(self.help_menu, "&Rate, feedback or suggestion…")
+        self.give_feedback.setToolTip("Rate GEE-Assist, send feedback or suggest a feature on the website")
+        self.help_menu.addSeparator()
         self.about = self._action(self.help_menu, "&About GEE-Assist")
+
+        # ---- update available badge (shown on the right side of the navbar if an update is available)
+        self._update_info: AppVersionDTO | None = None
+        self.update_button = QPushButton("Update Available", self)
+        self.update_button.setObjectName("UpdateBadge")
+        self.update_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.update_button.clicked.connect(self._show_update_dialog)
+        self.update_button.hide()
+        self.setCornerWidget(self.update_button, Qt.Corner.TopRightCorner)
+
+    # ------------------------------------------------------------- Update Available
+    def set_update_info(self, info: AppVersionDTO) -> None:
+        self._update_info = info
+        self.update_button.setText(f"● Update Available (v{info.latest_version})")
+        self.update_button.setToolTip(
+            f"A newer version (v{info.latest_version}) of GEE-Assist is available!\nClick to view release details."
+        )
+        self.update_button.show()
+
+    def clear_update_info(self) -> None:
+        self._update_info = None
+        self.update_button.hide()
+
+    def _show_update_dialog(self) -> None:
+        if self._update_info is not None:
+            from frontend.views.update_dialog import UpdateDialog
+
+            dialog = UpdateDialog(self._update_info, parent=self.window())
+            dialog.exec()
 
     # ------------------------------------------------------------- Theme
     def _choose_theme(self, name: str) -> None:
@@ -176,6 +253,18 @@ class AppMenuBar(QMenuBar):
     def _enable_edit_items(self) -> None:
         for action in self._edit_commands:
             action.setEnabled(True)
+
+    def set_projects(self, current, recent: list) -> None:
+        """The open project (a ProjectDTO or None) and the recent ones (File > Recent projects)."""
+        for action in (self.rename_project, self.move_project, self.close_project):
+            action.setEnabled(current is not None)
+        self.recent_projects_menu.clear()
+        for project in recent:
+            action = self.recent_projects_menu.addAction(f"{project.name}  —  {project.location}")
+            action.setToolTip(project.folder)
+            action.triggered.connect(lambda _=False, folder=project.folder: self.recent_project_chosen.emit(folder))
+        if not recent:
+            self.recent_projects_menu.addAction("No recent projects").setEnabled(False)
 
     def _menu(self, title: str) -> QMenu:
         menu = self.addMenu(title)

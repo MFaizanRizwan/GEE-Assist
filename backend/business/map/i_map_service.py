@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from backend.dto.map_dto import RasterInfoDTO, RasterViewDTO, ViewPresetDTO
+from backend.dto.map_dto import MapLayerDTO, RasterInfoDTO, RasterViewDTO, ViewPresetDTO
+from backend.dto.result_dto import ResultDTO
 
 
 class IMapService(ABC):
@@ -17,7 +18,7 @@ class IMapService(ABC):
         """
 
     @abstractmethod
-    def view_presets(self, info: RasterInfoDTO) -> list[ViewPresetDTO]:
+    def view_presets(self, info: RasterInfoDTO, analysis_colours: bool = True) -> list[ViewPresetDTO]:
         """The ways the file can be shown (true colour, NDVI, ...), the default first."""
 
     @abstractmethod
@@ -33,4 +34,12 @@ class IMapService(ABC):
         """Each band's value at a point, read from the full-resolution file.
 
         A band has ``None`` where it has no data, and every band does outside the image.
+        """
+
+    @abstractmethod
+    def build_layers(self, result: ResultDTO, max_size: int = 1600) -> list[MapLayerDTO]:
+        """Each layer of an analysis result drawn in its colour style, with its legend.
+
+        Raises:
+            MapError: the result GeoTIFF is missing or unreadable.
         """

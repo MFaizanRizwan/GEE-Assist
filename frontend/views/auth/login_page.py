@@ -18,6 +18,7 @@ class LoginPage(AuthPage):
     logged_in = pyqtSignal(object)                    # UserDTO
     verification_required = pyqtSignal(str, str, str)  # verification_token, username, password
     create_account_requested = pyqtSignal()
+    forgot_password_requested = pyqtSignal()
     google_requested = pyqtSignal(bool)               # remember
 
     def __init__(self, facade: IBusinessFacade, parent: QWidget | None = None):
@@ -29,9 +30,16 @@ class LoginPage(AuthPage):
         self.remember.setCursor(Qt.CursorShape.PointingHandCursor)
         self.remember.setChecked(True)  # reopening the app skips sign-in until the session runs out
         self.remember.setToolTip(
-            "Stay signed in on this computer for a limited time (SESSION_DURATION in .env). "
+            "Stay signed in on this computer for a limited time (Options → Settings…). "
             "The session is kept in Windows Credential Manager."
         )
+        self.forgot_password = link_button("Forgot password?")
+
+        options_row = QHBoxLayout()
+        options_row.setContentsMargins(0, 0, 0, 0)
+        options_row.addWidget(self.remember)
+        options_row.addStretch(1)
+        options_row.addWidget(self.forgot_password)
 
         self.submit = BusyButton("Sign in", "Signing in…")
         self.google = QPushButton("  Continue with Google", objectName="SecondaryButton")
@@ -50,7 +58,7 @@ class LoginPage(AuthPage):
 
         self.body.addWidget(self.username)
         self.body.addWidget(self.password)
-        self.body.addWidget(self.remember)
+        self.body.addLayout(options_row)
         self.body.addSpacing(4)
         self.body.addWidget(self.submit)
         self.body.addLayout(divider)
@@ -63,6 +71,7 @@ class LoginPage(AuthPage):
         self.password.input.returnPressed.connect(self._submit)
         self.google.clicked.connect(lambda: self.google_requested.emit(self.remember.isChecked()))
         self.create_account.clicked.connect(self.create_account_requested.emit)
+        self.forgot_password.clicked.connect(self.forgot_password_requested.emit)
 
     # ------------------------------------------------------------------ API
     def reset(self, keep_username: bool = True) -> None:
@@ -129,5 +138,5 @@ class LoginPage(AuthPage):
 
     def _set_busy(self, busy: bool) -> None:
         self.submit.set_busy(busy)
-        for widget in (self.username.input, self.password.input, self.remember, self.google, self.create_account):
+        for widget in (self.username.input, self.password.input, self.remember, self.forgot_password, self.google, self.create_account):
             widget.setEnabled(not busy)

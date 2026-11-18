@@ -28,46 +28,68 @@ def normalize_full_name(value: str) -> str:
     return " ".join(value.split())
 
 
+# Each check returns the message for an invalid value, or None when it is fine.
+
+def full_name_error(value: str) -> str | None:
+    name = normalize_full_name(value)
+    if len(name) < 2:
+        return "Enter your full name"
+    if len(name) > 100:
+        return "Must be at most 100 characters"
+    if not all(part.replace("-", "").replace("'", "").isalpha() for part in name.split(" ")):
+        return "Use letters, spaces, hyphens and apostrophes only"
+    return None
+
+
+def email_error(value: str) -> str | None:
+    email = value.strip()
+    if not email:
+        return "Enter your email address"
+    if len(email) > 254 or not EMAIL_PATTERN.fullmatch(email):
+        return "Enter a valid email address, e.g. name@example.com"
+    return None
+
+
+def phone_number_error(value: str) -> str | None:
+    phone = normalize_phone_number(value)
+    if not phone:
+        return "Enter your phone number"
+    if not PHONE_PATTERN.fullmatch(phone):
+        return "Use international format with country code, e.g. +923001234567"
+    return None
+
+
+def username_error(value: str) -> str | None:
+    username = value.strip()
+    if not username:
+        return "Choose a username"
+    if not USERNAME_PATTERN.fullmatch(username):
+        return "3-30 characters: letters, digits, '_' or '.'"
+    return None
+
+
+def password_error(value: str) -> str | None:
+    if not value.strip():
+        return "Choose a password"
+    if len(value) < PASSWORD_MIN_LENGTH:
+        return f"Must be at least {PASSWORD_MIN_LENGTH} characters"
+    if len(value) > PASSWORD_MAX_LENGTH:
+        return f"Must be at most {PASSWORD_MAX_LENGTH} characters"
+    return None
+
+
 def validate_signup(data: SignupDTO, confirm_password: str) -> dict[str, str]:
     """Returns {field: message} for every invalid field (empty dict = valid)."""
-    errors: dict[str, str] = {}
-
-    name = normalize_full_name(data.full_name)
-    if len(name) < 2:
-        errors["full_name"] = "Enter your full name"
-    elif len(name) > 100:
-        errors["full_name"] = "Must be at most 100 characters"
-    elif not all(part.replace("-", "").replace("'", "").isalpha() for part in name.split(" ")):
-        errors["full_name"] = "Use letters, spaces, hyphens and apostrophes only"
-
-    email = data.email.strip()
-    if not email:
-        errors["email"] = "Enter your email address"
-    elif len(email) > 254 or not EMAIL_PATTERN.fullmatch(email):
-        errors["email"] = "Enter a valid email address, e.g. name@example.com"
-
-    phone = normalize_phone_number(data.phone_number)
-    if not phone:
-        errors["phone_number"] = "Enter your phone number"
-    elif not PHONE_PATTERN.fullmatch(phone):
-        errors["phone_number"] = "Use international format with country code, e.g. +923001234567"
-
-    username = data.username.strip()
-    if not username:
-        errors["username"] = "Choose a username"
-    elif not USERNAME_PATTERN.fullmatch(username):
-        errors["username"] = "3-30 characters: letters, digits, '_' or '.'"
-
-    if not data.password.strip():
-        errors["password"] = "Choose a password"
-    elif len(data.password) < PASSWORD_MIN_LENGTH:
-        errors["password"] = f"Must be at least {PASSWORD_MIN_LENGTH} characters"
-    elif len(data.password) > PASSWORD_MAX_LENGTH:
-        errors["password"] = f"Must be at most {PASSWORD_MAX_LENGTH} characters"
-
+    checks = {
+        "full_name": full_name_error(data.full_name),
+        "email": email_error(data.email),
+        "phone_number": phone_number_error(data.phone_number),
+        "username": username_error(data.username),
+        "password": password_error(data.password),
+    }
+    errors = {field: message for field, message in checks.items() if message}
     if "password" not in errors and confirm_password != data.password:
         errors["confirm_password"] = "Passwords do not match"
-
     return errors
 
 

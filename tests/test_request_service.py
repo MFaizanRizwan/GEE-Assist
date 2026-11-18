@@ -30,6 +30,9 @@ class FakeDataFacade(IDataFacade):
             raise self.error
         return self.answer
 
+    def generate_explanation(self, request):  # not used here
+        raise NotImplementedError
+
     def search_places(self, query):
         self.place_queries.append(query)
         return self.places
@@ -39,6 +42,12 @@ class FakeDataFacade(IDataFacade):
 
     def validate_access(self) -> bool:
         return False
+
+    def configure_gee_project(self, project):  # not used here
+        pass
+
+    def configure_gemini_key(self, api_key):  # not used here
+        pass
 
     def diagnose_gee(self):  # not used here
         return []
@@ -51,6 +60,75 @@ class FakeDataFacade(IDataFacade):
 
     def cancel_gee_sign_in(self) -> None:  # not used here
         pass
+
+    def list_formulas(self):  # not used here
+        return []
+
+    def get_formula(self, key):  # not used here
+        return None
+
+    def formula_categories(self):  # not used here
+        return []
+
+    def analysis_groups(self):  # not used here
+        return []
+
+    def save_user(self, *args, **kwargs):  # not used here
+        raise NotImplementedError
+
+    def find_user_by_id(self, *args, **kwargs):  # not used here
+        raise NotImplementedError
+
+    def find_user_by_email(self, *args, **kwargs):  # not used here
+        raise NotImplementedError
+
+    def find_users(self, *args, **kwargs):  # not used here
+        raise NotImplementedError
+
+    def delete_user(self, *args, **kwargs):  # not used here
+        raise NotImplementedError
+
+    def create_user(self, *args, **kwargs):  # not used here
+        raise NotImplementedError
+
+    def change_password(self, *args, **kwargs):  # not used here
+        raise NotImplementedError
+
+    def save_profile_photo(self, *args, **kwargs):  # not used here
+        raise NotImplementedError
+
+    def find_profile_photo(self, *args, **kwargs):  # not used here
+        raise NotImplementedError
+
+    def delete_profile_photo(self, *args, **kwargs):  # not used here
+        raise NotImplementedError
+
+    def save_project(self, *args, **kwargs):  # not used here
+        raise NotImplementedError
+
+    def find_project_by_id(self, *args, **kwargs):  # not used here
+        raise NotImplementedError
+
+    def find_projects_by_user(self, *args, **kwargs):  # not used here
+        raise NotImplementedError
+
+    def find_all_projects(self, *args, **kwargs):  # not used here
+        raise NotImplementedError
+
+    def delete_project(self, *args, **kwargs):  # not used here
+        raise NotImplementedError
+
+    def load_project_folder(self, *args, **kwargs):  # not used here
+        raise NotImplementedError
+
+    def move_project(self, *args, **kwargs):  # not used here
+        raise NotImplementedError
+
+    def save_analysis_record(self, *args, **kwargs):  # not used here
+        raise NotImplementedError
+
+    def find_analysis_records(self, *args, **kwargs):  # not used here
+        raise NotImplementedError
 
 
 # ------------------------------------------------------------------ submit_query

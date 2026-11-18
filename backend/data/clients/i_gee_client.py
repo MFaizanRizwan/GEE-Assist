@@ -16,6 +16,10 @@ class IGEEClient(ABC):
     """Class diagram: IGEEClient. Gateway to Google Earth Engine."""
 
     @abstractmethod
+    def set_project(self, project: str) -> None:
+        """Use another Google Cloud project from now on (the next request connects with it)."""
+
+    @abstractmethod
     def fetch_chunk(
         self,
         chunk: ChunkDTO,

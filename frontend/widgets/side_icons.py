@@ -10,6 +10,11 @@ follow light and dark themes.
   lines on the paper one after another.
 * ``TerminalIcon``: a terminal window with a prompt; animated, characters are typed
   after the prompt while the cursor blinks.
+* ``AnalysisIcon``: three bars of a spectral chart under a magnifying lens; animated,
+  the bars rise and fall in a wave while the lens sweeps back and forth over them,
+  colouring the bar it is examining.
+* ``ExplainIcon``: a speech bubble with a sparkle (AI explanation); animated, the explanation's
+  lines appear in the bubble one after another while the sparkle twinkles.
 """
 
 from __future__ import annotations
@@ -207,3 +212,139 @@ class TerminalIcon(SideIcon):
     def cursor_visible(cls, t: float | None) -> bool:
         """At rest the cursor shows; animated it blinks."""
         return t is None or int(t * cls.BLINKS * 2) % 2 == 0
+
+
+class AnalysisIcon(SideIcon):
+    period_ms = 1800
+    BARS = 3
+    REST_HEIGHTS = (0.42, 0.7, 0.55)   # share of the chart's height, at rest
+
+    def paint(self, painter: QPainter, rect: QRectF, t: float | None) -> None:
+        s = rect.width()
+        line_width = max(1.4, s * 0.075)
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # Axis: an L along the left and bottom.
+        floor = rect.top() + s * 0.88
+        axis = QPainterPath(QPointF(rect.left() + s * 0.08, rect.top() + s * 0.1))
+        axis.lineTo(rect.left() + s * 0.08, floor)
+        axis.lineTo(rect.right() - s * 0.04, floor)
+        painter.setPen(QPen(QColor(theme.INK), line_width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap,
+                            Qt.PenJoinStyle.RoundJoin))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawPath(axis)
+
+        # Bars: rising and falling in a wave; the one under the lens is coloured.
+        lens_x = self.lens_x(t)
+        chart_height = s * 0.66
+        bar_width = s * 0.16
+        painter.setPen(Qt.PenStyle.NoPen)
+        for index in range(self.BARS):
+            left = rect.left() + s * (0.2 + 0.24 * index)
+            height = chart_height * self.bar_height(t, index)
+            centre = (left - rect.left() + bar_width / 2) / s
+            examined = t is not None and abs(centre - lens_x) < 0.13
+            painter.setBrush(QColor(theme.LEAF if examined else theme.OCEAN))
+            painter.drawRoundedRect(QRectF(left, floor - height - line_width / 2, bar_width, height),
+                                    s * 0.03, s * 0.03)
+
+        # Lens: a ring with a handle, sweeping over the bars.
+        radius = s * 0.17
+        centre = QPointF(rect.left() + s * lens_x, rect.top() + s * (0.34 + 0.04 * math.sin(2 * math.pi * (t or 0))))
+        glass = QColor(theme.WHITE)
+        glass.setAlpha(110)
+        painter.setBrush(glass)
+        painter.setPen(QPen(QColor(theme.INK), line_width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        painter.drawEllipse(centre, radius, radius)
+        handle = QPointF(math.cos(math.radians(45)), math.sin(math.radians(45)))
+        painter.drawLine(centre + handle * radius, centre + handle * (radius + s * 0.17))
+        painter.restore()
+
+    @classmethod
+    def bar_height(cls, t: float | None, index: int) -> float:
+        """Height of bar ``index`` at moment ``t``, as a share of the chart (a wave moving left to right)."""
+        if t is None:
+            return cls.REST_HEIGHTS[index]
+        return 0.55 + 0.35 * math.sin(2 * math.pi * (t - index / cls.BARS))
+
+    @staticmethod
+    def lens_x(t: float | None) -> float:
+        """The lens's centre across the icon (0-1): at rest over the right bar; animated, it sweeps there and back."""
+        if t is None:
+            return 0.7
+        return 0.3 + 0.45 * (0.5 - 0.5 * math.cos(2 * math.pi * t))
+
+
+class ExplainIcon(SideIcon):
+    """A speech bubble with a sparkle (AI explanation); animated, the explanation's lines appear in
+    the bubble one after another while the sparkle twinkles."""
+
+    period_ms = 1800
+    LINES = 3
+    LINE_LENGTHS = (0.52, 0.42, 0.3)   # share of the icon's width
+
+    def paint(self, painter: QPainter, rect: QRectF, t: float | None) -> None:
+        s = rect.width()
+        line_width = max(1.4, s * 0.075)
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # Bubble: a rounded box with a tail at the bottom left.
+        left, top, right, bottom = rect.left() + s * 0.06, rect.top() + s * 0.2, rect.left() + s * 0.8, rect.top() + s * 0.74
+        bubble = QPainterPath()
+        bubble.addRoundedRect(QRectF(left, top, right - left, bottom - top), s * 0.12, s * 0.12)
+        tail = QPainterPath(QPointF(left + s * 0.16, bottom - s * 0.02))
+        tail.lineTo(left + s * 0.1, rect.top() + s * 0.92)
+        tail.lineTo(left + s * 0.34, bottom - s * 0.02)
+        bubble = bubble.united(tail)
+        painter.setPen(QPen(QColor(theme.INK), line_width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap,
+                            Qt.PenJoinStyle.RoundJoin))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawPath(bubble)
+
+        # Lines of the explanation: written one after another.
+        painter.setPen(QPen(QColor(theme.OCEAN), line_width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        for index in range(self.LINES):
+            shown = self.line_shown(t, index)
+            if shown <= 0:
+                continue
+            y = top + (bottom - top) * (0.3 + 0.2 * index)
+            x0 = left + s * 0.12
+            painter.drawLine(QPointF(x0, y), QPointF(x0 + s * self.LINE_LENGTHS[index] * shown, y))
+
+        # Sparkle: a four-pointed star at the top right, twinkling.
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(theme.LEAF))
+        painter.drawPath(self._star(QPointF(rect.left() + s * 0.82, rect.top() + s * 0.2), s * 0.2 * self.sparkle(t)))
+        painter.restore()
+
+    @classmethod
+    def line_shown(cls, t: float | None, index: int) -> float:
+        """How much of line ``index`` is written at moment ``t`` (0 to 1): all of them at rest."""
+        if t is None:
+            return 1.0
+        start = index / (cls.LINES + 1)                 # each line in turn, then a pause with all shown
+        return max(0.0, min(1.0, (t - start) * (cls.LINES + 1)))
+
+    @staticmethod
+    def sparkle(t: float | None) -> float:
+        """The sparkle's size (share of its full size): twinkling between 0.55 and 1 while animated."""
+        if t is None:
+            return 1.0
+        return 0.775 + 0.225 * math.cos(2 * math.pi * t * 2)
+
+    @staticmethod
+    def _star(centre: QPointF, radius: float) -> QPainterPath:
+        inner = radius * 0.32
+        star = QPainterPath()
+        for point in range(8):
+            angle = math.radians(point * 45 - 90)
+            reach = radius if point % 2 == 0 else inner
+            corner = QPointF(centre.x() + reach * math.cos(angle), centre.y() + reach * math.sin(angle))
+            if point == 0:
+                star.moveTo(corner)
+            else:
+                star.lineTo(corner)
+        star.closeSubpath()
+        return star

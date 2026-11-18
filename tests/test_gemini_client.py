@@ -155,7 +155,7 @@ def test_key_errors_are_not_retried():
 
 
 def test_missing_api_key_is_reported():
-    with pytest.raises(LLMServiceError, match="GEMINI_API_KEY"):
+    with pytest.raises(LLMServiceError, match="Options → Settings"):
         GeminiClient(api_key="", model="m").process_query("q")
 
 

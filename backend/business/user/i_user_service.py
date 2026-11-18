@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 
 from backend.dto.user_dto import (
     GoogleSignInDTO,
+    NewUserDTO,
     SessionInfoDTO,
     SignupDTO,
     SignupResultDTO,
@@ -11,6 +12,8 @@ from backend.dto.user_dto import (
     UserPageDTO,
     VerificationStatusDTO,
 )
+from backend.dto.validation_dto import ValidationDTO
+from backend.dto.version_dto import AppVersionDTO
 
 
 class IUserService(ABC):
@@ -23,6 +26,9 @@ class IUserService(ABC):
     # ------------------------------------------------------------- server
     @abstractmethod
     def is_server_available(self) -> bool: ...
+
+    @abstractmethod
+    def check_app_version(self) -> AppVersionDTO | None: ...
 
     # ------------------------------------------------------------- session
     @property
@@ -45,6 +51,10 @@ class IUserService(ABC):
 
     @abstractmethod
     def log_out(self) -> None: ...
+
+    @abstractmethod
+    def set_session_duration(self, seconds: float) -> None:
+        """How long "Keep me signed in" lasts from the next sign-in on."""
 
     # ------------------------------------------------------------- sign-up / verification
     @abstractmethod
@@ -76,3 +86,53 @@ class IUserService(ABC):
 
     @abstractmethod
     def set_user_active(self, user_id: str, is_active: bool) -> UserDTO: ...
+
+    @abstractmethod
+    def find_user_by_email(self, email: str) -> UserDTO | None: ...
+
+    @abstractmethod
+    def create_user(self, user: NewUserDTO) -> ValidationDTO:
+        """Admins: add an account. Invalid or already-used fields come back in ``errors``."""
+
+    @abstractmethod
+    def delete_user(self, user_id: str) -> bool:
+        """Admins: delete someone else's account. False if it no longer existed."""
+
+    # ------------------------------------------------------------- forgot password
+    @abstractmethod
+    def start_forgot_password(self, identifier: str) -> dict[str, Any]:
+        """Request a password reset link sent to email."""
+
+    @abstractmethod
+    def poll_forgot_password(self, session_id: str) -> bool:
+        """Poll if email link was verified in browser. Returns True when verified."""
+
+    @abstractmethod
+    def complete_forgot_password(
+        self, session_id: str, new_password: str, confirm_password: str
+    ) -> ValidationDTO:
+        """Set new password after email verification."""
+
+    # ------------------------------------------------------------- manage account
+    @abstractmethod
+    def update_user(self, user: UserDTO) -> ValidationDTO:
+        """Save changed details: your own name, username and phone; admins also others' email, role
+        and status. Invalid or already-used fields come back in ``errors`` (nothing is saved then)."""
+
+    @abstractmethod
+    def change_password(
+        self, user_id: str, new_password: str, confirm_password: str, current_password: str | None = None
+    ) -> ValidationDTO:
+        """Your own password needs ``current_password``; admins reset others' without it."""
+
+    @abstractmethod
+    def set_profile_photo(self, file_path: str) -> ValidationDTO:
+        """Use the image at ``file_path`` as the signed-in user's photo. Kept on this computer only."""
+
+    @abstractmethod
+    def get_profile_photo(self, user_id: str | None = None) -> bytes | None:
+        """A user's photo saved on this computer (the signed-in user's by default), or None."""
+
+    @abstractmethod
+    def remove_profile_photo(self) -> bool:
+        """Remove the signed-in user's photo from this computer. False if there was none."""

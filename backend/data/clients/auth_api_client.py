@@ -54,14 +54,32 @@ class AuthApiClient(IAuthApiClient):
             return False
         return response.status_code == 200
 
+    def check_app_version(
+        self, current_version: str | None = None, token: str | None = None
+    ) -> dict[str, Any] | None:
+        params = {"current_version": current_version} if current_version else {}
+        headers = {"Authorization": f"Bearer {token}"} if token else {}
+        try:
+            response = self._http.get("/app/version", params=params, headers=headers, timeout=5)
+            if response.status_code == 200:
+                return response.json()
+        except httpx.HTTPError:
+            return None
+        return None
+
     def signup(self, payload: dict[str, str]) -> dict[str, Any]:
         return self._request("POST", "/auth/signup", json=payload)
 
-    def login(self, username: str, password: str) -> dict[str, Any]:
+    def login(
+        self, username: str, password: str, app_version: str | None = None
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {"username": username, "password": password}
+        if app_version:
+            payload["app_version"] = app_version
         return self._request(
             "POST",
             "/auth/login",
-            json={"username": username, "password": password},
+            json=payload,
             unauthorized=InvalidCredentialsError,
         )
 
@@ -91,7 +109,46 @@ class AuthApiClient(IAuthApiClient):
         _raise_for_status(response, unauthorized=AuthError)
         return response.json()
 
+    # ----------------------------------------------------------------- account
+    def forgot_password_start(self, identifier: str) -> dict[str, Any]:
+        return self._request("POST", "/auth/forgot-password/start", json={"identifier": identifier})
+
+    def forgot_password_poll(self, session_id: str) -> dict[str, Any] | None:
+        response = self._send("POST", "/auth/forgot-password/poll", json={"session_id": session_id})
+        if response.status_code == 202:
+            return None
+        _raise_for_status(response, unauthorized=AuthError)
+        return response.json()
+
+    def forgot_password_complete(self, session_id: str, new_password: str) -> dict[str, Any]:
+        return self._request(
+            "POST",
+            "/auth/forgot-password/complete",
+            json={"session_id": session_id, "new_password": new_password},
+        )
+
+    def update_user(self, access_token: str, user_id: str, fields: dict[str, Any]) -> dict[str, Any]:
+        return self._request("PATCH", f"/users/{user_id}", token=access_token, json=fields)
+
+    def change_password(
+        self, access_token: str, user_id: str, new_password: str, current_password: str | None = None
+    ) -> dict[str, Any]:
+        body = {"new_password": new_password}
+        if current_password is not None:
+            body["current_password"] = current_password
+        return self._request("PUT", f"/users/{user_id}/password", token=access_token, json=body)
+
     # ------------------------------------------------------------------- admin
+    def create_user(self, access_token: str, payload: dict[str, Any]) -> dict[str, Any]:
+        return self._request("POST", "/admin/users", token=access_token, json=payload)
+
+    def find_user_by_email(self, access_token: str, email: str) -> dict[str, Any]:
+        return self._request("GET", "/admin/users/by-email", token=access_token, params={"email": email})
+
+    def delete_user(self, access_token: str, user_id: str) -> None:
+        response = self._send("DELETE", f"/admin/users/{user_id}", token=access_token)
+        _raise_for_status(response, unauthorized=SessionExpiredError)  # 204: no body
+
     def list_users(self, access_token: str, skip: int = 0, limit: int = 50) -> dict[str, Any]:
         return self._request("GET", "/admin/users", token=access_token, params={"skip": skip, "limit": limit})
 

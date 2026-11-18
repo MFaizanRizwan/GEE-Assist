@@ -8,13 +8,13 @@ from pathlib import Path
 from typing import Generator
 
 from backend.auth_exceptions import AuthError
-from backend.config import DEFAULT_DOWNLOAD_DIR
 from backend.config.download_settings import DownloadSettingsStore
 from backend.config.llm import load_llm_settings
 from backend.config.settings import PROJECT_ROOT, get_settings
 from backend.dto import CheckDTO
 from backend.dto.check_dto import CHECK_FAIL, CHECK_OK, CHECK_WARN
 from frontend import appearance, palette
+from frontend.app_settings import SETTINGS_PLACE, current_settings
 from frontend.download_format import format_size
 from frontend.gkonsol import text
 from frontend.gkonsol.command import Command, Registry
@@ -25,6 +25,7 @@ from frontend.gkonsol.history import STORE_FILE
 from frontend.gkonsol.parser import Args, UsageError
 from frontend.gkonsol.ports import PAGES, Context
 from frontend.gkonsol.text import Span
+from frontend.project_paths import current_project, downloads_folder
 
 GROUP = "App"
 LOW_DISK_BYTES = 5_000_000_000   # warn below 5 GB free
@@ -50,7 +51,8 @@ def _open(ctx: Context, args: Args) -> None:
 def _side_bar(ctx: Context, args: Args) -> None:
     expanded = switch(args.word(0), ctx.app.is_side_bar_expanded())
     ctx.app.set_side_bar_expanded(expanded)
-    ctx.out.muted(f"The side bar is {'open' if expanded else 'collapsed'}.")
+    ctx.out.muted("The side bar is kept open." if expanded else
+                  "The side bar is collapsed; it opens while the pointer is over it.")
 
 
 def _full_screen(ctx: Context, args: Args) -> None:
@@ -106,16 +108,20 @@ def _panel_height(ctx: Context, args: Args) -> None:
 def _config(ctx: Context, args: Args) -> None:
     settings = get_settings()
     llm = load_llm_settings()
+    mine = current_settings(ctx.facade)  # what the user entered (Options > Settings), else .env
     downloads = DownloadSettingsStore().load()
+    project = current_project(ctx.facade)
     ctx.out.heading("Settings")
     ctx.out.pairs([
         ("Auth server", f"{settings.auth_api_url}  (AUTH_API_URL)"),
         ("Server timeout", f"{settings.auth_api_timeout:g} s  (AUTH_API_TIMEOUT)"),
-        ("Keep signed in for", f"{duration(settings.session_duration)}  (SESSION_DURATION)"),
-        ("Earth Engine project", settings.gee_project or Span("not set  (GEE_PROJECT)", text.WARNING)),
+        ("Keep signed in for", duration(mine.session_duration)),
+        ("Earth Engine project", mine.gee_project or Span(f"not set  ({SETTINGS_PLACE})", text.WARNING)),
         ("Gemini model", f"{llm.model}  (GEMINI_MODEL)"),
-        ("Gemini API key", Span("set", text.SUCCESS) if llm.api_key else Span("not set  (GEMINI_API_KEY)", text.WARNING)),
-        ("Download folder", str(DEFAULT_DOWNLOAD_DIR)),
+        ("Gemini API key", Span(f"set  ({mine.gemini_key_hint})" if mine.gemini_key_hint else "set", text.SUCCESS)
+         if mine.gemini_key_set else Span(f"not set  ({SETTINGS_PLACE})", text.WARNING)),
+        ("Project", project.folder if project is not None else Span("none open  (File > New project)", text.WARNING)),
+        ("Download folder", downloads_folder(ctx.facade)),
         ("Chunk size", f"{downloads.chunk_size_mb} MB"),
         ("Retries per chunk", str(downloads.retry_limit)),
         ("Theme", appearance.THEMES.get(palette.THEME, palette.THEME)),
@@ -133,17 +139,17 @@ def _doctor(ctx: Context, args: Args) -> Generator:
     reachable, elapsed = yield task(timed, ctx.facade.is_server_available, label="Contacting the authentication server")
     checks.append(CheckDTO("Authentication server", CHECK_OK, f"{url} answered.", duration_ms=elapsed) if reachable
                   else CheckDTO("Authentication server", CHECK_FAIL, f"Cannot reach {url}.",
-                                "Start GEE-Assist-Backend, or set AUTH_API_URL in .env."))
+                                "Check the internet connection, or the server address (AUTH_API_URL in .env)."))
     if reachable:
         try:
             user, elapsed = yield task(timed, ctx.facade.reload_current_user, label="Checking your session")
             checks.append(CheckDTO("Session", CHECK_OK, f"Signed in as {user.username}.", duration_ms=elapsed))
         except AuthError as exc:
             checks.append(CheckDTO("Session", CHECK_FAIL, str(exc), "Sign in again: signout"))
-    checks.append(CheckDTO("Gemini", CHECK_OK, "GEMINI_API_KEY is set.") if load_llm_settings().api_key
-                  else CheckDTO("Gemini", CHECK_WARN, "GEMINI_API_KEY is not set: 'ask' fills the form only from "
+    checks.append(CheckDTO("Gemini", CHECK_OK, "The Gemini API key is set.") if current_settings(ctx.facade).gemini_key_set
+                  else CheckDTO("Gemini", CHECK_WARN, f"No Gemini API key ({SETTINGS_PLACE}): 'ask' fills the form only from "
                                 "what it recognises itself.", "Create a key at https://aistudio.google.com/apikey"))
-    checks.append(_folder_check(Path(ctx.form.current().output_dir or DEFAULT_DOWNLOAD_DIR)))
+    checks.append(_folder_check(Path(downloads_folder(ctx.facade))))
     print_checks(ctx, checks)
 
     ctx.out.print(Span("Earth Engine", text.BOLD))
@@ -198,7 +204,7 @@ def register(registry: Registry) -> None:
         aliases=("goto",), group=GROUP, completer=_complete_page,
         examples=[("open downloads", "The Downloads page"), ("open query", "The parameter form")],
     ))
-    registry.add(Command("sidebar", "Open or collapse the side bar", _side_bar, params="[on|off|toggle]",
+    registry.add(Command("sidebar", "Keep the side bar open, or let it open on hover", _side_bar, params="[on|off|toggle]",
                          max_args=1, group=GROUP, completer=_complete_switch))
     registry.add(Command("fullscreen", "Switch full screen on or off", _full_screen, params="[on|off|toggle]",
                          max_args=1, group=GROUP, completer=_complete_switch))

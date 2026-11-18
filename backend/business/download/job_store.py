@@ -57,8 +57,11 @@ class DownloadJobStore:
         return jobs
 
     def forget(self, job: DownloadJobDTO) -> None:
+        self.forget_folder(job.folder)
+
+    def forget_folder(self, folder: str) -> None:
         with self._lock:
-            folders = [f for f in self._read_registry() if f != job.folder]
+            folders = [f for f in self._read_registry() if f != folder]
             _write_json(self.registry_path, folders)
 
     def _read_registry(self) -> list[str]:

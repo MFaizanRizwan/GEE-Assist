@@ -5,10 +5,12 @@ from __future__ import annotations
 from pathlib import Path
 
 from backend.business.download.naming import parse_dataset_name
-from backend.business.map import raster_renderer
+from backend.business.map import layer_styles, raster_renderer
 from backend.business.map.i_map_service import IMapService
+from backend.business.map.result_styles import read_result_layers
 from backend.business.map.view_presets import presets_for
-from backend.dto.map_dto import RasterInfoDTO, RasterViewDTO, ViewPresetDTO
+from backend.dto.map_dto import MapLayerDTO, RasterInfoDTO, RasterViewDTO, ViewPresetDTO
+from backend.dto.result_dto import ResultDTO
 from backend.exceptions import MapError
 
 
@@ -30,12 +32,13 @@ class MapService(IMapService):
                     crs=src.crs.to_string() if src.crs else "", bounds=tuple(float(v) for v in bounds),
                     nodata=src.nodata, dtype=src.dtypes[0], size_bytes=file.stat().st_size,
                     satellite=satellite, start_date=start, end_date=end,
+                    result_layers=read_result_layers(file, names),
                 )
         except rasterio.errors.RasterioIOError as exc:
             raise MapError(f"Cannot open {file.name}: it is missing or not a GeoTIFF.") from exc
 
-    def view_presets(self, info: RasterInfoDTO) -> list[ViewPresetDTO]:
-        return presets_for(info)
+    def view_presets(self, info: RasterInfoDTO, analysis_colours: bool = True) -> list[ViewPresetDTO]:
+        return presets_for(info, analysis_colours)
 
     def render(self, info: RasterInfoDTO, preset: ViewPresetDTO, max_size: int = 1600) -> RasterViewDTO:
         return raster_renderer.render(info, preset, max_size)
@@ -60,6 +63,40 @@ class MapService(IMapService):
             raise MapError(f"Cannot read {info.name}: {exc}") from exc
         return {band: (None if _missing(value, info.nodata) else float(value))
                 for band, value in zip(info.band_names, pixel)}
+
+    def build_layers(self, result: ResultDTO, max_size: int = 1600) -> list[MapLayerDTO]:
+        import math
+
+        import numpy as np
+        import rasterio
+        from rasterio.enums import Resampling
+        from rasterio.warp import transform_bounds
+
+        try:
+            with rasterio.open(result.output_path) as src:
+                scale = max(1.0, max(src.width, src.height) / max_size)
+                height, width = max(1, math.ceil(src.height / scale)), max(1, math.ceil(src.width / scale))
+                bounds = tuple(src.bounds)
+                if src.crs and src.crs.to_epsg() != 4326:
+                    bounds = transform_bounds(src.crs, "EPSG:4326", *bounds, densify_pts=21)
+                names = list(src.descriptions)
+                layers = []
+                for layer in result.layers:
+                    if layer.key not in names:
+                        continue
+                    categorical = layer.style in ("mask", "classes", "transition")
+                    values = src.read(names.index(layer.key) + 1, out_shape=(height, width), out_dtype="float64",
+                                      resampling=Resampling.nearest if categorical else Resampling.average)
+                    valid = np.isfinite(values) & (values != src.nodata if src.nodata is not None else True)
+                    title = f"{layer.label} ({layer.unit})" if layer.unit else layer.label
+                    rgb, legend = layer_styles.draw(values, valid, layer.style, title, layer.low, layer.high,
+                                                    layer.classes)
+                    rgba = np.dstack([rgb, np.where(valid, 255, 0).astype(np.uint8)])
+                    layers.append(MapLayerDTO(layer.key, layer.label, layer.style, rgba, legend, width, height,
+                                              tuple(float(v) for v in bounds), scale))
+                return layers
+        except rasterio.errors.RasterioIOError as exc:
+            raise MapError(f"Cannot open the analysis result {Path(result.output_path).name}.") from exc
 
 
 def _missing(value: float, nodata: float | None) -> bool:

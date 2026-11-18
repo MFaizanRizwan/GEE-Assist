@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import QApplication  # noqa: E402
 
 from backend.auth_exceptions import InvalidRequestError  # noqa: E402
 from backend.dto.user_dto import UserDTO, UserPageDTO  # noqa: E402
+from backend.dto.validation_dto import ValidationDTO  # noqa: E402
 
 ADMIN = UserDTO(id="a1", username="admin", full_name="System Administrator", role="admin", email="admin@example.com")
 USERS = [ADMIN] + [
@@ -48,6 +49,22 @@ class FakeAdminFacade:
         self.calls.append(("status", user_id, is_active))
         self.users[user_id] = dataclasses.replace(self.users[user_id], is_active=is_active)
         return self.users[user_id]
+
+    def get_profile_photo(self, user_id=None):
+        return None  # no photos on this computer
+
+    def delete_user(self, user_id):
+        self.calls.append(("delete", user_id))
+        return self.users.pop(user_id, None) is not None
+
+    def find_user_by_email(self, email):
+        self.calls.append(("find", email))
+        return next((u for u in self.users.values() if u.email == email), None)
+
+    def update_user(self, user):
+        self.calls.append(("update", user.id))
+        self.users[user.id] = user
+        return ValidationDTO(message=f"{user.full_name}'s details were saved.")
 
 
 def wait_until(condition, timeout=5.0):
@@ -90,7 +107,10 @@ def test_own_account_cannot_be_changed(dialog):
     dlg, _ = dialog
     dlg.table.selectRow(0)  # the admin themself
     assert wait_until(lambda: dlg.details.name.text() == "System Administrator")
-    assert not dlg.details.apply_role.isEnabled() and not dlg.details.toggle_status.isEnabled()
+    for action in (dlg.details.apply_role, dlg.details.toggle_status, dlg.details.edit_details,
+                   dlg.details.reset_password, dlg.details.delete_account):
+        assert action.isHidden()
+    assert not dlg.details.self_note.isHidden()
 
 
 def test_change_role_and_disable(dialog):
@@ -113,3 +133,68 @@ def test_filter_hides_non_matching_rows(dialog):
     dlg.search.setText("userB")
     visible = [r for r in range(dlg.table.rowCount()) if not dlg.table.isRowHidden(r)]
     assert [dlg.table.item(r, 1).text() for r in visible] == ["user1"]
+
+
+
+# ------------------------------------------------------------- manage accounts
+class AcceptedDialog:
+    """Stands in for a dialog the admin fills in and confirms."""
+
+    def __init__(self, facade, user=None, *args, **kwargs):
+        self.facade, self.user = facade, user
+        self.result_message = "Done."
+        self.session_expired = type("Signal", (), {"connect": lambda *_: None})()
+
+    def exec(self):
+        from PyQt6.QtWidgets import QDialog
+
+        if self.user is not None:
+            self.facade.update_user(dataclasses.replace(self.user, full_name="Renamed Person"))
+        return QDialog.DialogCode.Accepted
+
+
+def test_admin_edits_someones_details(dialog, monkeypatch):
+    import frontend.views.user_admin_view as view
+
+    dlg, facade = dialog
+    monkeypatch.setattr(view, "EditDetailsDialog", AcceptedDialog)
+    dlg.table.selectRow(1)
+    assert wait_until(lambda: dlg.details.name.text() == USERS[1].full_name)
+    dlg.details.edit_details.click()
+    assert wait_until(lambda: dlg.table.item(1, 0).text() == "Renamed Person")
+    assert ("update", "u0") in facade.calls and dlg.details.banner.text() == "Done."
+
+
+def test_admin_deletes_an_account_after_confirming(dialog):
+    dlg, facade = dialog
+    dlg.table.selectRow(2)
+    assert wait_until(lambda: dlg.details.name.text() == USERS[2].full_name)
+    dlg.details.confirm_delete = lambda user: False
+    dlg.details.delete_account.click()
+    assert ("delete", "u1") not in facade.calls  # cancelled
+    dlg.details.confirm_delete = lambda user: True
+    dlg.details.delete_account.click()
+    assert wait_until(lambda: "30 registered users" in dlg.count.text())
+    assert ("delete", "u1") in facade.calls and "was deleted" in dlg.banner.text()
+
+
+def test_enter_on_an_email_finds_the_user_among_all_users(dialog):
+    dlg, facade = dialog
+    dlg.search.setText("u29@example.com")  # on the second page
+    dlg.search.returnPressed.emit()
+    assert wait_until(lambda: dlg.details.name.text() == USERS[30].full_name)
+    dlg.search.setText("nobody@example.com")
+    dlg.search.returnPressed.emit()
+    assert wait_until(lambda: "No user has the email address nobody@example.com" in dlg.banner.text())
+
+
+def test_add_user_reloads_from_the_first_page(dialog, monkeypatch):
+    import frontend.views.user_admin_view as view
+
+    dlg, _ = dialog
+    monkeypatch.setattr(view, "CreateUserDialog", lambda facade, parent: AcceptedDialog(facade))
+    dlg.next_button.click()
+    assert wait_until(lambda: dlg.page_label.text() == "Page 2 of 2")
+    dlg.add_user.click()
+    assert wait_until(lambda: dlg.page_label.text() == "Page 1 of 2")
+    assert dlg.banner.text() == "Done."

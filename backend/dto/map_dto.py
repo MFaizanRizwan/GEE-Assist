@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional
 
+from backend.dto.result_dto import ResultLayerDTO
+
 
 @dataclass(frozen=True)
 class RasterInfoDTO:
@@ -23,6 +25,8 @@ class RasterInfoDTO:
     satellite: str = ""                         # from the download name, e.g. "Sentinel-2"
     start_date: str = ""                        # "YYYY-MM-DD", from the download name
     end_date: str = ""
+    # For an analysis result: its layers, coloured as on the Analysis page (from the result's .json).
+    result_layers: tuple[ResultLayerDTO, ...] = ()
 
     @property
     def band_count(self) -> int:
@@ -35,9 +39,15 @@ class ViewPresetDTO:
 
     key: str                                    # e.g. "true_colour", "ndvi", "band:B8"
     label: str                                  # shown to the user
-    kind: str                                   # "rgb", "index", "classes" or "band"
+    kind: str                                   # "rgb", "index", "classes", "band" or "layer"
     bands: tuple[str, ...]                      # the bands it uses (red, green, blue for "rgb")
     description: str = ""
+    # "layer": an analysis result's band, coloured as on the Analysis page
+    style: str = ""                             # see backend/business/map/layer_styles.py
+    low: float | None = None                    # fixed range; None = stretched to the data
+    high: float | None = None
+    classes: str = ""
+    unit: str = ""
 
 
 @dataclass(frozen=True)
@@ -63,3 +73,18 @@ class RasterViewDTO:
     height: int
     scale: float                                # GeoTIFF pixels per preview pixel (>= 1)
     notes: list[str] = field(default_factory=list)
+
+
+@dataclass
+class MapLayerDTO:
+    """Class diagram: MapLayerDTO. One analysis result layer drawn and ready to show."""
+
+    id: str                                     # the result band, e.g. "NDVI"
+    name: str                                   # shown to the user
+    style: str                                  # colour style it was drawn with
+    data: object                                # numpy uint8 array (height, width, 4); no-data is transparent
+    legend: LegendDTO
+    width: int
+    height: int
+    bounds: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0)  # west, south, east, north (EPSG:4326)
+    scale: float = 1.0                          # GeoTIFF pixels per preview pixel
