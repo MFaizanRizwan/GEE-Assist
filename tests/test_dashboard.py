@@ -639,3 +639,10 @@ def test_the_dashboard_lists_the_open_projects_own_results(home):
     home.show_dashboard()
     home._facade.get_analysis_results.assert_called_once_with(PROJECT)  # only the open project's
     assert len(home.dashboard.result_rows) == 1
+
+
+def test_a_result_map_clicked_on_the_dashboard_opens_in_the_viewer(home, monkeypatch):
+    opened = []
+    monkeypatch.setattr(home.viewer, "open", opened.append)
+    home.dashboard.open_result.emit("D:/work/MyProject/analysis/result.tif")
+    assert opened == ["D:/work/MyProject/analysis/result.tif"] and home.current_page() is home.viewer

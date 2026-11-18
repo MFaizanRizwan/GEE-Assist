@@ -353,3 +353,100 @@ def test_without_a_project_there_are_no_charts(dashboard):
     assert dashboard.charts_panel.isHidden()
     dashboard.set_projects(_project(1), [_project(1)], [])  # a project without results: empty charts
     assert not dashboard.charts_panel.isHidden() and dashboard.trend_title.text() == "Numbers over time"
+
+
+# ------------------------------------------------------------------ result maps, further down
+def _wait(condition, timeout_ms=3000):
+    from PyQt6.QtTest import QTest
+
+    waited = 0
+    while not condition() and waited < timeout_ms:
+        QTest.qWait(10)
+        waited += 10
+    assert condition()
+
+
+def _maps_facade(count=2, drawn=True):
+    from unittest.mock import MagicMock
+
+    import numpy as np
+
+    from backend.business.facade import IBusinessFacade
+    from backend.dto.map_dto import LegendDTO, MapLayerDTO
+    from backend.dto.result_dto import ResultDTO
+
+    facade = MagicMock(spec=IBusinessFacade)
+    facade.list_saved_results.return_value = [
+        ResultDTO(f"r{n}", "Vegetation", ["NDVI"], output_path=f"D:/work/Project 1/analysis/r{n}.tif",
+                  created_at=f"2026-11-1{n}T10:00:00", saved=True) for n in range(count)]
+    rgba = np.zeros((30, 40, 4), np.uint8)
+    rgba[..., 1], rgba[..., 3] = 160, 255
+    layer = MapLayerDTO("NDVI", "NDVI", "vegetation", rgba, LegendDTO("scale", "NDVI"), 40, 30)
+    facade.get_map_layers.return_value = [layer] if drawn else []
+    return facade
+
+
+def test_the_projects_result_maps_are_drawn_below_the_charts(app):
+    facade = _maps_facade(count=8)
+    view = DashboardView(facade)
+    view.set_projects(_project(1), [_project(1)], [_record(1)])
+    _wait(lambda: len(view.gallery.tiles) == 6 and all(t.has_picture() for t in view.gallery.tiles.values()))
+    assert facade.get_map_layers.call_count == 6  # only the newest six are drawn
+    tile = next(iter(view.gallery.tiles.values()))
+    assert tile.title.text() == "Vegetation · NDVI" and tile.subtitle.text() == "10 Nov 2026, 10:00"
+    view.resize(1300, 1400)
+    view.show()
+    QApplication.processEvents()
+    charts, maps = view.charts_panel, view.maps_panel
+    assert maps.mapTo(view, maps.rect().topLeft()).y() > charts.mapTo(view, charts.rect().bottomLeft()).y()
+    view.hide()
+    view.deleteLater()
+
+
+def test_maps_are_drawn_once_and_reused_when_the_dashboard_is_shown_again(app):
+    facade = _maps_facade()
+    view = DashboardView(facade)
+    view.set_projects(_project(1), [_project(1)], [])
+    _wait(lambda: len(view.gallery.tiles) == 2 and all(t.has_picture() for t in view.gallery.tiles.values()))
+    view.set_projects(_project(1), [_project(1)], [])  # e.g. back to the dashboard
+    _wait(lambda: facade.list_saved_results.call_count == 2 and all(t.has_picture() for t in view.gallery.tiles.values()))
+    assert facade.get_map_layers.call_count == 2
+    view.deleteLater()
+
+
+def test_clicking_a_map_asks_to_open_it(app):
+    view = DashboardView(_maps_facade())
+    view.set_projects(_project(1), [_project(1)], [])
+    _wait(lambda: len(view.gallery.tiles) == 2)
+    opened = []
+    view.open_result.connect(opened.append)
+    _click(view.gallery.tiles["D:/work/Project 1/analysis/r1.tif"])
+    assert opened == ["D:/work/Project 1/analysis/r1.tif"]
+    view.deleteLater()
+
+
+def test_a_project_without_saved_results_says_how_to_get_maps(app):
+    view = DashboardView(_maps_facade(count=0))
+    view.set_projects(_project(1), [_project(1)], [])
+    _wait(lambda: view.maps_note.text().startswith("Save an analysis result of Project 1"))
+    assert view.gallery.tiles == {}
+    view.deleteLater()
+
+
+def test_a_map_that_cannot_be_drawn_says_so(app):
+    view = DashboardView(_maps_facade(count=1, drawn=False))
+    view.set_projects(_project(1), [_project(1)], [])
+    _wait(lambda: view.gallery.tiles and next(iter(view.gallery.tiles.values())).picture.text() == "No picture")
+    view.deleteLater()
+
+
+def test_without_a_project_or_a_facade_there_are_no_maps(app):
+    facade = _maps_facade()
+    view = DashboardView(facade)
+    view.set_projects(None, [_project(1)], [])
+    assert view.maps_panel.isHidden() and facade.list_saved_results.call_count == 0
+    plain = DashboardView()  # e.g. in tests of other parts: nothing to draw them with
+    plain.set_projects(_project(1), [_project(1)], [])
+    assert plain.maps_panel.isHidden()
+    view.deleteLater()
+    plain.deleteLater()

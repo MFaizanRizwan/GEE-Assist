@@ -258,7 +258,7 @@ class HomeWindow(QMainWindow):
         self.account_menu.addAction(self.sign_out_action)
 
         # ---- pages
-        self.dashboard = DashboardView()
+        self.dashboard = DashboardView(facade)
 
         # The query-input workspace (parameter form + kept requests) is a QMainWindow
         # of its own; shown as a page it is embedded as a plain widget.
@@ -334,6 +334,7 @@ class HomeWindow(QMainWindow):
         self.projects.project_changed.connect(lambda _project: self.refresh_projects())
         dashboard = self.dashboard
         dashboard.open_recent.connect(self.projects.open_folder)
+        dashboard.open_result.connect(self.show_viewer)  # a result map on the dashboard
         self.query_input_button.clicked.connect(self.show_query_input)
         self.downloads_button.clicked.connect(self.show_downloads)
         self.analysis_button.clicked.connect(self.show_analysis)

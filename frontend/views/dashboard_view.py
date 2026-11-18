@@ -13,7 +13,7 @@ import re
 from datetime import datetime
 
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QMouseEvent
+from PyQt6.QtGui import QImage, QMouseEvent
 from PyQt6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
@@ -29,13 +29,19 @@ from PyQt6.QtWidgets import (
 
 from backend.dto.project_dto import AnalysisRecordDTO, ProjectDTO
 from backend.dto.user_dto import UserDTO
+from backend.business.facade import IBusinessFacade
 from frontend import theme
 from frontend.widgets.project_charts import CategoryBarChart, MetricTrendChart
+from frontend.widgets.raster_canvas import rgba_to_image
+from frontend.widgets.result_gallery import ResultGallery
+from frontend.workers.task_worker import run_task
 
 RECENT_PANEL_WIDTH = 300                        # the recent projects, on the right edge
 RECENT_PROJECTS = 3
 RESULTS_SHOWN = 3                               # the open project's latest results; "See more" lists them all
 METRICS_SHOWN = 3                               # numbers shown in a result row; all of them in its tooltip
+MAPS_SHOWN = 6                                  # the open project's newest result maps, further down
+MAP_PICTURE_SIZE = 480                          # longer side the maps are drawn at (then fitted in their tile)
 _CATEGORY_LABELS = {"LULC": "Land cover", "LST": "Surface temperature"}
 
 STYLESHEET = f"""
@@ -57,6 +63,13 @@ QFrame#RecentProject:hover {{ border-color: {theme.LEAF}; }}
 QFrame#RecentProject[current="true"] {{ border-color: {theme.LEAF}; }}
 QFrame#ResultRow {{ border: none; border-top: 1px solid {theme.BORDER}; border-radius: 0; background: transparent; }}
 """
+
+
+def _result_title(category: str, processes: list[str]) -> str:
+    """e.g. "Vegetation · NDVI, EVI"; "Analysis result" when neither is known."""
+    shown = ", ".join(processes[:3]) + ("…" if len(processes) > 3 else "")
+    label = category_label(category) if category else ""
+    return " · ".join(part for part in (label, shown) if part) or "Analysis result"
 
 
 def category_label(category: str) -> str:
@@ -355,13 +368,19 @@ def _clear(layout: QVBoxLayout) -> None:
 
 
 class DashboardView(QWidget):
-    """Start page after sign-in. Clicking a recent project emits ``open_recent``."""
+    """Start page after sign-in. Clicking a recent project emits ``open_recent``; clicking a result
+    map emits ``open_result``. With a ``facade``, the open project's result maps are drawn (in the
+    background) further down the page."""
 
     open_recent = pyqtSignal(str)  # a recent project's folder
+    open_result = pyqtSignal(str)  # a result GeoTIFF to open in the viewer
 
-    def __init__(self, parent: QWidget | None = None):
+    def __init__(self, facade: IBusinessFacade | None = None, parent: QWidget | None = None):
         super().__init__(parent)
         self.setStyleSheet(STYLESHEET)
+        self._facade = facade
+        self._map_pictures: dict[str, QImage | None] = {}  # drawn result maps, by GeoTIFF: drawn once
+        self._maps_for = ""  # the project whose maps are being shown (answers for another are dropped)
         self.recent_items: list[RecentProjectItem] = []
         self.result_rows: list[ResultRow] = []
 
@@ -399,6 +418,16 @@ class DashboardView(QWidget):
             charts.addWidget(widget)
         column.addSpacing(16)
         column.addWidget(self.charts_panel)
+        # ---- and the pictures of its saved results
+        self.maps_panel, _, maps = _panel("Result maps")
+        self.maps_note = QLabel(objectName="ItemMeta")
+        self.maps_note.setWordWrap(True)
+        self.gallery = ResultGallery()
+        self.gallery.open_requested.connect(self.open_result)
+        maps.addWidget(self.maps_note)
+        maps.addWidget(self.gallery)
+        column.addSpacing(16)
+        column.addWidget(self.maps_panel)
         column.addStretch(1)
 
         # ---- the two columns: the left one takes the room, the recent projects keep to the right edge
@@ -456,6 +485,7 @@ class DashboardView(QWidget):
                 f"Results of the analyses you run in {current.name} appear here." if current is not None
                 else "Open a project to see its analysis results here."))
         self._show_charts()
+        self._load_maps()
         hidden = len(self._results) - len(self.result_rows)
         self.see_more.setVisible(hidden > 0)
         if hidden > 0:
@@ -469,6 +499,46 @@ class DashboardView(QWidget):
         name, points = main_metric_series(self._results)
         self.trend_title.setText(f"{name} over time" if name else "Numbers over time")
         self.trend_chart.set_series(name, points)
+
+    # ------------------------------------------------------------- result maps
+    def _load_maps(self) -> None:
+        """List the open project's saved results in the background, then draw their maps."""
+        project = self._current
+        self.maps_panel.setVisible(project is not None and self._facade is not None)
+        if project is None or self._facade is None:
+            self._maps_for = ""
+            return
+        self._maps_for = project.id
+        if not self.gallery.tiles:
+            self.maps_note.setText("Looking for the project's result maps…")
+        run_task(self, self._facade.list_saved_results,
+                 on_success=lambda results, wanted=project.id: self._on_saved_results(wanted, results),
+                 on_error=lambda exc: self.maps_note.setText(f"The result maps could not be listed: {exc}"))
+
+    def _on_saved_results(self, project_id: str, results) -> None:
+        if project_id != self._maps_for:
+            return  # another project was opened meanwhile
+        shown = list(results)[:MAPS_SHOWN]
+        name = self._current.name if self._current is not None else "the project"
+        self.maps_note.setText(
+            "" if shown else f"Save an analysis result of {name} (Save result, or Explain with AI) to see its map here.")
+        self.maps_note.setVisible(not shown)
+        self.gallery.set_maps([(r.output_path, _result_title(r.category, r.processes), format_when(r.created_at))
+                               for r in shown])
+        for result in shown:
+            path = result.output_path
+            if path in self._map_pictures:
+                self.gallery.set_picture(path, self._map_pictures[path])
+                continue
+            run_task(self, self._facade.get_map_layers, result, MAP_PICTURE_SIZE,
+                     on_success=lambda layers, path=path, wanted=project_id: self._on_map_drawn(wanted, path, layers),
+                     on_error=lambda exc, path=path, wanted=project_id: self._on_map_drawn(wanted, path, []))
+
+    def _on_map_drawn(self, project_id: str, path: str, layers) -> None:
+        image = rgba_to_image(layers[0].data) if layers else None
+        self._map_pictures[path] = image
+        if project_id == self._maps_for:
+            self.gallery.set_picture(path, image)
 
     def make_results_dialog(self) -> AnalysisResultsDialog:
         """The modal with every analysis result of the open project."""
