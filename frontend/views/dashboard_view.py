@@ -1,8 +1,9 @@
 """Dashboard shown right after signing in.
 
-From the top: a greeting, the open project (or buttons to create / open one), and at the
-bottom the three most recent projects and the latest analysis results of those projects.
-The pages themselves are opened from the side bar (and the menus), not from the dashboard.
+From the top: a greeting, the open project, and at the bottom the three most recent projects
+and the latest analysis results of those projects. The dashboard has no buttons: pages are
+opened from the side bar, projects are created, opened, renamed, moved and closed from the
+File menu, and clicking a recent project opens it.
 """
 
 from __future__ import annotations
@@ -15,7 +16,6 @@ from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
-    QPushButton,
     QScrollArea,
     QStackedWidget,
     QVBoxLayout,
@@ -63,15 +63,8 @@ def format_when(iso: str) -> str:
         return iso or ""
 
 
-def _button(text: str, primary: bool = False) -> QPushButton:
-    button = QPushButton(text, objectName="PrimaryButton" if primary else "SecondaryButton")
-    button.setCursor(Qt.CursorShape.PointingHandCursor)
-    button.setStyleSheet("QPushButton { padding: 7px 14px; font-size: 9.5pt; }")
-    return button
-
-
 class ProjectCard(QFrame):
-    """The open project with its actions, or buttons to create / open one."""
+    """The open project (its name and folder), or a note on how to create or open one."""
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
@@ -83,22 +76,15 @@ class ProjectCard(QFrame):
         # ---- no project open
         empty = QWidget()
         self.empty_title = QLabel("No project open", objectName="ProjectName")
-        empty_text = QLabel("Create a project to start working: datasets are downloaded into its downloads "
-                            "folder and analysis results are kept in its analysis folder.", objectName="Muted")
-        empty_text.setWordWrap(True)
-        self.new_button = _button("New project", primary=True)
-        self.open_button = _button("Open project…")
-        empty_actions = QHBoxLayout()
-        empty_actions.setSpacing(8)
-        empty_actions.addWidget(self.new_button)
-        empty_actions.addWidget(self.open_button)
-        empty_actions.addStretch(1)
+        self.empty_text = QLabel("Create one with File → New project… or open one with File → Open project… "
+                                 "(or click a recent project). Datasets are downloaded into a project and "
+                                 "its analysis results are kept in it.", objectName="Muted")
+        self.empty_text.setWordWrap(True)
         empty_layout = QVBoxLayout(empty)
         empty_layout.setContentsMargins(0, 0, 0, 0)
         empty_layout.setSpacing(8)
         empty_layout.addWidget(self.empty_title)
-        empty_layout.addWidget(empty_text)
-        empty_layout.addLayout(empty_actions)
+        empty_layout.addWidget(self.empty_text)
 
         # ---- a project is open
         open_page = QWidget()
@@ -106,23 +92,12 @@ class ProjectCard(QFrame):
         self.path = QLabel(objectName="ItemPath")
         self.path.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         self.path.setWordWrap(True)
-        self.folder_button = _button("Open folder")
-        self.rename_button = _button("Rename…")
-        self.move_button = _button("Move…")
-        self.close_button = _button("Close")
-        actions = QHBoxLayout()
-        actions.setSpacing(8)
-        for button in (self.folder_button, self.rename_button, self.move_button, self.close_button):
-            actions.addWidget(button)
-        actions.addStretch(1)
         open_layout = QVBoxLayout(open_page)
         open_layout.setContentsMargins(0, 0, 0, 0)
         open_layout.setSpacing(4)
         open_layout.addWidget(QLabel("CURRENT PROJECT", objectName="Overline"))
         open_layout.addWidget(self.name)
         open_layout.addWidget(self.path)
-        open_layout.addSpacing(8)
-        open_layout.addLayout(actions)
 
         self.pages.addWidget(empty)
         self.pages.addWidget(open_page)
@@ -218,15 +193,9 @@ def _clear(layout: QVBoxLayout) -> None:
 
 
 class DashboardView(QWidget):
-    """Start page after sign-in. Emits a signal for each project action."""
+    """Start page after sign-in. Clicking a recent project emits ``open_recent``."""
 
-    new_project = pyqtSignal()
-    open_project = pyqtSignal()
     open_recent = pyqtSignal(str)  # a recent project's folder
-    rename_project = pyqtSignal()
-    move_project = pyqtSignal()
-    show_project_folder = pyqtSignal()
-    close_project = pyqtSignal()
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
@@ -238,11 +207,7 @@ class DashboardView(QWidget):
         self.project_card = ProjectCard()
 
         # ---- bottom: recent projects | their latest analysis results
-        recent_panel, recent_header, self.recent_list = _panel("Recent projects")
-        self.recent_new = _button("New")
-        self.recent_open = _button("Open…")
-        recent_header.addWidget(self.recent_new)
-        recent_header.addWidget(self.recent_open)
+        recent_panel, _, self.recent_list = _panel("Recent projects")
         results_panel, _, self.results_list = _panel("Recent analysis results")
         bottom = QHBoxLayout()
         bottom.setSpacing(20)
@@ -279,13 +244,6 @@ class DashboardView(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(scroll)
 
-        card = self.project_card
-        for button, signal in ((card.new_button, self.new_project), (card.open_button, self.open_project),
-                               (self.recent_new, self.new_project), (self.recent_open, self.open_project),
-                               (card.rename_button, self.rename_project), (card.move_button, self.move_project),
-                               (card.folder_button, self.show_project_folder),
-                               (card.close_button, self.close_project)):
-            button.clicked.connect(signal)
         self.set_projects(None, [], [])
 
     def set_user(self, user: UserDTO) -> None:

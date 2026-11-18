@@ -43,28 +43,27 @@ def _click(widget) -> None:
                                                    Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier))
 
 
-def test_without_a_project_it_offers_to_create_or_open_one(dashboard):
-    asked = []
-    dashboard.new_project.connect(lambda: asked.append("new"))
-    dashboard.open_project.connect(lambda: asked.append("open"))
+def test_without_a_project_it_says_how_to_create_or_open_one(dashboard):
     assert dashboard.project_card.pages.currentIndex() == 0
-    dashboard.project_card.new_button.click()
-    dashboard.project_card.open_button.click()
-    assert asked == ["new", "open"]
+    assert "File → New project…" in dashboard.project_card.empty_text.text()
+    assert "File → Open project…" in dashboard.project_card.empty_text.text()
     assert dashboard.recent_items == [] and dashboard.result_rows == []
 
 
-def test_the_open_project_and_its_actions(dashboard):
-    asked = []
-    for name in ("rename_project", "move_project", "show_project_folder", "close_project"):
-        getattr(dashboard, name).connect(lambda name=name: asked.append(name))
+def test_the_open_project_shows_its_name_and_folder(dashboard):
     dashboard.set_projects(_project(1), [_project(1)], [])
     card = dashboard.project_card
     assert card.pages.currentIndex() == 1 and card.name.text() == "Project 1"
     assert card.path.text() == "D:/work/Project 1"
-    for button in (card.rename_button, card.move_button, card.folder_button, card.close_button):
-        button.click()
-    assert asked == ["rename_project", "move_project", "show_project_folder", "close_project"]
+
+
+def test_the_dashboard_has_no_buttons(dashboard):
+    from PyQt6.QtWidgets import QAbstractButton
+
+    dashboard.set_projects(_project(1), [_project(1), _project(2)], [(_project(1), [_record(1)])])
+    assert dashboard.findChildren(QAbstractButton) == []
+    dashboard.set_projects(None, [], [])
+    assert dashboard.findChildren(QAbstractButton) == []
 
 
 def test_only_the_last_three_projects_are_listed_with_their_folders(dashboard):

@@ -333,13 +333,7 @@ class HomeWindow(QMainWindow):
         self.projects = ProjectActions(facade, self)
         self.projects.project_changed.connect(lambda _project: self.refresh_projects())
         dashboard = self.dashboard
-        dashboard.new_project.connect(self.projects.new_project)
-        dashboard.open_project.connect(self.projects.open_project)
         dashboard.open_recent.connect(self.projects.open_folder)
-        dashboard.rename_project.connect(self.projects.rename_project)
-        dashboard.move_project.connect(self.projects.move_project)
-        dashboard.show_project_folder.connect(self.projects.show_project_folder)
-        dashboard.close_project.connect(self.projects.close_project)
         self.query_input_button.clicked.connect(self.show_query_input)
         self.downloads_button.clicked.connect(self.show_downloads)
         self.analysis_button.clicked.connect(self.show_analysis)
