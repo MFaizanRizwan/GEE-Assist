@@ -121,8 +121,17 @@ def main() -> None:
     if iscc is None:
         print("  installer skipped: Inno Setup not found (winget install JRSoftware.InnoSetup)")
     else:
-        run([str(iscc), f"/DAppVersion={_app_version()}", f"/DSourceDir={app_dir}",
-             f"/O{ROOT / 'dist'}", str(ROOT / "installer" / "GEE-Assist.iss")])
+        cmd = [str(iscc), f"/DAppVersion={_app_version()}", f"/DSourceDir={app_dir}",
+               f"/O{ROOT / 'dist'}", str(ROOT / "installer" / "GEE-Assist.iss")]
+        # Defender scans the new Setup.exe while Inno Setup is still writing its
+        # icon, which can fail with "EndUpdateResource failed"; a retry succeeds.
+        for attempt in range(3):
+            print(f"\n$ {' '.join(cmd)}")
+            if subprocess.run(cmd, cwd=str(ROOT)).returncode == 0:
+                break
+            print("  installer step failed (often a virus scan holding the file); retrying ...")
+        else:
+            raise SystemExit("installer step failed 3 times - see the Inno Setup output above")
         setup = ROOT / "dist" / f"GEE-Assist-Setup-{_app_version()}.exe"
         print(f"  installer : {setup}  ({setup.stat().st_size / (1024 * 1024):.0f} MB)")
     print("=" * 60)
