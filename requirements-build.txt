@@ -9,3 +9,4 @@ cython>=3.0
 setuptools>=70
 wheel
 pyinstaller>=6.10
+# Installer: Inno Setup 6 (outside pip)  winget install JRSoftware.InnoSetup

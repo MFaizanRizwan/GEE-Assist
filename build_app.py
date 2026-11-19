@@ -8,9 +8,11 @@ Pipeline:
          backend/       (the COMPILED .pyd from dist/backend)
   3. Run PyInstaller on GEE-Assist.spec -> dist/GEE-Assist/ (exe + _internal/)
   4. Zip that folder -> dist/GEE-Assist-<version>-win64.zip
+  5. Inno Setup installer -> dist/GEE-Assist-Setup-<version>.exe (installer/GEE-Assist.iss)
 
-Your source backend/ is never modified. Distribute the zip; the user extracts it
-and runs GEE-Assist.exe with no Python installed.
+Your source backend/ is never modified. Distribute the installer, or the zip
+(the user extracts it and runs GEE-Assist.exe). No Python is needed on the
+user's PC.
 
 Why one folder and not one .exe: a one-file .exe unpacks ~6,000 files into
 %TEMP% on every start and Microsoft Defender scans them all each time (high
@@ -113,7 +115,32 @@ def main() -> None:
     print(f"BUILD OK -> {exe}")
     print(f"  distribute: {archive}  ({size_mb:.0f} MB)")
     print(r"  the user extracts it and runs GEE-Assist\GEE-Assist.exe")
+
+    # 5. Installer (Inno Setup), if it is installed.
+    iscc = _find_iscc()
+    if iscc is None:
+        print("  installer skipped: Inno Setup not found (winget install JRSoftware.InnoSetup)")
+    else:
+        run([str(iscc), f"/DAppVersion={_app_version()}", f"/DSourceDir={app_dir}",
+             f"/O{ROOT / 'dist'}", str(ROOT / "installer" / "GEE-Assist.iss")])
+        setup = ROOT / "dist" / f"GEE-Assist-Setup-{_app_version()}.exe"
+        print(f"  installer : {setup}  ({setup.stat().st_size / (1024 * 1024):.0f} MB)")
     print("=" * 60)
+
+
+def _find_iscc() -> Path | None:
+    found = shutil.which("ISCC")
+    if found:
+        return Path(found)
+    import os
+
+    for base in (os.environ.get("LOCALAPPDATA", ""), os.environ.get("ProgramFiles(x86)", ""),
+                 os.environ.get("ProgramFiles", "")):
+        for sub in ("Programs/Inno Setup 6", "Inno Setup 6"):
+            candidate = Path(base) / sub / "ISCC.exe"
+            if base and candidate.exists():
+                return candidate
+    return None
 
 
 def _app_version() -> str:
