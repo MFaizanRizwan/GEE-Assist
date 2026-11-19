@@ -38,6 +38,19 @@ DIST_BACKEND = ROOT / "dist" / "backend"
 SPEC = ROOT / "GEE-Assist.spec"
 PY = sys.executable
 
+# Data files the packaged app cannot work without (relative to _internal/).
+# PyInstaller does not always collect these, and nothing fails until a user
+# reaches the feature, so the build checks for them.
+REQUIRED_FILES = (
+    "rasterio/proj_data/proj.db",          # map projections (every analysis)
+    "rasterio/gdal_data/gdalvrt.xsd",      # GDAL's own data
+    "certifi/cacert.pem",                  # HTTPS certificates
+    "en_core_web_sm",                      # spaCy model for the query form
+    "frontend/resources/aoi_map.html",     # AOI map
+    "assets/app.ico",
+    "docs/GKONSOL.md",
+)
+
 
 def _patch_dis_3100() -> None:
     """Work around a bug in Python 3.10.0's `dis` module.
@@ -105,6 +118,13 @@ def main() -> None:
     print("\n" + "=" * 60)
     if not exe.exists():
         print("PyInstaller finished but GEE-Assist.exe was not found - check log above")
+        print("=" * 60)
+        raise SystemExit(1)
+    missing = [rel for rel in REQUIRED_FILES if not (app_dir / "_internal" / rel).exists()]
+    if missing:
+        print("The app is missing files it needs at run time:")
+        for rel in missing:
+            print(f"  _internal/{rel}")
         print("=" * 60)
         raise SystemExit(1)
 

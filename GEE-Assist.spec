@@ -16,7 +16,7 @@ UPX is off: UPX-packed files are a common reason for antivirus false positives.
 import ast
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_all, collect_submodules, copy_metadata
+from PyInstaller.utils.hooks import collect_all, collect_data_files, collect_submodules, copy_metadata
 from PyInstaller.utils.win32 import versioninfo as vi
 
 ROOT = Path(SPECPATH).resolve()
@@ -68,6 +68,11 @@ for path in (ROOT / "assets").rglob("*"):
     rel = path.relative_to(ROOT)
     if path.is_file() and rel.parts[1] != "tmp":
         datas.append((str(path), str(rel.parent)))
+
+# rasterio's projection database (proj.db) and GDAL's data files. rasterio
+# looks for them beside its own package; without them every analysis fails
+# with "PROJ: proj_create_from_database: Cannot find proj.db".
+datas += collect_data_files("rasterio", includes=["proj_data/**/*", "gdal_data/**/*"])
 
 binaries = []
 for package in ("en_core_web_sm", "spacy", "thinc", "ee", "google.genai", "markdown_pdf", "pymupdf"):
