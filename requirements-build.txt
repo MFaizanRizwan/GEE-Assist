@@ -1,0 +1,11 @@
+# Only needed to build the Windows .exe (python build_app.py), not to run the app.
+# Install the app's own requirements first:  pip install -r requirements.txt
+#
+# Also needed, outside pip: Microsoft C++ Build Tools ("Desktop development
+# with C++" workload: MSVC + Windows SDK), which Cython uses to compile the backend.
+#   winget install Microsoft.VisualStudio.2022.BuildTools --override "--quiet --wait --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+-r requirements.txt
+cython>=3.0
+setuptools>=70
+wheel
+pyinstaller>=6.10

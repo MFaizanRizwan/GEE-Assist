@@ -7,9 +7,16 @@ Pipeline:
          frontend/      (source; bundled as bytecode)
          backend/       (the COMPILED .pyd from dist/backend)
   3. Run PyInstaller on GEE-Assist.spec -> dist/GEE-Assist/ (exe + _internal/)
+  4. Zip that folder -> dist/GEE-Assist-<version>-win64.zip
 
-Your source backend/ is never modified. Distribute the dist/GEE-Assist/ folder
-(zip it); the user runs GEE-Assist.exe with no Python installed.
+Your source backend/ is never modified. Distribute the zip; the user extracts it
+and runs GEE-Assist.exe with no Python installed.
+
+Why one folder and not one .exe: a one-file .exe unpacks ~6,000 files into
+%TEMP% on every start and Microsoft Defender scans them all each time (high
+CPU, slow start). See GEE-Assist.spec.
+
+Requirements: see requirements-build.txt.
 
 Usage:
     python build_app.py            # full build
@@ -91,15 +98,29 @@ def main() -> None:
     print("\n$ PyInstaller --noconfirm --clean GEE-Assist.spec  (with dis 3.10.0 patch)")
     PyInstaller.__main__.run(["--noconfirm", "--clean", str(SPEC)])
 
-    exe = ROOT / "dist" / "GEE-Assist.exe"  # one-file output
+    app_dir = ROOT / "dist" / "GEE-Assist"  # one-folder output
+    exe = app_dir / "GEE-Assist.exe"
     print("\n" + "=" * 60)
-    if exe.exists():
-        size_mb = exe.stat().st_size / (1024 * 1024)
-        print(f"BUILD OK -> {exe}  ({size_mb:.0f} MB)")
-        print("  distribute: upload this single .exe (e.g. GitHub Releases)")
-    else:
+    if not exe.exists():
         print("PyInstaller finished but GEE-Assist.exe was not found - check log above")
+        print("=" * 60)
+        raise SystemExit(1)
+
+    # 4. Zip the folder for distribution.
+    zip_base = ROOT / "dist" / f"GEE-Assist-{_app_version()}-win64"
+    archive = Path(shutil.make_archive(str(zip_base), "zip", root_dir=app_dir.parent, base_dir=app_dir.name))
+    size_mb = archive.stat().st_size / (1024 * 1024)
+    print(f"BUILD OK -> {exe}")
+    print(f"  distribute: {archive}  ({size_mb:.0f} MB)")
+    print(r"  the user extracts it and runs GEE-Assist\GEE-Assist.exe")
     print("=" * 60)
+
+
+def _app_version() -> str:
+    for line in (ROOT / "backend" / "config" / "version.py").read_text(encoding="utf-8").splitlines():
+        if line.startswith("APP_VERSION"):
+            return line.split("=", 1)[1].strip().strip("\"'")
+    return "0.0.0"
 
 
 if __name__ == "__main__":
