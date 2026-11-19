@@ -41,6 +41,20 @@ WORK = ROOT / "build" / "cython"  # scratch for generated .c / .obj
 # Files kept as plain .py in the output (not compiled).
 KEEP_AS_PY = {"__init__.py"}
 
+# How Cython compiles the backend.
+#
+# annotation_typing=False: type hints stay hints, as in normal Python. By
+# default Cython turns hints such as ``-> dict`` or ``x: list`` into strict
+# run-time checks that reject subclasses and other compatible types. In the
+# compiled app that broke every analysis with "Expected dict, got _LazyRoles"
+# (``Block.roles`` returns a dict subclass), and about a thousand other checks
+# like it could fail the same way. Without them the compiled backend behaves
+# exactly like the Python source that the tests run against.
+COMPILER_DIRECTIVES = {
+    "language_level": "3",
+    "annotation_typing": False,
+}
+
 
 def _fail(msg: str) -> "None":
     print(f"\nERROR: {msg}", file=sys.stderr)
@@ -84,7 +98,7 @@ def main() -> None:
     ext_modules = cythonize(
         extensions,
         build_dir=str(WORK),  # generated .c files go here, not into dist/
-        compiler_directives={"language_level": "3"},
+        compiler_directives=COMPILER_DIRECTIVES,
         quiet=True,
     )
 
