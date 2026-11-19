@@ -9,7 +9,12 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-SETTINGS_FILE = Path(__file__).resolve().parents[1] / "workspace" / "appearance.json"
+from backend.config.paths import DATA_ROOT
+
+# DATA_ROOT is the project folder in development and %APPDATA%\GEE-Assist in the
+# packaged app. Next to the code would be the .exe's temporary folder, which is
+# deleted on exit, so the chosen theme would be forgotten every time.
+SETTINGS_FILE = DATA_ROOT / "workspace" / "appearance.json"
 
 THEMES = {                      # name -> label shown to the user
     "light": "Light",
