@@ -38,7 +38,8 @@ def test_menus_hold_the_expected_items(bar):
                                      "Sign &out", "E&xit"]
     assert _items(bar.edit_menu) == ["&Undo", "&Redo", "Cu&t", "&Copy", "&Paste", "Select &all"]
     assert _items(bar.view_menu) == ["&Dashboard", "&Query Input", "Do&wnloads", "&Account", "A&nalysis",
-                                     "&Reports", "Show analysis ta&ble", "&Side bar", "&Terminal", "&Full screen", "&Theme"]
+                                     "&Reports", "Show analysis ta&ble", "&Side bar", "&Terminal", "&Full screen",
+                                     "&Layout", "&Theme"]
     assert _items(bar.terminal_menu)[:4] == ["&Show terminal	Ctrl+`", "&Maximise terminal", "&Clear terminal",
                                              "S&top running command"]
     assert _items(bar.options_menu) == ["&Settings…", "Download &chunk size…", "&Manage users…"]
@@ -131,6 +132,22 @@ def test_choosing_another_theme_asks_for_it(bar):
 
     bar.show_current_theme()                    # e.g. switching was cancelled
     assert bar.theme_actions["light"].isChecked() and not bar.theme_actions["dark-grey"].isChecked()
+
+
+def test_view_menu_has_a_layout_switcher_set_to_classical(bar):
+    assert _items(bar.layout_menu) == ["Classical layout", "Modern layout"]
+    assert [a.isChecked() for a in bar.layout_menu.actions()] == [True, False]  # classical by default
+
+
+def test_choosing_another_layout_asks_for_it(bar):
+    chosen = []
+    bar.layout_chosen.connect(chosen.append)
+    bar.layout_actions["classical"].trigger()  # already in use: nothing to do
+    bar.layout_actions["modern"].trigger()
+    assert chosen == ["modern"]
+
+    bar.show_current_layout()  # e.g. switching was cancelled
+    assert bar.layout_actions["classical"].isChecked() and not bar.layout_actions["modern"].isChecked()
 
 
 def test_terminal_menu_items_run_gkonsol_commands(bar):

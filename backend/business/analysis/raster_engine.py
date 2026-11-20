@@ -20,7 +20,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Mapping, Optional
 
 import numpy as np
 
@@ -160,11 +160,16 @@ class Block:
             self._cache[key] = self.backend.to_device(self.engine.read(index, name, self.row, self.height, scaled))
         return self._cache[key]
 
-    def roles(self, period: int = -1) -> dict[str, Any]:
-        """Role -> array, read lazily: only the roles a formula uses are read."""
+    def roles(self, period: int = -1) -> Mapping[str, Any]:
+        """Role -> array, read lazily: only the roles a formula uses are read.
+
+        Typed as a Mapping, not a dict: the packaged app compiles this module
+        with Cython, which turns a ``dict`` hint into a strict check that
+        rejects ``_LazyRoles`` (a dict subclass) - "Expected dict, got _LazyRoles".
+        """
         return _LazyRoles(self, period)
 
-    def before(self) -> dict[str, Any]:
+    def before(self) -> Mapping[str, Any]:
         return self.roles(0)
 
     @property

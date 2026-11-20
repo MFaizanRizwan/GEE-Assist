@@ -20,9 +20,21 @@ RASTER_ENGINE = ROOT / "backend" / "business" / "analysis" / "raster_engine.py"
 TYPE_ERROR = '__Pyx_RaiseUnexpectedTypeError("dict"'
 
 
-def _generate_c(tmp_path: Path, directives: dict) -> str:
+# A function hinted ``-> dict`` that returns a dict subclass, like Block.roles once did
+# (it is hinted as a Mapping now, so raster_engine.py alone no longer shows the check).
+DICT_HINT_SAMPLE = """
+class _Lazy(dict):
+    pass
+
+
+def roles() -> dict:
+    return _Lazy()
+"""
+
+
+def _generate_c(tmp_path: Path, directives: dict, code: str | None = None) -> str:
     source = tmp_path / "raster_engine.py"
-    source.write_text(RASTER_ENGINE.read_text(encoding="utf-8"), encoding="utf-8")
+    source.write_text(code if code is not None else RASTER_ENGINE.read_text(encoding="utf-8"), encoding="utf-8")
     options = cython_compiler.CompilationOptions(
         cython_compiler.default_options, compiler_directives=dict(directives), language_level=3,
     )
@@ -40,7 +52,12 @@ def test_compiled_block_roles_accepts_the_lazy_dict(tmp_path):
     assert TYPE_ERROR not in c_code
 
 
+def test_a_dict_hint_is_not_checked_with_the_build_settings(tmp_path):
+    c_code = _generate_c(tmp_path, build_backend.COMPILER_DIRECTIVES, DICT_HINT_SAMPLE)
+    assert TYPE_ERROR not in c_code
+
+
 def test_default_cython_settings_would_reject_it(tmp_path):
-    # Guards the test above: it must be able to see the check when it is there.
-    c_code = _generate_c(tmp_path, {"language_level": "3"})
+    # Guards the tests above: they must be able to see the check when it is there.
+    c_code = _generate_c(tmp_path, {"language_level": "3"}, DICT_HINT_SAMPLE)
     assert TYPE_ERROR in c_code

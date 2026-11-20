@@ -48,7 +48,7 @@ class RequestService(IRequestService):
     # ------------------------------------------------------------------
     # UC-02 Enter Natural Language Query + Interpret Query (LLM)
     # ------------------------------------------------------------------
-    def submit_query(self, text: str) -> FormDTO:
+    def submit_query(self, text: str | None) -> FormDTO:
         """Interpret the query and return form values to review.
 
         1. a local named-entity classifier finds places, dates, datasets, processes, ...

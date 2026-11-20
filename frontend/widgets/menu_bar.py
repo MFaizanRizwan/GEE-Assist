@@ -24,7 +24,7 @@ from PyQt6.QtWidgets import (
 )
 
 from backend.dto.version_dto import AppVersionDTO
-from frontend import appearance, palette, theme
+from frontend import appearance, layout_mode, palette, theme
 
 STYLESHEET = f"""
 QMenuBar {{
@@ -76,6 +76,7 @@ TERMINAL_COMMANDS: tuple[tuple[tuple[str, str], ...], ...] = (
 
 class AppMenuBar(QMenuBar):
     theme_chosen = pyqtSignal(str)  # a theme other than the current one, e.g. "dark-green"
+    layout_chosen = pyqtSignal(str)  # a layout other than the current one, e.g. "modern"
     terminal_command = pyqtSignal(str)  # a gkonsol command to run in the terminal, e.g. "gee verify"
     update_requested = pyqtSignal(object)  # the AppVersionDTO, when "Update Available" is clicked
     recent_project_chosen = pyqtSignal(str)  # the folder of a project in File > Recent projects
@@ -132,6 +133,18 @@ class AppMenuBar(QMenuBar):
         self.toggle_terminal = self._action(self.view_menu, "&Terminal", "Ctrl+`", checkable=True)
         self.full_screen = self._action(self.view_menu, "&Full screen", "F11", checkable=True)
         self.view_menu.addSeparator()
+        # Layout: the original "classical" workspace, or the "modern" map-first panel.
+        self.layout_menu = self.view_menu.addMenu("&Layout")
+        self.layout_menu.setStyleSheet(theme.MENU_STYLE)
+        self.layout_actions: dict[str, QAction] = {}
+        layout_group = QActionGroup(self)  # one layout at a time
+        current_layout = layout_mode.current_layout()
+        for name, label in layout_mode.LAYOUTS.items():
+            action = self._action(self.layout_menu, label, checkable=True)
+            action.setChecked(name == current_layout)
+            action.triggered.connect(lambda _=False, name=name: self._choose_layout(name))
+            layout_group.addAction(action)
+            self.layout_actions[name] = action
         self.theme_menu = self.view_menu.addMenu("&Theme")
         self.theme_menu.setStyleSheet(theme.MENU_STYLE)
         self.theme_actions: dict[str, QAction] = {}
@@ -210,6 +223,15 @@ class AppMenuBar(QMenuBar):
     def show_current_theme(self) -> None:
         """Tick the theme in use again (e.g. when switching was cancelled)."""
         self.theme_actions[palette.THEME].setChecked(True)
+
+    # ------------------------------------------------------------- Layout
+    def _choose_layout(self, name: str) -> None:
+        if name != layout_mode.current_layout():
+            self.layout_chosen.emit(name)
+
+    def show_current_layout(self) -> None:
+        """Tick the layout in use again (e.g. when switching was cancelled)."""
+        self.layout_actions[layout_mode.current_layout()].setChecked(True)
 
     # ------------------------------------------------------------- Edit
     @staticmethod

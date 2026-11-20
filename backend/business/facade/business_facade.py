@@ -191,7 +191,7 @@ class BusinessFacade(IBusinessFacade):
         return self._user_service.remove_profile_photo()
 
     # ------------------------------------------------------------- query input
-    def submit_query(self, text: str) -> FormDTO:
+    def submit_query(self, text: str | None) -> FormDTO:
         return self._request_service.submit_query(text)
 
     def submit_form(self, form: FormDTO) -> ValidationDTO:

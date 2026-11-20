@@ -45,7 +45,7 @@ from backend.dto.project_dto import ProjectDTO
 from backend.dto.user_dto import UserDTO
 from backend.dto.version_dto import AppVersionDTO
 from backend.exceptions import GeeAssistError
-from frontend import appearance, theme
+from frontend import appearance, layout_mode, theme
 from frontend.project_paths import current_project, downloads_folder
 from frontend.views.account_view import AccountView, Avatar, SignupDetailsDialog
 from frontend.views.project_dialogs import ProjectActions
@@ -596,6 +596,20 @@ class HomeWindow(QMainWindow):
         appearance.save_theme(name)
         restart_app()
 
+    def change_layout(self, name: str) -> None:
+        """Save the chosen layout and restart, as it is applied while the window is built."""
+        answer = QMessageBox.question(
+            self, "Change layout",
+            f"GEE-Assist restarts to use the {layout_mode.LAYOUTS[name]}. A running download "
+            "is paused and can be resumed afterwards.\n\nRestart now?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.Yes,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            self.menu_bar.show_current_layout()
+            return
+        layout_mode.save_layout(name)
+        restart_app()
+
     def show_about(self) -> None:
         QMessageBox.about(
             self, "About GEE-Assist",
@@ -695,6 +709,7 @@ class HomeWindow(QMainWindow):
         bar.give_feedback.triggered.connect(lambda: self.ask_for_feedback())
         bar.theme_chosen.connect(self.change_theme)
         bar.update_requested.connect(self.show_update_dialog)
+        bar.layout_chosen.connect(self.change_layout)
 
     def open_user_admin(self) -> None:
         if self._admin_dialog is None:
