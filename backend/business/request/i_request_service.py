@@ -14,7 +14,7 @@ class IRequestService(ABC):
     """
 
     @abstractmethod
-    def submit_query(self, text: str) -> FormDTO:
+    def submit_query(self, text: str | None) -> FormDTO:
         """UC-02: accept a natural-language query and keep it."""
 
     @abstractmethod
