@@ -51,14 +51,16 @@ from backend.dto.download_dto import DatasetDTO
 from backend.dto.map_dto import MapLayerDTO
 from backend.dto.result_dto import ResultDTO
 from backend.exceptions import GeeAssistError
-from frontend import theme
+from frontend import layout_mode, palette, theme
 from frontend.project_paths import analysis_folder, current_project, downloads_folder
 from frontend.download_format import format_size
 from frontend.widgets.form_parts import StatusBanner
+from frontend.widgets.map_area import MapArea
 from frontend.widgets.process_picker import STYLESHEET as PICKER_STYLESHEET
 from frontend.widgets.process_picker import AnalysisTile, ProcessPicker
-from frontend.widgets.raster_canvas import RasterCanvas, rgba_to_image
-from frontend.widgets.raster_legend import RasterLegend, format_value
+from frontend.widgets.raster_canvas import rgba_to_image
+from frontend.widgets.raster_legend import format_value
+from frontend.widgets.symbology_panel import SymbologyPanel
 from frontend.workers.task_worker import run_task
 
 PANEL_WIDTH = 430
@@ -110,6 +112,61 @@ QHeaderView::section {{
 """
 
 
+# Dark theme for the Analysis page (modern layout). Scoped under #AnalysisPage so it
+# overrides the light base and the process picker's own stylesheet.
+_M = {
+    "bg": "#0B1210", "card": "#141E1A", "panel": "#0E1613", "line": "#25332C", "line2": "#324239",
+    "ink": "#F3F8F5", "text": "#E7EEEA", "muted": "#93A79D", "subtle": "#6E8278",
+    "field": "#172420", "accent": "#A6E22E", "accent_soft": "#1B2A1C", "error": "#F2777A",
+}
+MODERN_STYLESHEET = """
+#AnalysisPage {{ background: {bg}; }}
+#AnalysisPage QLabel {{ color: {text}; }}
+#AnalysisPage QLabel#PageTitle {{ color: {ink}; }}
+#AnalysisPage QLabel#PageSubtitle, #AnalysisPage QLabel#Muted {{ color: {muted}; }}
+QFrame#AnalysisPanel, QFrame#ResultCard {{ background: {card}; border: 1px solid {line}; }}
+#AnalysisPage QLabel#StepTitle {{ color: {ink}; }}
+#AnalysisPage QLabel#SectionTitle, #AnalysisPage QLabel#GroupTitle {{ color: {muted}; }}
+#AnalysisPage QLabel#DeviceLine {{ color: {ink}; }}
+#AnalysisPage QListWidget {{ background: {field}; border: 1px solid {line}; color: {text}; }}
+#AnalysisPage QListWidget::item:selected {{ background: {accent_soft}; color: {ink}; }}
+#AnalysisPage QComboBox, #AnalysisPage QDoubleSpinBox {{
+    background: {field}; border: 1px solid {line2}; color: {ink};
+}}
+#AnalysisPage QComboBox QAbstractItemView {{
+    background: {field}; color: {ink}; selection-background-color: {accent_soft}; selection-color: {ink};
+}}
+#AnalysisPage QTableWidget {{ background: {card}; color: {text}; gridline-color: {line}; }}
+#AnalysisPage QHeaderView::section {{ background: {field}; color: {muted}; border-bottom: 1px solid {line}; }}
+/* process picker */
+#AnalysisPage QPushButton#AnalysisTile {{ background: {field}; color: {ink}; border: 1px solid {line}; }}
+#AnalysisPage QPushButton#AnalysisTile:hover {{ background: {accent_soft}; }}
+#AnalysisPage QPushButton#AnalysisTile:checked {{ background: {accent_soft}; border: 2px solid {accent}; }}
+#AnalysisPage QPushButton#AnalysisTile:disabled {{ color: {subtle}; background: {card}; }}
+#AnalysisPage QFrame#ProcessCard {{ background: {field}; border: 1px solid {line}; }}
+#AnalysisPage QFrame#ProcessCard[available="true"]:hover {{ background: {accent_soft}; border-color: {line2}; }}
+#AnalysisPage QFrame#ProcessCard[selected="true"] {{ background: {accent_soft}; border: 2px solid {accent}; }}
+#AnalysisPage QFrame#ProcessCard[available="false"] {{ background: {card}; border: 1px dashed {line}; }}
+#AnalysisPage QLabel#CardKey {{ color: {ink}; }}
+#AnalysisPage QLabel#CardName {{ color: {text}; }}
+#AnalysisPage QLabel#CardFormula {{ color: {muted}; }}
+#AnalysisPage QLabel#CardCheck {{ border: 1px solid {line2}; }}
+#AnalysisPage QLabel#CardCheck[on="true"] {{ background: {accent}; border-color: {accent}; }}
+#AnalysisPage QLabel#SectionCan {{ color: {accent}; }}
+#AnalysisPage QPushButton#SubtypeChip {{ background: {field}; color: {text}; border: 1px solid {line2}; }}
+#AnalysisPage QPushButton#SubtypeChip:hover {{ background: {accent_soft}; }}
+#AnalysisPage QPushButton#SubtypeChip:checked {{ background: {accent_soft}; border-color: {accent}; }}
+#AnalysisPage QCheckBox {{ color: {text}; }}
+#AnalysisPage QPushButton#PrimaryButton {{
+    color: {bg}; border: none;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {accent}, stop:1 #8CC81F);
+}}
+#AnalysisPage QPushButton#SecondaryButton {{ background: {field}; color: {text}; border: 1px solid {line2}; }}
+#AnalysisPage QPushButton#SecondaryButton:hover {{ background: {accent_soft}; }}
+#AnalysisPage QLabel#SaveState {{ color: {muted}; }}
+""".format(**_M)
+
+
 def _shrinkable(widget: QWidget) -> QWidget:
     """May be narrower than its text (clipped), so the fixed-width panel never overflows."""
     widget.setSizePolicy(QSizePolicy.Policy.Ignored, widget.sizePolicy().verticalPolicy())
@@ -146,7 +203,9 @@ class AnalysisView(QWidget):
     def __init__(self, facade: IBusinessFacade, parent: QWidget | None = None):
         super().__init__(parent)
         self.setObjectName("AnalysisPage")
-        self.setStyleSheet(STYLESHEET + PICKER_STYLESHEET)
+        self._modern = layout_mode.is_modern()
+        self._dark = self._modern or palette.IS_DARK  # overlays/panel follow the app theme in classical
+        self.setStyleSheet(STYLESHEET + PICKER_STYLESHEET + (MODERN_STYLESHEET if self._modern else ""))
         self._facade = facade
         self.datasets: list[DatasetDTO] = []
         self.opened: list[DatasetDTO] = []               # GeoTIFFs opened from disk this session
@@ -264,17 +323,25 @@ class AnalysisView(QWidget):
         panel_layout.addWidget(divider)
         panel_layout.addLayout(run_box)
 
-        # ---- results
+        # ---- results: the map (with a scale bar and floating legend), the numbers,
+        # and a symbology / statistics panel beside it.
+        self._current_layer: MapLayerDTO | None = None
         self.result_title = QLabel("No result yet", objectName="StepTitle")
-        self.result_info = QLabel("Results appear here: each layer with its legend, and the numbers.",
-                                  objectName="Muted")
+        self.result_info = QLabel("Results appear here: the map with its legend and a scale bar, the symbology "
+                                  "controls, and the numbers.", objectName="Muted")
         self.result_info.setWordWrap(True)
         self.layer_box = QComboBox()
-        self.layer_box.setMinimumWidth(220)
-        self.canvas = RasterCanvas()
-        self.canvas.setMinimumHeight(260)
-        self.legend = RasterLegend()
-        self.pointer_label = QLabel(objectName="Muted")
+        self.layer_box.setMinimumWidth(200)
+
+        self.map_area = MapArea(dark=self._dark)
+        self.canvas = self.map_area.canvas        # kept name: the raster canvas inside the map area
+        self.canvas.setMinimumHeight(300)
+
+        self.sym_panel = SymbologyPanel(dark=self._dark)
+        self.sym_panel.setFixedWidth(322)
+        self.sym_panel.changed.connect(self._recolor)
+        self.sym_panel.opacity_changed.connect(self.map_area.set_opacity)
+
         self.metrics_table = QTableWidget(0, 2)
         self.metrics_table.setHorizontalHeaderLabels(("Result", "Value"))
         self.metrics_table.verticalHeader().hide()
@@ -282,7 +349,7 @@ class AnalysisView(QWidget):
         self.metrics_table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
         self.metrics_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.metrics_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
-        self.metrics_table.setMaximumHeight(200)
+        self.metrics_table.setMaximumHeight(150)
         self.save_state = QLabel(objectName="SaveState")
         self.save_state.setWordWrap(True)
         self.save_button = QPushButton("Save result", objectName="PrimaryButton")
@@ -305,18 +372,7 @@ class AnalysisView(QWidget):
         top.addWidget(self.layer_box)
         result_layout.addLayout(top)
         result_layout.addWidget(self.result_info)
-        middle = QHBoxLayout()
-        middle.setSpacing(12)
-        middle.addWidget(self.canvas, 1)
-        side = QVBoxLayout()
-        side.addWidget(self.legend)
-        side.addWidget(self.pointer_label)
-        side.addStretch(1)
-        side_box = QWidget()
-        side_box.setFixedWidth(230)
-        side_box.setLayout(side)
-        middle.addWidget(side_box)
-        result_layout.addLayout(middle, 1)
+        result_layout.addWidget(self.map_area, 1)
         result_layout.addWidget(_section("Numbers"))
         result_layout.addWidget(self.metrics_table)
         buttons = QHBoxLayout()
@@ -326,10 +382,17 @@ class AnalysisView(QWidget):
             buttons.addWidget(button)
         result_layout.addLayout(buttons)
 
+        sym_frame = QFrame(objectName="ResultCard")
+        sym_frame.setFixedWidth(322)
+        sym_frame_layout = QVBoxLayout(sym_frame)
+        sym_frame_layout.setContentsMargins(0, 0, 0, 0)
+        sym_frame_layout.addWidget(self.sym_panel)
+
         body = QHBoxLayout()
         body.setSpacing(14)
         body.addWidget(panel)
         body.addWidget(card, 1)
+        body.addWidget(sym_frame)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 20, 24, 20)
         layout.setSpacing(10)
@@ -689,13 +752,38 @@ class AnalysisView(QWidget):
         if not 0 <= index < len(self.layers):
             return
         layer = self.layers[index]
+        self._current_layer = layer
         self.layer_box.blockSignals(True)
         self.layer_box.setCurrentIndex(index)
         self.layer_box.blockSignals(False)
-        self.canvas.set_image(rgba_to_image(layer.data), keep_view=True)
-        self.legend.set_legend(layer.legend)
-        scale = f"Shown at 1/{layer.scale:.1f} of full resolution." if layer.scale > 1 else ""
-        self.pointer_label.setText(scale)
+        self.sym_panel.set_layer(layer, self._run_info())
+        self.map_area.set_image(rgba_to_image(layer.data), layer.bounds, layer.width, keep_view=True)
+        self.map_area.set_opacity(1.0)
+        self._update_overlay_legend(layer)
+
+    def _run_info(self) -> dict:
+        result, dataset = self.result, self.dataset
+        return {
+            "device": result.device if result else "",
+            "duration": f"{result.seconds:.2f} s" if result else "",
+            "dataset": (dataset.name or dataset.satellite) if dataset else "",
+        }
+
+    def _recolor(self) -> None:
+        """Redraw the current layer from the symbology panel's settings (ramp, stretch, classes…)."""
+        rgba = self.sym_panel.current_rgba()
+        if rgba is not None:
+            self.canvas.set_image(rgba_to_image(rgba), keep_view=True)
+        if self._current_layer is not None:
+            self._update_overlay_legend(self._current_layer)
+
+    def _update_overlay_legend(self, layer: MapLayerDTO) -> None:
+        if layer.kind == "scale":
+            colours, low, high = self.sym_panel.scale_legend()
+            self.map_area.show_legend_scale(layer.name, colours, low, high)
+        else:
+            rows = self.sym_panel.legend_rows()
+            self.map_area.show_legend_classes(layer.legend.title or "Legend", rows)
 
     def _fill_metrics(self, metrics: dict[str, float]) -> None:
         self.metrics_table.setRowCount(0)

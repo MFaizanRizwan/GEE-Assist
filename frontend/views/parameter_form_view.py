@@ -8,6 +8,7 @@ from pathlib import Path
 from PyQt6.QtCore import QDate, Qt, pyqtSignal
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
+    QAbstractItemView,
     QButtonGroup,
     QComboBox,
     QDateEdit,
@@ -15,12 +16,16 @@ from PyQt6.QtWidgets import (
     QFileDialog,
     QFrame,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QLineEdit,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QSpinBox,
     QStackedWidget,
+    QTableWidget,
+    QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
@@ -43,6 +48,7 @@ from backend.dto import FormDTO, PlaceDTO, ValidationDTO
 from backend.config.limits import MAX_QUERY_LENGTH
 from backend.exceptions import GeeAssistError
 from frontend import form_theme as theme
+from frontend import layout_mode
 from frontend.aoi_geometry import (
     bbox_of,
     estimate_download,
@@ -58,6 +64,7 @@ from frontend.widgets.query_assistant import QueryAssistant
 from frontend.widgets.form_parts import (
     CheckComboBox,
     StatusBanner,
+    divider,
     field_row,
     hint_label,
     labelled,
@@ -75,6 +82,27 @@ NO_FILE_TEXT = "No file imported."
 # ---------------------------------------------------------------------- helpers
 def _qdate(value) -> QDate:
     return QDate(value.year, value.month, value.day)
+
+
+def _polygon_vertices(aoi: str) -> list[tuple[float, float]]:
+    """The (lat, lon) points of an AOI's outer ring, with the repeated closing point dropped."""
+    if not aoi:
+        return []
+    try:
+        geometry = json.loads(aoi)
+    except (ValueError, TypeError):
+        return []
+    kind = geometry.get("type")
+    if kind == "Polygon":
+        ring = geometry.get("coordinates", [[]])[0]
+    elif kind == "MultiPolygon":
+        ring = geometry.get("coordinates", [[[]]])[0][0]
+    else:
+        return []
+    points = [(float(c[1]), float(c[0])) for c in ring if len(c) >= 2]
+    if len(points) > 1 and points[0] == points[-1]:
+        points = points[:-1]
+    return points
 
 
 def _segment_button(text: str, position: str) -> QPushButton:
@@ -110,9 +138,58 @@ class ParameterFormView(QWidget):
 
         self.setObjectName("ParameterForm")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.setStyleSheet(theme.FORM_STYLESHEET)
+        self._modern = layout_mode.is_modern()
+        self.setStyleSheet(theme.FORM_STYLESHEET + (theme.MODERN_FORM_STYLESHEET if self._modern else ""))
 
-        # ---- page heading
+        # ---- action widgets, shared by both layouts
+        self.estimate_label = hint_label()  # download size; placed by whichever layout is built
+        self.status_banner = StatusBanner()
+        self.reset_button = QPushButton("Reset")
+        self.reset_button.setObjectName("SecondaryButton")
+        self.submit_button = QPushButton("Submit Parameters")
+        self.submit_button.setObjectName("PrimaryButton")
+        self.submit_button.setDefault(True)
+        for button in (self.reset_button, self.submit_button):
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+            button.setMinimumHeight(40)
+
+        # The same field widgets, arranged two ways: the classical scrolling cards,
+        # or the modern map-first panel with the parameters grouped under tabs.
+        if self._modern:
+            self._assemble_modern()
+        else:
+            self._assemble_classic()
+
+        self.dataset_combo.currentIndexChanged.connect(self._on_dataset_changed)
+        self._aoi_mode.idClicked.connect(self._on_aoi_mode_changed)
+        self.import_button.clicked.connect(self._on_import_geojson)
+        self.map_widget.bbox_drawn.connect(self._on_map_bbox_drawn)
+        self.map_widget.circle_drawn.connect(self._on_map_circle_drawn)
+        self.map_widget.polygon_drawn.connect(self._on_map_polygon_drawn)
+        self.map_widget.shape_cleared.connect(self._on_map_shape_cleared)
+        self.place_edit.returnPressed.connect(self._on_place_search)
+        self.place_search_button.clicked.connect(self._on_place_search)
+        self.place_results_combo.activated.connect(self._on_place_chosen)
+        for spin in self._bbox_spins:
+            spin.editingFinished.connect(self._on_bbox_typed)
+        pad_spin_text(self.scale_spin, self.cloud_spin, *self._bbox_spins)
+        self.browse_button.clicked.connect(self._on_browse_output)
+        self.output_dir_edit.textEdited.connect(lambda _: self._set_field_error("output_dir", ""))
+        self.bands_combo.selection_changed.connect(self._update_estimate)
+        self.scale_spin.valueChanged.connect(self._update_estimate)
+        self.reset_button.clicked.connect(self.reset)
+        self.submit_button.clicked.connect(self._on_submit)
+
+        # Natural-language assistant (UC-02): fills this form via Gemini. The
+        # main window places it in the side panel, under the kept requests.
+        self.assistant = QueryAssistant(MAX_QUERY_LENGTH)
+        self.assistant.submitted.connect(self._on_query_submitted)
+
+        self.reset()
+
+    # ----------------------------------------------------------- assembly (classical)
+    def _assemble_classic(self) -> None:
+        """The original layout: a page heading over scrolling cards, with a bottom action bar."""
         title = QLabel("Parameter Form")
         title.setObjectName("PageTitle")
         subtitle = QLabel("Tell Google Earth Engine what to fetch: the dataset, the area, the time range and the analysis.")
@@ -144,17 +221,6 @@ class ParameterFormView(QWidget):
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setWidget(content)
 
-        # ---- action bar
-        self.status_banner = StatusBanner()
-        self.reset_button = QPushButton("Reset")
-        self.reset_button.setObjectName("SecondaryButton")
-        self.submit_button = QPushButton("Submit Parameters")
-        self.submit_button.setObjectName("PrimaryButton")
-        self.submit_button.setDefault(True)
-        for button in (self.reset_button, self.submit_button):
-            button.setCursor(Qt.CursorShape.PointingHandCursor)
-            button.setMinimumHeight(40)
-
         action_bar = QWidget()
         action_bar.setObjectName("FormActionBar")
         action_bar.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
@@ -172,32 +238,215 @@ class ParameterFormView(QWidget):
         layout.addWidget(scroll, 1)
         layout.addWidget(action_bar)
 
-        self.dataset_combo.currentIndexChanged.connect(self._on_dataset_changed)
-        self._aoi_mode.idClicked.connect(self._on_aoi_mode_changed)
-        self.import_button.clicked.connect(self._on_import_geojson)
-        self.map_widget.bbox_drawn.connect(self._on_map_bbox_drawn)
-        self.map_widget.circle_drawn.connect(self._on_map_circle_drawn)
-        self.map_widget.polygon_drawn.connect(self._on_map_polygon_drawn)
-        self.map_widget.shape_cleared.connect(self._on_map_shape_cleared)
-        self.place_edit.returnPressed.connect(self._on_place_search)
-        self.place_search_button.clicked.connect(self._on_place_search)
-        self.place_results_combo.activated.connect(self._on_place_chosen)
-        for spin in self._bbox_spins:
-            spin.editingFinished.connect(self._on_bbox_typed)
-        pad_spin_text(self.scale_spin, self.cloud_spin, *self._bbox_spins)
-        self.browse_button.clicked.connect(self._on_browse_output)
-        self.output_dir_edit.textEdited.connect(lambda _: self._set_field_error("output_dir", ""))
-        self.bands_combo.selection_changed.connect(self._update_estimate)
-        self.scale_spin.valueChanged.connect(self._update_estimate)
-        self.reset_button.clicked.connect(self.reset)
-        self.submit_button.clicked.connect(self._on_submit)
+    # ------------------------------------------------------------- assembly (modern)
+    def _modern_tab_button(self, text: str, index: int) -> QPushButton:
+        button = QPushButton(text)
+        button.setObjectName("ModernTab")
+        button.setCheckable(True)
+        button.setCursor(Qt.CursorShape.PointingHandCursor)
+        button.clicked.connect(lambda: self._modern_stack.setCurrentIndex(index))
+        self._modern_tabs.addButton(button, index)
+        return button
 
-        # Natural-language assistant (UC-02): fills this form via Gemini. The
-        # main window places it in the side panel, under the kept requests.
-        self.assistant = QueryAssistant(MAX_QUERY_LENGTH)
-        self.assistant.submitted.connect(self._on_query_submitted)
+    @staticmethod
+    def _modern_page(card: QFrame) -> QScrollArea:
+        """Put a section card on its own scrolling tab page (cards can be taller than the panel)."""
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setWidget(card)
+        return scroll
 
-        self.reset()
+    def _modern_area_page(self, toggle_row: QHBoxLayout) -> QWidget:
+        """The modern Area tab: the AOI source, place search, extent and a live vertices table."""
+        page = QWidget()
+        page.setObjectName("ModernAreaPage")
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(18, 16, 18, 16)
+        layout.setSpacing(12)
+        layout.addLayout(toggle_row)
+        layout.addWidget(self.place_box)
+        layout.addWidget(self.coords_box)
+
+        head = QHBoxLayout()
+        head.setContentsMargins(0, 2, 0, 0)
+        vertices_title = QLabel("Vertices")
+        vertices_title.setObjectName("FieldLabel")
+        self.vertices_count_label = QLabel("No shape yet")
+        self.vertices_count_label.setObjectName("FieldHint")
+        self.vertices_count_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        head.addWidget(vertices_title)
+        head.addWidget(self.vertices_count_label, 1)
+        layout.addLayout(head)
+
+        self.vertices_table = QTableWidget(0, 3)
+        self.vertices_table.setObjectName("VerticesTable")
+        self.vertices_table.setHorizontalHeaderLabels(["#", "Latitude", "Longitude"])
+        self.vertices_table.verticalHeader().setVisible(False)
+        self.vertices_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.vertices_table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
+        self.vertices_table.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.vertices_table.setAlternatingRowColors(True)
+        header = self.vertices_table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        layout.addWidget(self.vertices_table, 1)
+        layout.addWidget(self._error_label("aoi"))
+        return page
+
+    def _refresh_vertices(self) -> None:
+        """Fill the modern vertices table from the current AOI (draw or imported file)."""
+        if getattr(self, "vertices_table", None) is None:
+            return
+        aoi, _name = self._current_aoi()
+        points = _polygon_vertices(aoi)
+        self.vertices_table.setRowCount(len(points))
+        for row, (lat, lon) in enumerate(points):
+            cells = (str(row + 1), f"{lat:.5f}", f"{lon:.5f}")
+            for column, text in enumerate(cells):
+                item = QTableWidgetItem(text)
+                align = Qt.AlignmentFlag.AlignVCenter | (
+                    Qt.AlignmentFlag.AlignLeft if column == 0 else Qt.AlignmentFlag.AlignRight
+                )
+                item.setTextAlignment(align)
+                self.vertices_table.setItem(row, column, item)
+        if points:
+            self.vertices_count_label.setText(f"{len(points):,} point{'s' if len(points) != 1 else ''}")
+        else:
+            self.vertices_count_label.setText("No shape yet")
+
+    @staticmethod
+    def _modern_field_page() -> tuple[QWidget, QVBoxLayout]:
+        """An empty modern tab page with standard margins. Returns (page, layout)."""
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(18, 16, 18, 16)
+        layout.setSpacing(14)
+        return page, layout
+
+    def _modern_data_page(self) -> QWidget:
+        """Modern Data tab: full-width dataset/bands/composite (nothing clipped) + a size estimate."""
+        page, layout = self._modern_field_page()
+        layout.addWidget(labelled(
+            "Dataset", self.dataset_combo, self.dataset_info_label,
+            self._error_label("dataset", self.dataset_combo),
+        ))
+        layout.addWidget(labelled("Bands", self.bands_combo, self._error_label("bands", self.bands_combo)))
+        layout.addLayout(field_row(
+            labelled("Scale", self.scale_spin, self._error_label("scale", self.scale_spin)),
+            labelled("Max cloud cover", self.cloud_spin, self._error_label("max_cloud_cover", self.cloud_spin)),
+        ))
+        layout.addWidget(labelled("Composite", self.composite_combo, self._error_label("composite", self.composite_combo)))
+        layout.addWidget(divider())
+        layout.addWidget(labelled("Estimated download size", self.estimate_label))
+        layout.addStretch(1)
+        return page
+
+    def _modern_time_page(self) -> QWidget:
+        """Modern Time tab: start/end dates side by side with the availability hint."""
+        page, layout = self._modern_field_page()
+        layout.addLayout(field_row(
+            labelled("Start date", self.start_date_edit),
+            labelled("End date", self.end_date_edit),
+        ))
+        layout.addWidget(self._error_label("dates", self.start_date_edit, self.end_date_edit))
+        layout.addWidget(self.date_hint_label)
+        layout.addStretch(1)
+        return page
+
+    def _modern_output_page(self, output_error: QLabel) -> QWidget:
+        """Modern Output tab: projection only. Downloads always go to the project's folder,
+        so the "Save to folder" field is dropped (the field widget is kept, hidden, for logic)."""
+        page, layout = self._modern_field_page()
+        layout.addWidget(labelled("Projection (CRS)", self.crs_combo, self._error_label("crs", self.crs_combo)))
+        layout.addWidget(hint_label(
+            "The GeoTIFF is saved to the open project's downloads folder automatically."
+        ))
+        output_error.setParent(page)  # kept in the widget tree so errors can still surface here
+        layout.addWidget(output_error)
+        layout.addStretch(1)
+        return page
+
+    def _assemble_modern(self) -> None:
+        """Map-first layout: a full-height map beside a dark panel whose tabs group the parameters."""
+        self.submit_button.setText("Run analysis  →")
+
+        # Build the same cards as the classical layout; the big map is then pulled out
+        # of the Area card so it can fill the left side at all times.
+        dataset_card = self._build_dataset_group()
+        aoi_card = self._build_aoi_group()
+        time_card = self._build_time_group()
+        output_card = self._build_output_group()
+
+        # ---- left: the interactive map, always visible
+        self.map_widget.setMinimumHeight(0)
+        self.map_widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        map_panel = QFrame()
+        map_panel.setObjectName("ModernMapPanel")
+        map_layout = QVBoxLayout(map_panel)
+        map_layout.setContentsMargins(0, 0, 0, 0)
+        map_layout.addWidget(self.map_widget)  # reparents it out of the Area card
+
+        # ---- right: a dark panel with a header, a tab strip and a footer
+        header = QLabel("Analysis parameters")
+        header.setObjectName("ModernPanelTitle")
+        self.modern_subtitle = QLabel("GEE-Assist · Query input")
+        self.modern_subtitle.setObjectName("ModernPanelSubtitle")
+        self.modern_subtitle.setWordWrap(True)
+
+        self._modern_tabs = QButtonGroup(self)
+        self._modern_tabs.setExclusive(True)
+        self._modern_stack = QStackedWidget()
+        self._modern_stack.addWidget(aoi_card)                         # Area (manages its own space)
+        self._modern_stack.addWidget(self._modern_page(dataset_card))  # Data
+        self._modern_stack.addWidget(self._modern_page(time_card))     # Time
+        self._modern_stack.addWidget(self._modern_page(output_card))   # Output
+
+        tab_strip = QHBoxLayout()
+        tab_strip.setSpacing(0)
+        for index, name in enumerate(("Area", "Data", "Time", "Output")):
+            tab_strip.addWidget(self._modern_tab_button(name, index))
+        self._modern_tabs.button(0).setChecked(True)
+
+        footer = QWidget()
+        footer.setObjectName("ModernFooter")
+        footer.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        footer_layout = QVBoxLayout(footer)
+        footer_layout.setContentsMargins(18, 12, 18, 16)
+        footer_layout.setSpacing(10)
+        footer_layout.addWidget(self.status_banner)
+        footer_buttons = QHBoxLayout()
+        footer_buttons.setSpacing(10)
+        footer_buttons.addWidget(self.reset_button)
+        footer_buttons.addWidget(self.submit_button, 1)
+        footer_layout.addLayout(footer_buttons)
+
+        panel = QFrame()
+        panel.setObjectName("ModernPanel")
+        panel.setFixedWidth(440)
+        panel_layout = QVBoxLayout(panel)
+        panel_layout.setContentsMargins(0, 0, 0, 0)
+        panel_layout.setSpacing(0)
+        head_box = QVBoxLayout()
+        head_box.setContentsMargins(18, 18, 18, 10)
+        head_box.setSpacing(3)
+        head_box.addWidget(header)
+        head_box.addWidget(self.modern_subtitle)
+        panel_layout.addLayout(head_box)
+        strip_box = QHBoxLayout()
+        strip_box.setContentsMargins(18, 0, 18, 10)
+        strip_box.addLayout(tab_strip)
+        panel_layout.addLayout(strip_box)
+        panel_layout.addWidget(self._modern_stack, 1)
+        panel_layout.addWidget(footer)
+
+        root = QHBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+        root.addWidget(map_panel, 1)
+        root.addWidget(panel, 0)
 
     # ------------------------------------------------------------------ build
     def _error_label(self, key: str, *targets: QWidget) -> QLabel:
@@ -244,6 +493,9 @@ class ParameterFormView(QWidget):
         self.composite_combo.setToolTip("How multiple images in the time range are combined into one.")
 
         self.bands_combo = CheckComboBox(placeholder="No bands selected")
+
+        if self._modern:
+            return self._modern_data_page()
 
         body.addWidget(labelled(
             "Dataset", self.dataset_combo, self.dataset_info_label,
@@ -345,15 +597,31 @@ class ParameterFormView(QWidget):
         coords_layout = QVBoxLayout(self.coords_box)
         coords_layout.setContentsMargins(0, 0, 0, 0)
         coords_layout.setSpacing(6)
-        coords_layout.addLayout(field_row(
-            labelled("West (min lon)", self.min_lon_spin),
-            labelled("South (min lat)", self.min_lat_spin),
-            labelled("East (max lon)", self.max_lon_spin),
-            labelled("North (max lat)", self.max_lat_spin),
-        ))
+        if self._modern:
+            # Two rows of two: four across does not fit the narrow modern panel.
+            coords_layout.addLayout(field_row(
+                labelled("West (min lon)", self.min_lon_spin),
+                labelled("East (max lon)", self.max_lon_spin),
+            ))
+            coords_layout.addLayout(field_row(
+                labelled("South (min lat)", self.min_lat_spin),
+                labelled("North (max lat)", self.max_lat_spin),
+            ))
+        else:
+            coords_layout.addLayout(field_row(
+                labelled("West (min lon)", self.min_lon_spin),
+                labelled("South (min lat)", self.min_lat_spin),
+                labelled("East (max lon)", self.max_lon_spin),
+                labelled("North (max lat)", self.max_lat_spin),
+            ))
         coords_layout.addWidget(hint_label(
             "Extent of the drawn shape in WGS84 degrees. Typing values replaces the shape with that rectangle."
         ))
+
+        if self._modern:
+            # The map lives in the left panel; this tab lists the AOI's own vertices instead,
+            # filling the space the map used to take.
+            return self._modern_area_page(toggle_row)
 
         body.addLayout(toggle_row)
         body.addWidget(self.place_box)
@@ -374,6 +642,8 @@ class ParameterFormView(QWidget):
         self.start_date_edit = date_edit()
         self.end_date_edit = date_edit()
         self.date_hint_label = hint_label()
+        if self._modern:
+            return self._modern_time_page()
         body.addLayout(field_row(
             labelled("Start date", self.start_date_edit),
             labelled("End date", self.end_date_edit),
@@ -406,12 +676,15 @@ class ParameterFormView(QWidget):
         folder_row.addWidget(self.output_dir_edit, 1)
         folder_row.addWidget(self.browse_button)
 
-        self.estimate_label = hint_label()
+        # Register the output-folder error label in both layouts so _set_field_error("output_dir")
+        # never misses, even though the modern layout hides the folder field itself.
+        output_error = self._error_label("output_dir", self.output_dir_edit)
+
+        if self._modern:
+            return self._modern_output_page(output_error)
 
         body.addWidget(labelled("Projection (CRS)", self.crs_combo, self._error_label("crs", self.crs_combo)))
-        body.addWidget(labelled(
-            "Save to folder", folder_row, self._error_label("output_dir", self.output_dir_edit)
-        ))
+        body.addWidget(labelled("Save to folder", folder_row, output_error))
         body.addWidget(self.estimate_label)
         body.addStretch(1)
         return card
@@ -466,6 +739,8 @@ class ParameterFormView(QWidget):
         )
 
         self._apply_date_limits(info)
+        if getattr(self, "modern_subtitle", None) is not None:
+            self.modern_subtitle.setText(f"GEE-Assist · {info.name}")
         if self._analysis[0] and self._analysis[0] not in info.supported_analyses:
             self._analysis = ("", [])  # an analysis set from the terminal that this dataset cannot run
 
@@ -827,6 +1102,7 @@ class ParameterFormView(QWidget):
 
     def _update_estimate(self, *_args) -> None:
         """Rough GeoTIFF size and how many GEE requests (tiles) the download needs."""
+        self._refresh_vertices()  # modern layout only; no-op otherwise
         if not hasattr(self, "estimate_label"):
             return  # still building the form
         aoi, _name = self._current_aoi()

@@ -92,8 +92,9 @@ class MapService(IMapService):
                     rgb, legend = layer_styles.draw(values, valid, layer.style, title, layer.low, layer.high,
                                                     layer.classes)
                     rgba = np.dstack([rgb, np.where(valid, 255, 0).astype(np.uint8)])
+                    extra = _layer_data(values, valid, rgb, legend)
                     layers.append(MapLayerDTO(layer.key, layer.label, layer.style, rgba, legend, width, height,
-                                              tuple(float(v) for v in bounds), scale))
+                                              tuple(float(v) for v in bounds), scale, **extra))
                 return layers
         except rasterio.errors.RasterioIOError as exc:
             raise MapError(f"Cannot open the analysis result {Path(result.output_path).name}.") from exc
@@ -101,3 +102,37 @@ class MapService(IMapService):
 
 def _missing(value: float, nodata: float | None) -> bool:
     return bool(value != value) or (nodata is not None and value == nodata)  # NaN, or the no-data value
+
+
+def _layer_data(values, valid, rgb, legend) -> dict:
+    """Raw values + statistics (continuous layers) or class fractions (categorical), for live symbology."""
+    import numpy as np
+
+    if legend.kind == "scale":
+        sample = values[valid]
+        if sample.size:
+            lo2, hi2 = (float(v) for v in np.percentile(sample, (2.0, 98.0)))
+            stats = {
+                "min": float(sample.min()), "max": float(sample.max()),
+                "mean": float(sample.mean()), "std": float(sample.std()),
+                "p2": lo2, "p98": hi2,
+            }
+            counts, edges = np.histogram(sample, bins=40)
+            histogram = (counts.astype(int).tolist(), [float(e) for e in edges])
+        else:
+            stats, histogram = {}, ()
+        return {
+            "kind": "scale",
+            "values": np.where(valid, values, np.nan).astype(np.float32),
+            "stats": stats,
+            "histogram": histogram,
+        }
+
+    # Categorical: the fraction of valid pixels matching each legend colour.
+    total = int(valid.sum()) or 1
+    fractions = []
+    for label, colour in zip(legend.labels, legend.colours):
+        r, g, b = (int(colour[i:i + 2], 16) for i in (1, 3, 5))
+        mask = valid & (rgb[..., 0] == r) & (rgb[..., 1] == g) & (rgb[..., 2] == b)
+        fractions.append((label, colour, float(int(mask.sum()) / total)))
+    return {"kind": "classes", "class_fractions": tuple(fractions)}

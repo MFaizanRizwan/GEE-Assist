@@ -408,3 +408,158 @@ QMenu#ModeMenu::item:checked {{ color: {LEAF_DARK}; font-weight: 600; }}
 QMenu#ModeMenu::indicator {{ width: 14px; height: 14px; left: 8px; }}
 QMenu#ModeMenu::indicator:checked, QMenu#ModeMenu::indicator:exclusive:checked {{ image: url("{CHECK_GREEN_ICON}"); }}
 """
+
+
+# ----------------------------------------------------------------------------- modern layout
+# A dark, map-first panel (inspired by web GIS consoles). Appended after FORM_STYLESHEET and
+# scoped under #ModernPanel / #ModernMapPanel / #ModernFooter so it overrides the light base.
+M_BG = "#0E1613"            # parameter panel
+M_MAP_BG = "#0B1210"        # map backdrop
+M_FIELD = "#172420"         # input background
+M_BORDER = "#25332C"        # hairline borders
+M_BORDER_STRONG = "#324239"  # input borders
+M_BORDER_HOVER = "#45594E"
+M_TEXT = "#E7EEEA"
+M_INK = "#F3F8F5"
+M_MUTED = "#93A79D"
+M_SUBTLE = "#6E8278"
+M_ACCENT = "#A6E22E"        # lime accent
+M_ACCENT_DK = "#8CC81F"
+M_ACCENT_SOFT = "#1B2A1C"   # active tab / selection tint
+M_DISABLED_BG = "#141E1A"
+
+MODERN_FORM_STYLESHEET = f"""
+#ParameterForm {{ background: {M_MAP_BG}; }}
+#ModernMapPanel {{ background: {M_MAP_BG}; border-right: 1px solid {M_BORDER}; }}
+#ModernMapPanel QLabel {{ color: {M_MUTED}; }}
+
+#ModernPanel {{ background: {M_BG}; }}
+#ModernPanel QWidget {{ color: {M_TEXT}; }}
+
+/* ---- panel header ---- */
+QLabel#ModernPanelTitle {{ font-family: "{SERIF}"; font-size: 17pt; color: {M_INK}; }}
+QLabel#ModernPanelSubtitle {{ color: {M_MUTED}; font-size: 9pt; }}
+
+/* ---- tab strip (Area · Data · Time · Output) ---- */
+QPushButton#ModernTab {{
+    color: {M_MUTED}; background: transparent; border: none;
+    border-bottom: 2px solid transparent; border-radius: 0;
+    padding: 9px 10px; font-weight: 600; font-size: 9.5pt;
+}}
+QPushButton#ModernTab:hover {{ color: {M_TEXT}; background: {M_ACCENT_SOFT}; }}
+QPushButton#ModernTab:checked {{ color: {M_ACCENT}; border-bottom: 2px solid {M_ACCENT}; }}
+
+/* ---- cards blend into the dark panel ---- */
+#ModernPanel QFrame#SectionCard {{ background: transparent; border: none; border-radius: 0; }}
+#ModernPanel QFrame#SectionCard QWidget {{ background: transparent; }}
+#ModernPanel QLabel#SectionTitle {{ font-family: "{SERIF}"; font-size: 13pt; color: {M_INK}; }}
+#ModernPanel QLabel#SectionSubtitle {{ color: {M_MUTED}; font-size: 8.5pt; }}
+#ModernPanel QFrame#Divider {{ background: {M_BORDER}; }}
+#ModernPanel QLabel#FieldLabel {{ color: {M_INK}; font-weight: 600; font-size: 9.5pt; }}
+#ModernPanel QLabel#FieldHint {{ color: {M_SUBTLE}; font-size: 8.5pt; }}
+#ModernPanel QLabel {{ color: {M_TEXT}; }}
+
+/* ---- inputs ---- */
+#ModernPanel QComboBox, #ModernPanel QSpinBox, #ModernPanel QDoubleSpinBox,
+#ModernPanel QDateEdit, #ModernPanel QLineEdit {{
+    background: {M_FIELD}; color: {M_INK};
+    border: 1px solid {M_BORDER_STRONG}; border-radius: 9px;
+    padding: 6px 11px; min-height: 22px;
+    selection-background-color: {M_ACCENT}; selection-color: {M_BG};
+}}
+#ModernPanel QComboBox:hover, #ModernPanel QSpinBox:hover, #ModernPanel QDoubleSpinBox:hover,
+#ModernPanel QDateEdit:hover, #ModernPanel QLineEdit:hover {{ border-color: {M_BORDER_HOVER}; }}
+#ModernPanel QComboBox:focus, #ModernPanel QSpinBox:focus, #ModernPanel QDoubleSpinBox:focus,
+#ModernPanel QDateEdit:focus, #ModernPanel QLineEdit:focus {{ border: 1px solid {M_ACCENT}; }}
+#ModernPanel QComboBox:disabled, #ModernPanel QSpinBox:disabled, #ModernPanel QDoubleSpinBox:disabled,
+#ModernPanel QDateEdit:disabled {{ color: {M_SUBTLE}; background: {M_DISABLED_BG}; border-color: {M_BORDER}; }}
+#ModernPanel QComboBox QAbstractItemView {{
+    background: {M_FIELD}; color: {M_INK}; border: 1px solid {M_BORDER_STRONG};
+    selection-background-color: {M_ACCENT_SOFT}; selection-color: {M_INK}; outline: none;
+}}
+#ModernPanel QComboBox QAbstractItemView::item:hover {{ background: {M_ACCENT_SOFT}; }}
+#ModernPanel QComboBox QAbstractItemView::indicator:checked {{
+    background: {M_ACCENT}; border-color: {M_ACCENT}; image: url("{CHECK_ICON}");
+}}
+
+/* ---- segmented AOI toggle in the Area tab ---- */
+#ModernPanel QPushButton#SegmentButton {{
+    color: {M_TEXT}; background: {M_FIELD}; border: 1px solid {M_BORDER_STRONG};
+}}
+#ModernPanel QPushButton#SegmentButton:hover {{ background: {M_ACCENT_SOFT}; }}
+#ModernPanel QPushButton#SegmentButton:checked {{
+    color: {M_BG}; border-color: {M_ACCENT};
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {M_ACCENT}, stop:1 {M_ACCENT_DK});
+}}
+
+/* ---- secondary buttons (Reset, Browse, Import, Find place) ---- */
+#ModernPanel QPushButton#SecondaryButton, #ModernFooter QPushButton#SecondaryButton {{
+    color: {M_TEXT}; background: {M_FIELD}; border: 1px solid {M_BORDER_STRONG}; border-radius: 9px;
+}}
+#ModernPanel QPushButton#SecondaryButton:hover, #ModernFooter QPushButton#SecondaryButton:hover {{
+    background: {M_ACCENT_SOFT}; border-color: {M_BORDER_HOVER};
+}}
+
+/* ---- footer with the Run analysis button ---- */
+#ModernFooter {{ background: {M_BG}; border-top: 1px solid {M_BORDER}; }}
+#ModernFooter QPushButton#PrimaryButton {{
+    color: {M_BG}; border: none; border-radius: 9px; padding: 10px 22px; font-size: 10.5pt; font-weight: 700;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {M_ACCENT}, stop:1 {M_ACCENT_DK});
+}}
+#ModernFooter QPushButton#PrimaryButton:hover {{ background: {M_ACCENT}; }}
+#ModernFooter QPushButton#PrimaryButton:pressed {{ padding-top: 11px; padding-bottom: 9px; }}
+
+/* ---- checkboxes / radios inside the panel ---- */
+#ModernPanel QCheckBox, #ModernPanel QRadioButton {{ color: {M_INK}; }}
+#ModernPanel QCheckBox::indicator, #ModernPanel QRadioButton::indicator {{
+    border: 1px solid {M_BORDER_STRONG}; background: {M_FIELD};
+}}
+#ModernPanel QCheckBox::indicator:checked {{ background: {M_ACCENT}; border-color: {M_ACCENT}; image: url("{CHECK_ICON}"); }}
+
+/* ---- vertices table (modern Area tab) ---- */
+#ModernPanel QTableWidget#VerticesTable {{
+    background: {M_FIELD}; color: {M_INK};
+    border: 1px solid {M_BORDER_STRONG}; border-radius: 9px;
+    gridline-color: {M_BORDER}; alternate-background-color: {M_BG};
+    outline: none;
+}}
+#ModernPanel QTableWidget#VerticesTable::item {{ padding: 3px 8px; border: none; }}
+#ModernPanel QHeaderView::section {{
+    background: {M_BG}; color: {M_MUTED};
+    padding: 5px 8px; border: none; border-bottom: 1px solid {M_BORDER_STRONG}; font-weight: 600;
+}}
+#ModernPanel QTableCornerButton::section {{ background: {M_BG}; border: none; }}
+
+/* ---- scrollbars ---- */
+#ModernPanel QScrollBar:vertical {{ background: transparent; width: 10px; margin: 2px; }}
+#ModernPanel QScrollBar::handle:vertical {{ background: {M_BORDER_STRONG}; border-radius: 4px; min-height: 30px; }}
+#ModernPanel QScrollBar::handle:vertical:hover {{ background: {M_BORDER_HOVER}; }}
+"""
+
+
+# The signed-in window chrome around a modern query-input page: the kept-requests dock,
+# the status bar and the mode switcher, darkened to match the modern panel.
+MODERN_WINDOW_STYLESHEET = f"""
+QMainWindow, QDockWidget {{ background: {M_BG}; }}
+QDockWidget {{ color: {M_INK}; titlebar-close-icon: none; titlebar-normal-icon: none; }}
+QDockWidget::title {{
+    background: {M_MAP_BG}; color: {M_MUTED}; padding: 8px 12px;
+    border-bottom: 1px solid {M_BORDER}; font-weight: 600;
+}}
+QDockWidget > QWidget {{ background: {M_BG}; color: {M_TEXT}; }}
+QDockWidget QLabel {{ color: {M_INK}; background: transparent; }}
+QDockWidget QListWidget, QDockWidget QPlainTextEdit {{
+    background: {M_FIELD}; color: {M_INK};
+    border: 1px solid {M_BORDER_STRONG}; border-radius: 9px; padding: 4px;
+    selection-background-color: {M_ACCENT}; selection-color: {M_BG};
+}}
+QDockWidget QListWidget::item:selected {{ background: {M_ACCENT_SOFT}; color: {M_INK}; }}
+QDockWidget QPushButton#PrimaryButton {{
+    color: {M_BG}; border: none; border-radius: 9px; padding: 9px 18px; font-weight: 700;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {M_ACCENT}, stop:1 {M_ACCENT_DK});
+}}
+QDockWidget QPushButton#PrimaryButton:hover {{ background: {M_ACCENT}; }}
+QDockWidget QPushButton#PrimaryButton:disabled {{ background: {M_DISABLED_BG}; color: {M_SUBTLE}; }}
+QStatusBar {{ background: {M_MAP_BG}; border-top: 1px solid {M_BORDER}; color: {M_MUTED}; min-height: 40px; }}
+QStatusBar::item {{ border: none; }}
+"""
