@@ -142,7 +142,7 @@ def main() -> None:
     if iscc is None:
         print("  installer skipped: Inno Setup not found (winget install JRSoftware.InnoSetup)")
     else:
-        cmd = [str(iscc), f"/DAppVersion={_app_version()}", f"/DSourceDir={app_dir}",
+        cmd = [str(iscc), f"/DAppVersion={_app_version()}", f"/DAppVersionNumber={_version_number()}", f"/DSourceDir={app_dir}",
                f"/O{ROOT / 'dist'}", str(ROOT / "installer" / "GEE-Assist.iss")]
         # Defender scans the new Setup.exe while Inno Setup is still writing its
         # icon, which can fail with "EndUpdateResource failed"; a retry succeeds.
@@ -183,6 +183,11 @@ def _app_version() -> str:
         if line.startswith("APP_VERSION"):
             return line.split("=", 1)[1].strip().strip("\"'")
     return "0.0.0"
+
+
+def _version_number() -> str:
+    """The numeric part Windows version fields accept: "0.1.2-beta" -> "0.1.2"."""
+    return _app_version().split("-")[0]
 
 
 if __name__ == "__main__":

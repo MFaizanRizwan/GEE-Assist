@@ -111,7 +111,8 @@ a.binaries = [entry for entry in a.binaries if not unwanted(entry[0])]
 
 pyz = PYZ(a.pure)
 
-numbers = tuple(int(p) for p in (APP_VERSION.split(".") + ["0"] * 4)[:4])
+# Windows wants four numbers: "0.1.2-beta" -> (0, 1, 2, 0); the full text stays in the strings below.
+numbers = tuple(int(p) for p in (APP_VERSION.split("-")[0].split(".") + ["0"] * 4)[:4])
 version = vi.VSVersionInfo(
     ffi=vi.FixedFileInfo(filevers=numbers, prodvers=numbers),
     kids=[

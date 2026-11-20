@@ -1,11 +1,15 @@
 ; Inno Setup script for the GEE-Assist installer. Run through build_app.py,
-; which passes AppVersion and the built app folder (dist\GEE-Assist).
+; which passes AppVersion (e.g. 0.1.2-beta), AppVersionNumber (0.1.2) and the
+; built app folder (dist\GEE-Assist).
 ;
 ; Installs for the current user by default (no admin needed) into
 ; %LOCALAPPDATA%\Programs\GEE-Assist; the user can choose all users instead.
 
 #ifndef AppVersion
   #define AppVersion "1.0.0"
+#endif
+#ifndef AppVersionNumber
+  #define AppVersionNumber "1.0.0"
 #endif
 #ifndef SourceDir
   #define SourceDir "..\dist\GEE-Assist"
@@ -32,7 +36,9 @@ Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 CloseApplications=yes
-VersionInfoVersion={#AppVersion}
+; Windows file versions are numbers only, so not "-beta".
+VersionInfoVersion={#AppVersionNumber}
+VersionInfoTextVersion={#AppVersion}
 VersionInfoProductName=GEE-Assist
 
 [Tasks]
