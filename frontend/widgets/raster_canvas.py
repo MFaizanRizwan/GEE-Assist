@@ -28,6 +28,7 @@ def rgba_to_image(rgba: np.ndarray) -> QImage:
 class RasterCanvas(QGraphicsView):
     hovered = pyqtSignal(float, float)   # image pixel (x, y) under the pointer
     left_image = pyqtSignal()
+    view_changed = pyqtSignal()          # zoom, pan or resize changed what is shown (for a scale bar)
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
@@ -55,6 +56,10 @@ class RasterCanvas(QGraphicsView):
         if not (keep_view and same_size):
             self.fit()
 
+    def set_opacity(self, opacity: float) -> None:
+        """Fade the raster (0 transparent, 1 opaque) — the "map overlay opacity" control."""
+        self._item.setOpacity(max(0.0, min(1.0, opacity)))
+
     def clear(self) -> None:
         self._item.setPixmap(QPixmap())
 
@@ -67,6 +72,14 @@ class RasterCanvas(QGraphicsView):
             return
         self.fitInView(self._item, Qt.AspectRatioMode.KeepAspectRatio)
         self._fit_scale = self.transform().m11()
+        self.view_changed.emit()
+
+    def displayed_pixel_size(self) -> float:
+        """How many screen pixels one image pixel currently spans (for a scale bar)."""
+        return self.transform().m11()
+
+    def image_width(self) -> int:
+        return self._item.pixmap().width()
 
     def zoom(self) -> float:
         """How far in it is zoomed, relative to the whole image in view (1.0)."""
@@ -75,6 +88,7 @@ class RasterCanvas(QGraphicsView):
     def zoom_by(self, factor: float) -> None:
         target = min(MAX_ZOOM, max(MIN_ZOOM, self.zoom() * factor))
         self.scale(target / self.zoom(), target / self.zoom())
+        self.view_changed.emit()
 
     # ------------------------------------------------------------- mouse
     def wheelEvent(self, event) -> None:  # noqa: N802 (Qt API)

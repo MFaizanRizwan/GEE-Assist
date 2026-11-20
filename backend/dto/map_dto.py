@@ -88,3 +88,10 @@ class MapLayerDTO:
     height: int
     bounds: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0)  # west, south, east, north (EPSG:4326)
     scale: float = 1.0                          # GeoTIFF pixels per preview pixel
+    # ---- raw data + statistics, so symbology (colour ramp, stretch, gamma) can be changed live
+    kind: str = "classes"                       # "scale" (continuous, recolourable) or "classes"
+    values: object = None                       # numpy float32 (height, width); NaN where no-data ("scale" only)
+    stats: dict = field(default_factory=dict)   # min, max, mean, std, p2, p98 ("scale" only)
+    histogram: tuple = ()                       # (counts, edges) for the distribution ("scale" only)
+    # For class / mask / transition layers: (label, colour, fraction 0-1) per class present.
+    class_fractions: tuple[tuple[str, str, float], ...] = ()
