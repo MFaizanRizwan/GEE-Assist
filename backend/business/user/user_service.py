@@ -95,7 +95,7 @@ class UserService(IUserService):
         return self._api.health()
 
     def check_app_version(self) -> AppVersionDTO | None:
-        from backend.config.version import APP_VERSION
+        from backend.config.version import APP_VERSION, UPDATE_DOWNLOAD_URL
 
         token = self._session.access_token if self._session.active else None
         try:
@@ -107,7 +107,7 @@ class UserService(IUserService):
         return AppVersionDTO(
             latest_version=data.get("latest_version", APP_VERSION),
             minimum_supported_version=data.get("minimum_supported_version", APP_VERSION),
-            download_url=data.get("download_url"),
+            download_url=data.get("download_url") or UPDATE_DOWNLOAD_URL,  # the server may leave it empty
             release_notes=data.get("release_notes"),
             force_update=bool(data.get("force_update", False)),
             update_available=bool(data.get("update_available", False)),

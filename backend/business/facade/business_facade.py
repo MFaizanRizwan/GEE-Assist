@@ -14,6 +14,7 @@ from backend.business.report.i_report_service import IReportService
 from backend.business.map.i_map_service import IMapService
 from backend.business.request.i_request_service import IRequestService
 from backend.business.settings.i_settings_service import ISettingsService
+from backend.business.update.i_update_service import IUpdateService
 from backend.business.user.i_user_service import IUserService
 from backend.dto import CheckDTO, DownloadJobDTO, FormDTO, PlaceDTO, ValidationDTO
 from backend.dto.version_dto import AppVersionDTO
@@ -25,7 +26,7 @@ from backend.dto.project_dto import AnalysisRecordDTO, ProjectDTO
 from backend.dto.report_dto import ExplanationFileDTO
 from backend.dto.settings_dto import AppSettingsDTO, AppSettingsUpdateDTO
 from backend.dto.result_dto import ResultDTO
-from backend.exceptions import AnalysisError, ExplanationError, GeeAssistError, ProjectError, ReportError
+from backend.exceptions import AnalysisError, ExplanationError, GeeAssistError, ProjectError, ReportError, UpdateError
 from backend.dto.user_dto import (
     GoogleSignInDTO,
     NewUserDTO,
@@ -56,6 +57,7 @@ class BusinessFacade(IBusinessFacade):
         settings_service: ISettingsService | None = None,
         explanation_service: IExplanationService | None = None,
         report_service: IReportService | None = None,
+        update_service: IUpdateService | None = None,
     ):
         self._user_service = user_service
         self._request_service = request_service
@@ -65,6 +67,7 @@ class BusinessFacade(IBusinessFacade):
         self._settings_service = settings_service
         self._explanation_service = explanation_service
         self._report_service = report_service
+        self._update_service = update_service
 
     # ------------------------------------------------------------- authentication
     def is_server_available(self) -> bool:
@@ -72,6 +75,22 @@ class BusinessFacade(IBusinessFacade):
 
     def check_app_version(self) -> AppVersionDTO | None:
         return self._user_service.check_app_version()
+
+    def download_update(
+        self,
+        url: str,
+        on_progress: Callable[[int, int | None], None] | None = None,
+        is_cancelled: Callable[[], bool] | None = None,
+    ) -> Path:
+        return self._updates().download_update(url, on_progress, is_cancelled)
+
+    def install_update(self, installer: Path) -> None:
+        self._updates().install_update(installer)
+
+    def _updates(self) -> IUpdateService:
+        if self._update_service is None:
+            raise UpdateError("Updating is not available in this build.")
+        return self._update_service
 
     def get_current_user(self) -> UserDTO | None:
         return self._user_service.current_user

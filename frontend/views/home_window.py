@@ -380,6 +380,11 @@ class HomeWindow(QMainWindow):
     def check_for_updates(self) -> None:
         run_task(self, self._facade.check_app_version, on_success=self._on_version_checked)
 
+    def show_update_dialog(self, info: AppVersionDTO) -> None:
+        from frontend.views.update_dialog import UpdateDialog
+
+        UpdateDialog(self._facade, info, parent=self).exec()
+
     def _on_version_checked(self, info: AppVersionDTO | None) -> None:
         if info is not None and info.update_available:
             self.menu_bar.set_update_info(info)
@@ -689,6 +694,7 @@ class HomeWindow(QMainWindow):
         bar.about.triggered.connect(self.show_about)
         bar.give_feedback.triggered.connect(lambda: self.ask_for_feedback())
         bar.theme_chosen.connect(self.change_theme)
+        bar.update_requested.connect(self.show_update_dialog)
 
     def open_user_admin(self) -> None:
         if self._admin_dialog is None:

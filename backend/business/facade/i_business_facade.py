@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import Callable, Optional
 
 from backend.dto import CheckDTO, DownloadJobDTO, FormDTO, PlaceDTO, ValidationDTO
@@ -38,6 +39,19 @@ class IBusinessFacade(ABC):
 
     @abstractmethod
     def check_app_version(self) -> AppVersionDTO | None: ...
+
+    @abstractmethod
+    def download_update(
+        self,
+        url: str,
+        on_progress: Callable[[int, int | None], None] | None = None,
+        is_cancelled: Callable[[], bool] | None = None,
+    ) -> Path:
+        """Download the new version's installer; see ``IUpdateService.download_update``."""
+
+    @abstractmethod
+    def install_update(self, installer: Path) -> None:
+        """Start the downloaded installer; the app should quit right after."""
 
     @abstractmethod
     def get_current_user(self) -> UserDTO | None: ...

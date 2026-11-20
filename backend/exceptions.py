@@ -64,3 +64,11 @@ class ExplanationError(GeeAssistError):
 
 class ReportError(GeeAssistError):
     """A report cannot be made or exported: the explanation is missing, or a file cannot be written."""
+
+
+class UpdateError(GeeAssistError):
+    """The new version's installer cannot be downloaded or started."""
+
+
+class UpdateCancelledError(UpdateError):
+    """The user stopped the update download."""
