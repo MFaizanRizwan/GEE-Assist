@@ -1,6 +1,6 @@
 """Desktop app release version."""
 
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.0.1"
 
 #: Where "Update Now" downloads the installer from when the server gives no ``download_url``.
 #: Each release uploads GEE-Assist-Setup.exe to the GitHub release tagged ``main``.

@@ -8,7 +8,8 @@ Pipeline:
          backend/       (the COMPILED .pyd from dist/backend)
   3. Run PyInstaller on GEE-Assist.spec -> dist/GEE-Assist/ (exe + _internal/)
   4. Zip that folder -> dist/GEE-Assist-<version>-win64.zip
-  5. Inno Setup installer -> dist/GEE-Assist-Setup-<version>.exe (installer/GEE-Assist.iss)
+  5. Inno Setup installer -> dist/GEE-Assist-Setup-<version>.exe (installer/GEE-Assist.iss),
+     copied to dist/GEE-Assist-Setup.exe for the GitHub release the app updates from
 
 Your source backend/ is never modified. Distribute the installer, or the zip
 (the user extracts it and runs GEE-Assist.exe). No Python is needed on the
@@ -154,6 +155,11 @@ def main() -> None:
             raise SystemExit("installer step failed 3 times - see the Inno Setup output above")
         setup = ROOT / "dist" / f"GEE-Assist-Setup-{_app_version()}.exe"
         print(f"  installer : {setup}  ({setup.stat().st_size / (1024 * 1024):.0f} MB)")
+        # The app's "Update Now" downloads this name from the GitHub release tagged "main"
+        # (UPDATE_DOWNLOAD_URL in backend/config/version.py): upload this file there.
+        release = ROOT / "dist" / "GEE-Assist-Setup.exe"
+        shutil.copy2(setup, release)
+        print(f"  release   : {release}  (upload to the GitHub release tagged 'main')")
     print("=" * 60)
 
 
