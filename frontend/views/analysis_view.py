@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PyQt6.QtCore import QBuffer, QIODevice, QSize, Qt, QTimer, QUrl, pyqtSignal
+from PyQt6.QtCore import QBuffer, QEvent, QIODevice, QSize, Qt, QTimer, QUrl, pyqtSignal
 from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtWidgets import (
     QAbstractItemView,
@@ -29,6 +29,7 @@ from PyQt6.QtWidgets import (
     QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
+    QGridLayout,
     QFrame,
     QHBoxLayout,
     QHeaderView,
@@ -54,6 +55,7 @@ from backend.exceptions import GeeAssistError
 from frontend import layout_mode, palette, theme
 from frontend.project_paths import analysis_folder, current_project, downloads_folder
 from frontend.download_format import format_size
+from frontend.widgets.flow_layout import FlowLayout
 from frontend.widgets.form_parts import StatusBanner
 from frontend.widgets.map_area import MapArea
 from frontend.widgets.process_picker import STYLESHEET as PICKER_STYLESHEET
@@ -64,6 +66,18 @@ from frontend.widgets.symbology_panel import SymbologyPanel
 from frontend.workers.task_worker import run_task
 
 PANEL_WIDTH = 430
+# Responsive layout: on smaller screens (e.g. 1366x768) the dataset panel narrows, the symbology
+# panel moves under the map once the map card would get narrower than MIN_CARD_WIDTH, and the
+# results scroll instead of being squeezed below their minimum height.
+PANEL_WIDTH_COMPACT = 360
+WIDE_PAGE = 1450              # page width from which the dataset panel gets its full width
+SHORT_PAGE = 720              # page height below which the header is compacted
+SYM_WIDTH = 322
+SYM_STACKED_HEIGHT = 440
+MIN_CARD_WIDTH = 560
+CARD_MIN_HEIGHT = 470
+RESULT_SPACING = 14
+QWIDGETSIZE_MAX = (1 << 24) - 1
 PROGRESS_POLL_MS = 100
 MAP_IMAGE_SIZE = 1024
 
@@ -335,10 +349,9 @@ class AnalysisView(QWidget):
 
         self.map_area = MapArea(dark=self._dark)
         self.canvas = self.map_area.canvas        # kept name: the raster canvas inside the map area
-        self.canvas.setMinimumHeight(300)
+        self.canvas.setMinimumHeight(200)
 
         self.sym_panel = SymbologyPanel(dark=self._dark)
-        self.sym_panel.setFixedWidth(322)
         self.sym_panel.changed.connect(self._recolor)
         self.sym_panel.opacity_changed.connect(self.map_area.set_opacity)
 
@@ -349,6 +362,7 @@ class AnalysisView(QWidget):
         self.metrics_table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
         self.metrics_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.metrics_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        self.metrics_table.setMinimumHeight(80)
         self.metrics_table.setMaximumHeight(150)
         self.save_state = QLabel(objectName="SaveState")
         self.save_state.setWordWrap(True)
@@ -375,31 +389,49 @@ class AnalysisView(QWidget):
         result_layout.addWidget(self.map_area, 1)
         result_layout.addWidget(_section("Numbers"))
         result_layout.addWidget(self.metrics_table)
-        buttons = QHBoxLayout()
-        buttons.addWidget(_shrinkable(self.save_state), 1)
+        # The buttons wrap onto a second line when the card is narrow, instead of being clipped.
+        result_layout.addWidget(self.save_state)
+        buttons = FlowLayout(spacing=6)
         for button in (self.save_button, self.explain_button, self.viewer_button, self.map_button,
                        self.folder_button):
             buttons.addWidget(button)
         result_layout.addLayout(buttons)
 
-        sym_frame = QFrame(objectName="ResultCard")
-        sym_frame.setFixedWidth(322)
-        sym_frame_layout = QVBoxLayout(sym_frame)
+        self._panel = panel
+        self._result_card = card
+        self._sym_frame = QFrame(objectName="ResultCard")
+        sym_frame_layout = QVBoxLayout(self._sym_frame)
         sym_frame_layout.setContentsMargins(0, 0, 0, 0)
         sym_frame_layout.addWidget(self.sym_panel)
 
+        # The results (map card + symbology) scroll as a whole when the window is too small for
+        # them, so nothing is squeezed; the dataset panel and its Run button stay in view.
+        results = QWidget(objectName="ResultsArea")
+        self._results_grid = QGridLayout(results)
+        self._results_grid.setContentsMargins(0, 0, 0, 0)
+        self._results_grid.setSpacing(RESULT_SPACING)
+        self._results_scroll = QScrollArea()
+        self._results_scroll.setWidgetResizable(True)
+        self._results_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self._results_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._results_scroll.setWidget(results)
+        self._results_scroll.viewport().setAutoFillBackground(False)
+        results.setAutoFillBackground(False)
+        self._stacked: bool | None = None   # symbology under the map (narrow) or beside it (wide)
+
         body = QHBoxLayout()
-        body.setSpacing(14)
+        body.setSpacing(RESULT_SPACING)
         body.addWidget(panel)
-        body.addWidget(card, 1)
-        body.addWidget(sym_frame)
-        layout = QVBoxLayout(self)
+        body.addWidget(self._results_scroll, 1)
+        self._page_layout = layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 20, 24, 20)
         layout.setSpacing(10)
         layout.addWidget(self.title)
         layout.addWidget(self.subtitle)
         layout.addWidget(self.banner)
         layout.addLayout(body, 1)
+        self._results_scroll.viewport().installEventFilter(self)
+        self._arrange_results()
 
         for button in (self.refresh_button, self.browse_button, self.run_button, self.viewer_button,
                        self.map_button, self.folder_button, self.save_button, self.explain_button):
@@ -427,6 +459,52 @@ class AnalysisView(QWidget):
         self._set_result_buttons(False)
         self._show_save_state()
         self._update_run_button()
+
+    # ------------------------------------------------------------- responsive layout
+    def resizeEvent(self, event) -> None:  # noqa: N802 (Qt API)
+        super().resizeEvent(event)
+        self._arrange_results()
+
+    def eventFilter(self, watched, event) -> bool:  # noqa: N802 (Qt API)
+        if watched is self._results_scroll.viewport() and event.type() == QEvent.Type.Resize:
+            self._fit_card_height()
+        return super().eventFilter(watched, event)
+
+    def _arrange_results(self) -> None:
+        """Fit the page to its size: narrower dataset panel and symbology under the map on small screens."""
+        short = self.height() < SHORT_PAGE
+        margins = (16, 10, 16, 10) if short else (24, 20, 24, 20)
+        self._page_layout.setContentsMargins(*margins)
+        self.subtitle.setVisible(not short)
+
+        panel_width = PANEL_WIDTH if self.width() >= WIDE_PAGE else PANEL_WIDTH_COMPACT
+        self._panel.setFixedWidth(panel_width)
+        results_width = self.width() - margins[0] - margins[2] - panel_width - RESULT_SPACING
+        stacked = results_width - SYM_WIDTH - RESULT_SPACING < MIN_CARD_WIDTH
+        if stacked != self._stacked:
+            self._stacked = stacked
+            grid = self._results_grid
+            grid.removeWidget(self._result_card)
+            grid.removeWidget(self._sym_frame)
+            grid.addWidget(self._result_card, 0, 0)
+            if stacked:
+                grid.addWidget(self._sym_frame, 1, 0)
+                grid.setColumnStretch(1, 0)
+                self._sym_frame.setMinimumWidth(0)
+                self._sym_frame.setMaximumWidth(QWIDGETSIZE_MAX)
+                self._sym_frame.setFixedHeight(SYM_STACKED_HEIGHT)
+            else:
+                grid.addWidget(self._sym_frame, 0, 1)
+                self._sym_frame.setFixedWidth(SYM_WIDTH)
+                self._sym_frame.setMinimumHeight(0)
+                self._sym_frame.setMaximumHeight(QWIDGETSIZE_MAX)
+            grid.setColumnStretch(0, 1)
+        self._fit_card_height()
+
+    def _fit_card_height(self) -> None:
+        """The map card fills the visible height (and never gets shorter than it can be drawn)."""
+        visible = self._results_scroll.viewport().height()
+        self._result_card.setMinimumHeight(max(CARD_MIN_HEIGHT, visible) if self._stacked else CARD_MIN_HEIGHT)
 
     # ------------------------------------------------------------- loading
     def showEvent(self, event) -> None:  # noqa: N802 (Qt API)

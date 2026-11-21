@@ -149,6 +149,8 @@ class JobRow(QFrame):
         self.title = QLabel(objectName="JobTitle")
         self.details = QLabel(objectName="Muted")
         self.chunks = QLabel(objectName="Muted")
+        for label in (self.title, self.details):  # on narrow pages these are clipped, not the progress figures
+            label.setSizePolicy(QSizePolicy.Policy.Ignored, label.sizePolicy().verticalPolicy())
         names = QVBoxLayout()
         names.setSpacing(2)
         names.addWidget(self.title)

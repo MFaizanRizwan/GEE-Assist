@@ -38,6 +38,7 @@ from frontend import form_theme, layout_mode, palette, theme
 from frontend.download_format import format_size, format_speed
 from frontend.widgets.download_rows import CollapsibleSection, CompletedRow, JobRow
 from frontend.widgets.form_parts import StatusBanner
+from frontend.widgets.source_card import SourceCard
 from frontend.widgets.speed_chart import SpeedChart
 from frontend.workers.task_worker import run_task
 
@@ -121,6 +122,7 @@ _MODERN_COLORS = {
 }
 MC = _MODERN_COLORS.get(palette.THEME, _MODERN_COLORS["dark-green"])
 MONO = "Consolas"
+SIDE_WIDTH = 300
 
 MODERN_STYLESHEET = f"""
 #DownloadPage, QWidget#DownloadContent {{ background: {MC['page']}; }}
@@ -140,6 +142,19 @@ QFrame#StatsCard QLabel, QFrame#DownloadSection QLabel {{ background: transparen
 QLabel#CardTitle {{ color: {MC['ink']}; font-weight: 700; font-size: 10.5pt; }}
 QLabel#LiveDot {{ color: {MC['accent']}; font-size: 10pt; }}
 
+/* ---- left column: Source dataset and Transfer settings ---- */
+QFrame#SideCard {{ background: {MC['card']}; border: 1px solid {MC['border']}; border-radius: 10px; }}
+QFrame#SideCard QLabel {{ background: transparent; }}
+QFrame#SourceHero {{ background: {MC['field']}; border: 1px solid {MC['border']}; border-radius: 8px; }}
+QLabel#SourceSub {{ color: {MC['muted']}; font-family: "{MONO}"; font-size: 8pt; }}
+QLabel#SourceValue {{ color: {MC['ink']}; font-family: "{MONO}"; font-size: 9.5pt; }}
+QLabel#SourceTotal {{ color: {MC['ink']}; font-family: "{MONO}"; font-size: 10pt; font-weight: 700; }}
+QLabel#Coordinates {{ color: {MC['text']}; font-family: "{MONO}"; font-size: 8.5pt; background: transparent; }}
+QScrollArea#CoordinateList {{ background: {MC['field']}; border: 1px solid {MC['border']}; border-radius: 8px; }}
+QScrollArea#CoordinateList > QWidget > QWidget {{ background: {MC['field']}; }}
+QScrollArea#CoordinateList QLabel#Coordinates {{ padding: 8px 10px; }}
+QFrame#CardLine {{ background: {MC['border']}; border: none; }}
+
 /* ---- stat tiles ---- */
 QFrame#StatTiles {{ background: transparent; border: none; border-top: 1px solid {MC['border']};
     border-bottom: 1px solid {MC['border']}; border-radius: 0; }}
@@ -152,7 +167,6 @@ QLabel#StatValue {{ color: {MC['ink']}; font-family: "{MONO}"; font-size: 14pt; 
 QLabel#LegendSpeed {{ color: {MC['accent_text']}; font-size: 9pt; }}
 QLabel#LegendAverage {{ color: {MC['second']}; font-size: 9pt; }}
 QLabel#ChartCaption {{ color: {MC['subtle']}; font-family: "{MONO}"; font-size: 7.5pt; letter-spacing: 1px; }}
-QFrame#ChunkBar {{ background: transparent; border: none; border-top: 1px solid {MC['border']}; border-radius: 0; }}
 QLabel#ChunkSetting {{ color: {MC['text']}; font-family: "{MONO}"; font-size: 9pt; }}
 
 /* ---- buttons ---- */
@@ -249,13 +263,38 @@ class DownloadView(QWidget):
             column.addWidget(title)
             column.addWidget(subtitle)
         column.addWidget(self.banner)
-        column.addWidget(self._build_modern_stats() if self._modern else self._build_stats())
         self.queued = CollapsibleSection("QUEUED", "Nothing is downloading. Start a download from Query Input.")
         self.paused = CollapsibleSection("PAUSED", "No paused downloads.")
         self.completed = CollapsibleSection("COMPLETED HISTORY", "Finished downloads appear here.")
-        for section in (self.queued, self.paused, self.completed):
-            column.addWidget(section)
-        column.addStretch(1)
+        sections = (self.queued, self.paused, self.completed)
+        if self._modern:
+            # Source dataset and transfer settings on the left, the live transfer and the jobs on the right.
+            self.source = SourceCard()
+            side = QVBoxLayout()
+            side.setSpacing(16)
+            side.addWidget(self.source)
+            side.addWidget(self._build_transfer_settings())
+            side.addStretch(1)
+            side_widget = QWidget()
+            side_widget.setLayout(side)
+            side_widget.setFixedWidth(SIDE_WIDTH)
+            main = QVBoxLayout()
+            main.setSpacing(16)
+            main.addWidget(self._build_modern_stats())
+            for section in sections:
+                main.addWidget(section)
+            main.addStretch(1)
+            body = QHBoxLayout()
+            body.setSpacing(16)
+            body.addWidget(side_widget, 0, Qt.AlignmentFlag.AlignTop)
+            body.addLayout(main, 1)
+            column.addLayout(body, 1)
+        else:
+            self.source = None
+            column.addWidget(self._build_stats())
+            for section in sections:
+                column.addWidget(section)
+            column.addStretch(1)
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -362,24 +401,33 @@ class DownloadView(QWidget):
         plot.addLayout(legend)
         plot.addWidget(self.chart, 1)
 
-        self.chunk_setting = QLabel(objectName="ChunkSetting")
-        self.change_chunk = QPushButton("Change…", objectName="SecondaryButton")
-        self.change_chunk.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.change_chunk.setToolTip("Chunk size for downloads started from now on")
-        bar = QFrame(objectName="ChunkBar")
-        setting = QHBoxLayout(bar)
-        setting.setContentsMargins(18, 10, 18, 12)
-        setting.addWidget(self.chunk_setting)
-        setting.addStretch(1)
-        setting.addWidget(self.change_chunk)
-
         layout = QVBoxLayout(card)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         layout.addLayout(heading)
         layout.addWidget(tiles)
         layout.addLayout(plot, 1)
-        layout.addWidget(bar)
+        return card
+
+    def _build_transfer_settings(self) -> QFrame:
+        """The chunk size for new downloads (modern layout's left column)."""
+        card = QFrame(objectName="SideCard")
+        self.chunk_setting = QLabel(objectName="ChunkSetting")
+        self.change_chunk = QPushButton("Change…", objectName="SecondaryButton")
+        self.change_chunk.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.change_chunk.setToolTip("Chunk size for downloads started from now on")
+        value = QHBoxLayout()
+        value.addWidget(self.chunk_setting, 1)
+        value.addWidget(self.change_chunk)
+        hint = QLabel("Used for downloads started from now on.", objectName="Muted")
+        hint.setWordWrap(True)
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(16, 14, 16, 16)
+        layout.setSpacing(10)
+        layout.addWidget(QLabel("Transfer settings", objectName="CardTitle"))
+        layout.addWidget(QLabel("CHUNK SIZE", objectName="StatName"))
+        layout.addLayout(value)
+        layout.addWidget(hint)
         self.change_chunk.clicked.connect(self.change_chunk_size)
         return card
 
@@ -424,6 +472,8 @@ class DownloadView(QWidget):
             self._remove_row(job_id)
 
         latest = jobs[-1] if jobs else None
+        if self.source is not None:
+            self.source.show_job(running or latest)
         area = latest.request.aoi_name if latest and latest.request and latest.request.aoi_name else ""
         self.location.setText(f"GEE-Assist  |  Location: {area}" if area else "GEE-Assist")
 
