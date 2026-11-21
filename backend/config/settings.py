@@ -47,8 +47,9 @@ class Settings:
     # Google Cloud project registered for Earth Engine (dataset downloads).
     gee_project: str = ""
     # Base URL of the GEE-Assist website (GEE-Assist-Web): its community page takes ratings,
-    # feedback and suggestions.
-    web_app_url: str = "http://localhost:5173"
+    # feedback and suggestions. Deployed site by default; override with WEB_APP_URL in .env
+    # (e.g. http://localhost:5173) to use a copy run on this computer.
+    web_app_url: str = "https://gee-assist-web.vercel.app"
 
 
 _UNIT_SECONDS = {"s": 1, "m": 60, "h": 3600, "d": 86400}

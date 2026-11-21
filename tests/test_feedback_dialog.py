@@ -33,8 +33,8 @@ def test_the_website_address_comes_from_the_settings(monkeypatch):
         get_settings.cache_clear()
 
 
-def test_the_default_website_is_the_local_dev_server():
-    assert Settings().web_app_url == "http://localhost:5173"
+def test_the_default_website_is_the_deployed_site():
+    assert Settings().web_app_url == "https://gee-assist-web.vercel.app"
 
 
 def test_an_unknown_tab_is_refused():

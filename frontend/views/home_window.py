@@ -87,6 +87,7 @@ FEEDBACK_DELAY_MS = 800  # the explanation is drawn (and seen) before the modal 
 # Why a project is needed (the first lines of the "A project is needed" message).
 DOWNLOAD_NEEDS_PROJECT = "Datasets are downloaded into a project's downloads folder."
 EXPLANATION_NEEDS_PROJECT = "AI explanations are made from the analysis results saved in a project."
+QUERY_NEEDS_PROJECT = "A request is filled for the open project: its data is downloaded into the project's folder."
 
 
 class SideBarHost(QWidget):
@@ -463,6 +464,10 @@ class HomeWindow(QMainWindow):
         self._analysis_since_dashboard = True
 
     def show_query_input(self) -> None:
+        # The parameter form is always for the open project, so ask for one first; stay
+        # where we are if the user does not create or open a project.
+        if not self.ensure_project(QUERY_NEEDS_PROJECT):
+            return
         self._show_page(self.query_input)
 
     def show_downloads(self) -> None:

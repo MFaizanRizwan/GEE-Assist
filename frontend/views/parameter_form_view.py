@@ -1229,9 +1229,15 @@ class ParameterFormView(QWidget):
         if result.is_valid:
             self.status_banner.show_success(result.message)
         else:
-            # problems with fields not on the page (e.g. an analysis set from the terminal) go in the banner
-            elsewhere = [message for key, message in result.errors.items() if key not in self._error_labels]
-            self.status_banner.show_error(" ".join([result.message, *elsewhere]).strip())
+            # Each field's error already shows under the field (and in the "Still needed" links),
+            # so the banner would only repeat it. Keep the banner for errors that have no field on
+            # the page (e.g. an analysis set from the terminal); otherwise leave it empty.
+            elsewhere = [message for key, message in result.errors.items()
+                         if message and key not in self._error_labels]
+            if elsewhere:
+                self.status_banner.show_error(" ".join(elsewhere).strip())
+            else:
+                self.status_banner.clear()
 
     def _set_field_error(self, key: str, message: str) -> None:
         label = self._error_labels[key]
@@ -1263,6 +1269,9 @@ class ParameterFormView(QWidget):
             return
         missing = self.missing_fields()
         labels = dict(REQUIRED_FIELDS)
+        # The folder is always the open project's: an empty one means no project is open,
+        # so name the actual fix rather than a "Project folder" field the user cannot type in.
+        labels["output_dir"] = "Create or open a project"
         if missing:
             links = "  ·  ".join(
                 f'<a href="{key}" style="color:{_NEEDED}; text-decoration:underline;">{labels[key]}</a>'

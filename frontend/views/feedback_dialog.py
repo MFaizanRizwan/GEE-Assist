@@ -1,7 +1,7 @@
 """Ask the user to rate GEE-Assist, send feedback or suggest a feature.
 
 The choice opens the matching tab of the website's community page in the browser,
-e.g. ``http://localhost:5173/community?tab=feedback`` (the address is ``WEB_APP_URL``).
+e.g. ``https://gee-assist-web.vercel.app/community?tab=feedback`` (the address is ``WEB_APP_URL``).
 The tabs are the website's: ``rate``, ``feedback`` and ``suggest``.
 """
 
