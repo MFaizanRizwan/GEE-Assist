@@ -427,6 +427,8 @@ M_ACCENT = "#A6E22E"        # lime accent
 M_ACCENT_DK = "#8CC81F"
 M_ACCENT_SOFT = "#1B2A1C"   # active tab / selection tint
 M_DISABLED_BG = "#141E1A"
+M_NEEDED = "#F5B83D"         # amber: required field still empty
+M_ERROR = "#FF8A80"
 
 MODERN_FORM_STYLESHEET = f"""
 #ParameterForm {{ background: {M_MAP_BG}; }}
@@ -448,6 +450,13 @@ QPushButton#ModernTab {{
 }}
 QPushButton#ModernTab:hover {{ color: {M_TEXT}; background: {M_ACCENT_SOFT}; }}
 QPushButton#ModernTab:checked {{ color: {M_ACCENT}; border-bottom: 2px solid {M_ACCENT}; }}
+QPushButton#ModernTab[state="missing"] {{ color: {M_NEEDED}; }}
+QPushButton#ModernTab[state="missing"]:checked {{ border-bottom: 2px solid {M_NEEDED}; }}
+QPushButton#ModernTab[state="error"] {{ color: {M_ERROR}; }}
+QPushButton#ModernTab[state="error"]:checked {{ border-bottom: 2px solid {M_ERROR}; }}
+
+/* ---- "Still needed: …" links above the Submit button ---- */
+#ModernFooter QLabel#RequiredList {{ font-size: 9pt; }}
 
 /* ---- cards blend into the dark panel ---- */
 #ModernPanel QFrame#SectionCard {{ background: transparent; border: none; border-radius: 0; }}

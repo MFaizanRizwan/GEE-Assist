@@ -5,10 +5,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from PyQt6.QtCore import QDate, Qt, pyqtSignal
+from PyQt6.QtCore import QDate, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QAbstractItemView,
+    QBoxLayout,
     QButtonGroup,
     QComboBox,
     QDateEdit,
@@ -48,7 +49,7 @@ from backend.dto import FormDTO, PlaceDTO, ValidationDTO
 from backend.config.limits import MAX_QUERY_LENGTH
 from backend.exceptions import GeeAssistError
 from frontend import form_theme as theme
-from frontend import layout_mode
+from frontend import layout_mode, palette
 from frontend.aoi_geometry import (
     bbox_of,
     estimate_download,
@@ -116,6 +117,27 @@ def _segment_button(text: str, position: str) -> QPushButton:
 
 NO_PROJECT_FOLDER = "Create or open a project: downloads are saved in its downloads folder"
 
+# Fields that must be filled before the parameters can be submitted, in the order they are listed.
+REQUIRED_FIELDS = (
+    ("aoi", "Area of interest"),
+    ("dataset", "Dataset"),
+    ("bands", "Bands"),
+    ("output_dir", "Project folder"),
+)
+# Modern layout: the tab each field is on (Area, Data, Time, Output).
+TAB_NAMES = ("Area", "Data", "Time", "Output")
+FIELD_TABS = {"aoi": 0, "dataset": 1, "bands": 1, "scale": 1, "max_cloud_cover": 1, "composite": 1,
+              "dates": 2, "crs": 3, "output_dir": 3}
+FIELD_ORDER = ("aoi", "dataset", "bands", "scale", "max_cloud_cover", "composite", "dates", "crs", "output_dir")
+
+# Responsive layout
+MODERN_PANEL_WIDTH = 440
+MODERN_PANEL_MIN_WIDTH = 340
+SHORT_PAGE = 600        # below this height the modern panel header drops its subtitle
+NARROW_PAGE = 900       # below this width the classical Time and Output cards stack
+_NEEDED = "#F5B83D" if layout_mode.is_modern() or palette.IS_DARK else "#B7791F"   # amber: still to fill
+_DONE = theme.M_ACCENT if layout_mode.is_modern() else theme.SUCCESS
+
 
 class ParameterFormView(QWidget):
     """Collects every parameter GEE needs to fetch data, validates and keeps it."""
@@ -144,6 +166,14 @@ class ParameterFormView(QWidget):
         # ---- action widgets, shared by both layouts
         self.estimate_label = hint_label()  # download size; placed by whichever layout is built
         self.status_banner = StatusBanner()
+        # "Still needed: Area of interest · Bands": each item is a link to that field.
+        self.required_label = QLabel()
+        self.required_label.setObjectName("RequiredList")
+        self.required_label.setTextFormat(Qt.TextFormat.RichText)
+        self.required_label.setWordWrap(True)
+        self.required_label.linkActivated.connect(self.go_to_field)
+        self._field_errors: set[str] = set()   # fields whose last validation failed
+        self._modern_tab_buttons: list[QPushButton] = []
         self.reset_button = QPushButton("Reset")
         self.reset_button.setObjectName("SecondaryButton")
         self.submit_button = QPushButton("Submit Parameters")
@@ -178,6 +208,9 @@ class ParameterFormView(QWidget):
         self.bands_combo.selection_changed.connect(self._update_estimate)
         self.scale_spin.valueChanged.connect(self._update_estimate)
         self.reset_button.clicked.connect(self.reset)
+        self.dataset_combo.currentIndexChanged.connect(self._update_required)
+        self.output_dir_edit.textChanged.connect(self._update_required)
+        self._aoi_mode.idClicked.connect(self._update_required)
         self.submit_button.clicked.connect(self._on_submit)
 
         # Natural-language assistant (UC-02): fills this form via Gemini. The
@@ -186,6 +219,7 @@ class ParameterFormView(QWidget):
         self.assistant.submitted.connect(self._on_query_submitted)
 
         self.reset()
+        self._update_required()
 
     # ----------------------------------------------------------- assembly (classical)
     def _assemble_classic(self) -> None:
@@ -198,6 +232,7 @@ class ParameterFormView(QWidget):
 
         # ---- time range and output share one row
         time_and_output = QHBoxLayout()
+        self._time_output_row = time_and_output   # stacks on narrow pages (see resizeEvent)
         time_and_output.setSpacing(14)
         time_and_output.addWidget(self._build_time_group(), 2)
         time_and_output.addWidget(self._build_output_group(), 3)
@@ -227,8 +262,11 @@ class ParameterFormView(QWidget):
         buttons = QHBoxLayout(action_bar)
         buttons.setContentsMargins(22, 10, 22, 10)
         buttons.setSpacing(10)
-        buttons.addWidget(self.status_banner, 1)
-        buttons.addStretch(0)
+        messages = QVBoxLayout()
+        messages.setSpacing(4)
+        messages.addWidget(self.status_banner)
+        messages.addWidget(self.required_label)
+        buttons.addLayout(messages, 1)
         buttons.addWidget(self.reset_button)
         buttons.addWidget(self.submit_button)
 
@@ -237,6 +275,7 @@ class ParameterFormView(QWidget):
         layout.setSpacing(0)
         layout.addWidget(scroll, 1)
         layout.addWidget(action_bar)
+        self._form_scroll = scroll
 
     # ------------------------------------------------------------- assembly (modern)
     def _modern_tab_button(self, text: str, index: int) -> QPushButton:
@@ -246,6 +285,7 @@ class ParameterFormView(QWidget):
         button.setCursor(Qt.CursorShape.PointingHandCursor)
         button.clicked.connect(lambda: self._modern_stack.setCurrentIndex(index))
         self._modern_tabs.addButton(button, index)
+        self._modern_tab_buttons.append(button)
         return button
 
     @staticmethod
@@ -265,7 +305,11 @@ class ParameterFormView(QWidget):
         layout = QVBoxLayout(page)
         layout.setContentsMargins(18, 16, 18, 16)
         layout.setSpacing(12)
+        # The file / shape summary goes under the toggle: beside it the row is wider than the panel.
+        toggle_row.removeWidget(self.aoi_summary_stack)
+        toggle_row.addStretch(1)
         layout.addLayout(toggle_row)
+        layout.addWidget(self.aoi_summary_stack)
         layout.addWidget(self.place_box)
         layout.addWidget(self.coords_box)
 
@@ -288,6 +332,7 @@ class ParameterFormView(QWidget):
         self.vertices_table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
         self.vertices_table.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.vertices_table.setAlternatingRowColors(True)
+        self.vertices_table.setMinimumHeight(140)  # the tab scrolls on short screens instead of crushing it
         header = self.vertices_table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
@@ -371,7 +416,6 @@ class ParameterFormView(QWidget):
 
     def _assemble_modern(self) -> None:
         """Map-first layout: a full-height map beside a dark panel whose tabs group the parameters."""
-        self.submit_button.setText("Run analysis  →")
 
         # Build the same cards as the classical layout; the big map is then pulled out
         # of the Area card so it can fill the left side at all times.
@@ -399,14 +443,14 @@ class ParameterFormView(QWidget):
         self._modern_tabs = QButtonGroup(self)
         self._modern_tabs.setExclusive(True)
         self._modern_stack = QStackedWidget()
-        self._modern_stack.addWidget(aoi_card)                         # Area (manages its own space)
+        self._modern_stack.addWidget(self._modern_page(aoi_card))      # Area (scrolls on short screens)
         self._modern_stack.addWidget(self._modern_page(dataset_card))  # Data
         self._modern_stack.addWidget(self._modern_page(time_card))     # Time
         self._modern_stack.addWidget(self._modern_page(output_card))   # Output
 
         tab_strip = QHBoxLayout()
         tab_strip.setSpacing(0)
-        for index, name in enumerate(("Area", "Data", "Time", "Output")):
+        for index, name in enumerate(TAB_NAMES):
             tab_strip.addWidget(self._modern_tab_button(name, index))
         self._modern_tabs.button(0).setChecked(True)
 
@@ -417,6 +461,7 @@ class ParameterFormView(QWidget):
         footer_layout.setContentsMargins(18, 12, 18, 16)
         footer_layout.setSpacing(10)
         footer_layout.addWidget(self.status_banner)
+        footer_layout.addWidget(self.required_label)
         footer_buttons = QHBoxLayout()
         footer_buttons.setSpacing(10)
         footer_buttons.addWidget(self.reset_button)
@@ -425,7 +470,8 @@ class ParameterFormView(QWidget):
 
         panel = QFrame()
         panel.setObjectName("ModernPanel")
-        panel.setFixedWidth(440)
+        panel.setFixedWidth(MODERN_PANEL_WIDTH)
+        self._modern_panel = panel
         panel_layout = QVBoxLayout(panel)
         panel_layout.setContentsMargins(0, 0, 0, 0)
         panel_layout.setSpacing(0)
@@ -1103,6 +1149,7 @@ class ParameterFormView(QWidget):
     def _update_estimate(self, *_args) -> None:
         """Rough GeoTIFF size and how many GEE requests (tiles) the download needs."""
         self._refresh_vertices()  # modern layout only; no-op otherwise
+        self._update_required()
         if not hasattr(self, "estimate_label"):
             return  # still building the form
         aoi, _name = self._current_aoi()
@@ -1169,9 +1216,14 @@ class ParameterFormView(QWidget):
         self._show_validation(result)
         if result.is_valid:
             self.request_kept.emit(form)
+        else:
+            first = next((key for key in FIELD_ORDER if key in result.errors), None)
+            if first:
+                self.go_to_field(first)  # take the user straight to the first field to fix
         return result
 
     def _show_validation(self, result: ValidationDTO) -> None:
+        self._field_errors = {key for key, message in result.errors.items() if message}
         for key in self._error_labels:
             self._set_field_error(key, result.errors.get(key, ""))
         if result.is_valid:
@@ -1187,3 +1239,98 @@ class ParameterFormView(QWidget):
         label.setVisible(bool(message))
         for target in self._error_targets.get(key, ()):
             set_invalid(target, bool(message))
+        if not message:
+            self._field_errors.discard(key)
+        self._update_required()
+
+    # ------------------------------------------------------------- required fields
+    def missing_fields(self) -> list[str]:
+        """Keys of the required fields that are still empty, in REQUIRED_FIELDS order."""
+        if not hasattr(self, "output_dir_edit") or not hasattr(self, "bands_combo"):
+            return []  # still building the form
+        aoi, _name = self._current_aoi()
+        empty = {
+            "aoi": not aoi,
+            "dataset": not self.dataset_combo.currentData(),
+            "bands": not self.bands_combo.checked(),
+            "output_dir": not self.output_dir_edit.text().strip(),
+        }
+        return [key for key, _label in REQUIRED_FIELDS if empty[key]]
+
+    def _update_required(self, *_args) -> None:
+        """Refresh the "Still needed" links and mark the tabs that need attention."""
+        if not hasattr(self, "required_label"):
+            return
+        missing = self.missing_fields()
+        labels = dict(REQUIRED_FIELDS)
+        if missing:
+            links = "  ·  ".join(
+                f'<a href="{key}" style="color:{_NEEDED}; text-decoration:underline;">{labels[key]}</a>'
+                for key in missing
+            )
+            self.required_label.setText(f'<span style="color:{_NEEDED};">● Still needed:</span>&nbsp; {links}')
+            self.required_label.setToolTip("Click a field to go to it.")
+        else:
+            self.required_label.setText(f'<span style="color:{_DONE};">✓ All required fields are filled.</span>')
+            self.required_label.setToolTip("")
+
+        for index, button in enumerate(self._modern_tab_buttons):
+            keys = [key for key, tab in FIELD_TABS.items() if tab == index]
+            if any(key in self._field_errors for key in keys):
+                state = "error"
+            elif any(key in missing for key in keys):
+                state = "missing"
+            else:
+                state = ""
+            if button.property("state") != state:
+                button.setProperty("state", state)
+                button.setText(f"{TAB_NAMES[index]}  ●" if state else TAB_NAMES[index])
+                button.setToolTip({"error": "Some fields here need fixing",
+                                   "missing": "Required fields here are still empty"}.get(state, ""))
+                button.style().unpolish(button)
+                button.style().polish(button)
+
+    def _field_widget(self, key: str) -> QWidget | None:
+        """The widget to focus for ``key``."""
+        if key == "aoi":
+            return self.import_button if self.aoi_file_toggle.isChecked() else self.place_edit
+        if key == "output_dir":
+            return self.output_dir_edit if not self._modern else self._error_labels.get("output_dir")
+        targets = self._error_targets.get(key, ())
+        return targets[0] if targets else self._error_labels.get(key)
+
+    def go_to_field(self, key: str) -> None:
+        """Show the field ``key`` (switching tab in the modern layout), scroll to it and focus it."""
+        if self._modern and key in FIELD_TABS:
+            index = FIELD_TABS[key]
+            self._modern_tabs.button(index).setChecked(True)
+            self._modern_stack.setCurrentIndex(index)
+        if key == "output_dir" and not self.output_dir_edit.text().strip():
+            self.status_banner.show_error(NO_PROJECT_FOLDER + ".")
+        widget = self._field_widget(key)
+        if widget is None:
+            return
+
+        def reveal() -> None:
+            parent = widget.parentWidget()
+            while parent is not None and not isinstance(parent, QScrollArea):
+                parent = parent.parentWidget()
+            if parent is not None and widget.isVisible():
+                parent.ensureWidgetVisible(widget, 40, 60)
+            if widget.focusPolicy() != Qt.FocusPolicy.NoFocus and widget.isEnabled():
+                widget.setFocus(Qt.FocusReason.OtherFocusReason)
+
+        QTimer.singleShot(0, reveal)  # after the tab switch is laid out
+
+    # ------------------------------------------------------------- responsive layout
+    def resizeEvent(self, event) -> None:  # noqa: N802 (Qt API)
+        super().resizeEvent(event)
+        if self._modern:
+            width = max(MODERN_PANEL_MIN_WIDTH, min(MODERN_PANEL_WIDTH, int(self.width() * 0.42)))
+            self._modern_panel.setFixedWidth(width)
+            self.modern_subtitle.setVisible(self.height() >= SHORT_PAGE)
+        else:
+            narrow = self.width() < NARROW_PAGE
+            self._time_output_row.setDirection(
+                QBoxLayout.Direction.TopToBottom if narrow else QBoxLayout.Direction.LeftToRight
+            )
