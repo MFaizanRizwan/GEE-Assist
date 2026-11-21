@@ -336,6 +336,8 @@ class HomeWindow(QMainWindow):
         dashboard = self.dashboard
         dashboard.open_recent.connect(self.projects.open_folder)
         dashboard.open_result.connect(self.show_viewer)  # a result map on the dashboard
+        dashboard.new_project_requested.connect(self.projects.new_project)  # dashboard "Create project"
+        dashboard.open_project_requested.connect(self.projects.open_project)  # dashboard "Open project"
         self.query_input_button.clicked.connect(self.show_query_input)
         self.downloads_button.clicked.connect(self.show_downloads)
         self.analysis_button.clicked.connect(self.show_analysis)

@@ -2,9 +2,9 @@
 
 On the left, from the top: a greeting, the open project's name as a heading right under it,
 and that project's latest analysis results. On the right edge of the page: the three most recent
-projects. Everything starts at the top left; all text is left-aligned. The dashboard has no buttons: pages are
-opened from the side bar, projects are created, opened, renamed, moved and closed from the
-File menu, and clicking a recent project opens it.
+projects. Everything starts at the top left; all text is left-aligned. "Create project" and
+"Open project" buttons sit at the top left (the same actions are also in the File menu, and
+clicking a recent project opens it); other pages are opened from the side bar.
 """
 
 from __future__ import annotations
@@ -64,6 +64,19 @@ QFrame#RecentProject {{
 QFrame#RecentProject:hover {{ border-color: {theme.LEAF}; }}
 QFrame#RecentProject[current="true"] {{ border-color: {theme.LEAF}; }}
 QFrame#ResultRow {{ border: none; border-top: 1px solid {theme.BORDER}; border-radius: 0; background: transparent; }}
+QPushButton#PrimaryButton {{
+    color: {theme.WHITE}; border: none; border-radius: 9px; padding: 9px 20px; font-weight: 600;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {theme.LEAF}, stop:1 {theme.OCEAN});
+}}
+QPushButton#PrimaryButton:hover {{
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {theme.LEAF_DARK}, stop:1 {theme.OCEAN_DARK});
+}}
+QPushButton#SecondaryButton {{
+    color: {theme.INK}; background: {theme.WHITE}; border: 1px solid {theme.BORDER_STRONG};
+    border-radius: 9px; padding: 8px 18px; font-weight: 600;
+}}
+QPushButton#SecondaryButton:hover {{ background: {theme.FOAM}; border-color: {theme.BORDER_HOVER}; }}
+QPushButton#SecondaryButton:pressed {{ background: {theme.MINT}; }}
 """
 
 
@@ -397,8 +410,10 @@ class DashboardView(QWidget):
     map emits ``open_result``. With a ``facade``, the open project's result maps are drawn (in the
     background) further down the page."""
 
-    open_recent = pyqtSignal(str)  # a recent project's folder
-    open_result = pyqtSignal(str)  # a result GeoTIFF to open in the viewer
+    open_recent = pyqtSignal(str)        # a recent project's folder
+    open_result = pyqtSignal(str)        # a result GeoTIFF to open in the viewer
+    new_project_requested = pyqtSignal()  # "Create project" button
+    open_project_requested = pyqtSignal()  # "Open project" button
 
     def __init__(self, facade: IBusinessFacade | None = None, parent: QWidget | None = None):
         super().__init__(parent)
@@ -410,6 +425,22 @@ class DashboardView(QWidget):
         self.result_rows: list[ResultRow] = []
 
         self.greeting = QLabel(objectName="Title")
+
+        # ---- quick actions, top-left: create or open a project
+        self.create_project_button = QPushButton("＋  Create project", objectName="PrimaryButton")
+        self.create_project_button.setToolTip("Start a new project (its downloads and analysis results are kept in it)")
+        self.open_project_button = QPushButton("Open project", objectName="SecondaryButton")
+        self.open_project_button.setToolTip("Open an existing project folder on this computer")
+        for button in (self.create_project_button, self.open_project_button):
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.create_project_button.clicked.connect(self.new_project_requested)
+        self.open_project_button.clicked.connect(self.open_project_requested)
+        self.project_actions_row = QHBoxLayout()
+        self.project_actions_row.setSpacing(10)
+        self.project_actions_row.addWidget(self.create_project_button)
+        self.project_actions_row.addWidget(self.open_project_button)
+        self.project_actions_row.addStretch(1)
+
         self.project_heading = ProjectHeading()
 
         results_panel, _, self.results_list = _panel("Recent analysis results")  # of the open project
@@ -426,7 +457,9 @@ class DashboardView(QWidget):
         column = QVBoxLayout()
         column.setSpacing(6)
         column.addWidget(self.greeting)
-        column.addSpacing(10)
+        column.addSpacing(12)
+        column.addLayout(self.project_actions_row)  # create / open a project, top-left
+        column.addSpacing(16)
         column.addWidget(self.project_heading)  # just after the welcome
         column.addSpacing(20)
         column.addWidget(results_panel)

@@ -173,11 +173,30 @@ def test_signup_details_open_for_the_signed_in_user(home, monkeypatch):
 
 
 def test_the_dashboard_has_no_workspace_cards(home):
-    """The pages are opened from the side bar: the dashboard does not repeat them."""
+    """The pages are opened from the side bar: the dashboard does not repeat them.
+
+    The only buttons are the project quick-actions (Create / Open project) and "See more".
+    """
     texts = [label.text() for label in home.dashboard.findChildren(QLabel)]
     for name in ("Open Query Input", "Open Downloads", "Open Analysis", "Open Reports", "Coming soon"):
         assert all(name not in text for text in texts)
-    assert home.dashboard.findChildren(QPushButton) == [home.dashboard.see_more]  # only "See more"
+    buttons = set(home.dashboard.findChildren(QPushButton))
+    assert buttons == {home.dashboard.create_project_button, home.dashboard.open_project_button,
+                       home.dashboard.see_more}
+
+
+def test_the_dashboard_create_and_open_project_buttons(app):
+    """The top-left buttons emit the create / open project signals the window wires up."""
+    from frontend.views.dashboard_view import DashboardView
+
+    dashboard = DashboardView()
+    created, opened = [], []
+    dashboard.new_project_requested.connect(lambda: created.append(1))
+    dashboard.open_project_requested.connect(lambda: opened.append(1))
+    dashboard.create_project_button.click()
+    dashboard.open_project_button.click()
+    assert created == [1] and opened == [1]
+    dashboard.deleteLater()
 
 
 def test_the_side_bar_opens_the_analysis_and_downloads_pages(home):
