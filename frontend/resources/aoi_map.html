@@ -45,6 +45,20 @@
   ).addTo(map);
   L.control.scale().addTo(map);
 
+  // Keep Leaflet's size in sync with the container. Qt creates (and, in the modern
+  // layout, reparents) the web view at a size that changes after the map is built, so
+  // without this Leaflet keeps its first size and only tiles part of the widget,
+  // leaving the rest grey. A ResizeObserver reloads tiles for the real size instead.
+  function refreshMapSize() { map.invalidateSize(false); }
+  window.addEventListener('resize', refreshMapSize);
+  if (window.ResizeObserver) {
+    var resizePending = null;
+    new ResizeObserver(function () {
+      if (resizePending) cancelAnimationFrame(resizePending);
+      resizePending = requestAnimationFrame(refreshMapSize);  // debounced: avoids the loop warning
+    }).observe(document.getElementById('map'));
+  }
+
   // Layers: user-drawn shape (draw mode) and imported GeoJSON outline (file mode)
   var drawn = new L.FeatureGroup().addTo(map);
   var footprint = L.geoJSON(null, { style: { color: '#e67e22', weight: 2, fillOpacity: 0.15 } }).addTo(map);

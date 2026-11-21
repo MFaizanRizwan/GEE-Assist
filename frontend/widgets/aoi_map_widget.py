@@ -146,6 +146,12 @@ class AoiMapWidget(QWidget):
         # while the cursor is over the map.
         event.accept()
 
+    def showEvent(self, event) -> None:  # noqa: N802 (Qt API)
+        # When the page becomes visible (e.g. navigating to Query Input in the stacked
+        # pages), make Leaflet recheck its size so tiles fill the whole widget.
+        super().showEvent(event)
+        self._run("if (typeof map !== 'undefined') { map.invalidateSize(false); }")
+
     # ------------------------------------------------------------- public API
     @property
     def available(self) -> bool:
