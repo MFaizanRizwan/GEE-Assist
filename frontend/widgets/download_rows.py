@@ -210,9 +210,10 @@ class JobRow(QFrame):
         self.eta.setText(f"ETA: {format_eta(job.eta_seconds)}" if job.status == JOB_RUNNING else "")
         self.size.setText(f"{format_size(job.downloaded_bytes)} / {format_size(job.total_bytes)}")
         self.bar.setValue(round(job.progress * 1000))
-        self.bar.setProperty("state", job.status)
-        self.bar.style().unpolish(self.bar)
-        self.bar.style().polish(self.bar)
+        for widget in (self.bar, self.status):  # the stylesheet colours them by state
+            widget.setProperty("state", job.status)
+            widget.style().unpolish(widget)
+            widget.style().polish(widget)
 
         self.error.setText(job.error)
         self.error.setVisible(bool(job.error))

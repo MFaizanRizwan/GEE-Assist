@@ -34,7 +34,7 @@ from backend.config.download_settings import MAX_CHUNK_SIZE_MB, MIN_CHUNK_SIZE_M
 from backend.dto import DownloadJobDTO, FormDTO
 from backend.dto.download_dto import JOB_COMPLETED, JOB_FAILED, JOB_PAUSED, JOB_QUEUED, JOB_RUNNING
 from backend.exceptions import GeeAssistError
-from frontend import form_theme, theme
+from frontend import form_theme, layout_mode, palette, theme
 from frontend.download_format import format_size, format_speed
 from frontend.widgets.download_rows import CollapsibleSection, CompletedRow, JobRow
 from frontend.widgets.form_parts import StatusBanner
@@ -92,6 +92,122 @@ QLabel#FooterText {{ color: {theme.MUTED}; font-size: 9pt; }}
 """
 
 
+# ----------------------------------------------------------------------------- modern layout
+# A transfer-manager look (View > Layout > Modern): flat cards, hairline borders, mono figures
+# and a lime accent. Unlike the modern query form it follows the chosen theme, so each theme
+# has its own set of colours with the same keys.
+_MODERN_COLORS = {
+    "light": dict(
+        page="#F4F6F3", card="#FFFFFF", field="#F8FAF7", border="#E3E8E2", border_strong="#CFD7CD",
+        border_hover="#AEBBAB", ink="#111A15", text="#2B3A33", muted="#5F6F67", subtle="#8A988F",
+        accent="#84CC16", accent_dk="#65A30D", accent_text="#4D7C0F", accent_soft="#F0F8E1",
+        on_accent="#132006", second="#0284C7", track="#E8EDE6", grid="#E3E8E2",
+        paused="#A3AFA6", failed="#E3A79F", error="#C0392B", success="#3F7A0C",
+    ),
+    "dark-green": dict(
+        page="#0B1210", card="#0E1613", field="#111B17", border="#25332C", border_strong="#324239",
+        border_hover="#45594E", ink="#F3F8F5", text="#E7EEEA", muted="#93A79D", subtle="#6E8278",
+        accent="#A6E22E", accent_dk="#8CC81F", accent_text="#A6E22E", accent_soft="#1B2A1C",
+        on_accent="#0E1613", second="#4FB3E8", track="#1B2621", grid="#1F2B26",
+        paused="#6E8278", failed="#D08378", error="#FF8A80", success="#A6E22E",
+    ),
+    "dark-grey": dict(
+        page="#111111", card="#181818", field="#1C1C1C", border="#2A2A2A", border_strong="#383838",
+        border_hover="#4D4D4D", ink="#F2F2F2", text="#D9D9D9", muted="#A0A0A0", subtle="#7A7A7A",
+        accent="#A6E22E", accent_dk="#8CC81F", accent_text="#A6E22E", accent_soft="#24291D",
+        on_accent="#111111", second="#5DB8EA", track="#262626", grid="#262626",
+        paused="#7A7A7A", failed="#D08A80", error="#FF8A80", success="#A6E22E",
+    ),
+}
+MC = _MODERN_COLORS.get(palette.THEME, _MODERN_COLORS["dark-green"])
+MONO = "Consolas"
+
+MODERN_STYLESHEET = f"""
+#DownloadPage, QWidget#DownloadContent {{ background: {MC['page']}; }}
+#DownloadPage QScrollArea {{ background: {MC['page']}; border: none; }}
+#DownloadPage QLabel {{ background: transparent; color: {MC['text']}; }}
+
+/* ---- header ---- */
+QLabel#PageEyebrow {{ color: {MC['muted']}; font-family: "{MONO}"; font-size: 8pt; letter-spacing: 1.5px; }}
+QLabel#PageTitle {{ color: {MC['ink']}; font-family: "{theme.SANS}"; font-size: 18pt; font-weight: 700; }}
+QLabel#PageSubtitle {{ color: {MC['muted']}; font-size: 9.5pt; }}
+
+/* ---- cards ---- */
+QFrame#StatsCard, QFrame#DownloadSection {{
+    background: {MC['card']}; border: 1px solid {MC['border']}; border-radius: 10px;
+}}
+QFrame#StatsCard QLabel, QFrame#DownloadSection QLabel {{ background: transparent; }}
+QLabel#CardTitle {{ color: {MC['ink']}; font-weight: 700; font-size: 10.5pt; }}
+QLabel#LiveDot {{ color: {MC['accent']}; font-size: 10pt; }}
+
+/* ---- stat tiles ---- */
+QFrame#StatTiles {{ background: transparent; border: none; border-top: 1px solid {MC['border']};
+    border-bottom: 1px solid {MC['border']}; border-radius: 0; }}
+QFrame#StatTile {{ background: transparent; border: none; border-right: 1px solid {MC['border']}; border-radius: 0; }}
+QFrame#StatTile[last="true"] {{ border-right: none; }}
+QLabel#StatName {{ color: {MC['muted']}; font-family: "{MONO}"; font-size: 7.5pt; letter-spacing: 1px; }}
+QLabel#StatValue {{ color: {MC['ink']}; font-family: "{MONO}"; font-size: 14pt; }}
+
+/* ---- chart legend and chunk setting ---- */
+QLabel#LegendSpeed {{ color: {MC['accent_text']}; font-size: 9pt; }}
+QLabel#LegendAverage {{ color: {MC['second']}; font-size: 9pt; }}
+QLabel#ChartCaption {{ color: {MC['subtle']}; font-family: "{MONO}"; font-size: 7.5pt; letter-spacing: 1px; }}
+QFrame#ChunkBar {{ background: transparent; border: none; border-top: 1px solid {MC['border']}; border-radius: 0; }}
+QLabel#ChunkSetting {{ color: {MC['text']}; font-family: "{MONO}"; font-size: 9pt; }}
+
+/* ---- buttons ---- */
+#DownloadPage QPushButton#SecondaryButton {{
+    color: {MC['text']}; background: {MC['field']}; border: 1px solid {MC['border_strong']};
+    border-radius: 7px; padding: 5px 6px; font-size: 9pt;
+}}
+#DownloadPage QPushButton#SecondaryButton:hover {{ background: {MC['accent_soft']}; border-color: {MC['border_hover']}; }}
+#DownloadPage QPushButton#SecondaryButton:pressed {{ background: {MC['accent_soft']}; }}
+#DownloadPage QPushButton#SecondaryButton:disabled {{ color: {MC['subtle']}; background: transparent; border-color: {MC['border']}; }}
+QPushButton#ViewButton {{
+    color: {MC['text']}; background: {MC['field']}; border: 1px solid {MC['border_strong']};
+    border-radius: 7px; padding: 0 14px; font-size: 9pt;
+}}
+QPushButton#ViewButton:hover {{ background: {MC['accent_soft']}; border-color: {MC['border_hover']}; }}
+QPushButton#ViewButton:disabled {{ color: {MC['subtle']}; background: transparent; border-color: {MC['border']}; }}
+QPushButton#OpenButton {{
+    color: {MC['on_accent']}; font-size: 10pt; font-weight: 700; border: none; border-radius: 7px; padding: 0;
+    background: {MC['accent']};
+}}
+QPushButton#OpenButton:hover {{ background: {MC['accent_dk']}; }}
+
+/* ---- sections (Queued, Paused, Completed history) ---- */
+QFrame#SectionHeader {{ background: transparent; border: none; border-radius: 0; }}
+QLabel#SectionHeaderText {{ color: {MC['ink']}; font-weight: 700; font-size: 10pt; letter-spacing: 0.8px; }}
+QToolButton#SectionToggle {{ border: 1px solid {MC['border_strong']}; border-radius: 6px; background: {MC['field']}; padding: 3px; }}
+QToolButton#SectionToggle:hover {{ border-color: {MC['border_hover']}; }}
+QWidget#SectionBody {{ background: transparent; }}
+#DownloadPage QLabel#Muted {{ color: {MC['muted']}; }}
+QFrame#JobRow {{ border: none; border-top: 1px solid {MC['border']}; border-radius: 0; background: transparent; }}
+QFrame#JobRow:hover {{ background: {MC['field']}; }}
+QLabel#SatelliteIcon {{ font-family: "Segoe UI Emoji"; font-size: 16pt; }}
+QLabel#JobTitle {{ color: {MC['ink']}; font-size: 10pt; font-weight: 700; }}
+QLabel#JobStatus {{ color: {MC['accent_text']}; font-family: "{MONO}"; font-size: 8.5pt; letter-spacing: 0.6px; }}
+QLabel#JobStatus[state="paused"], QLabel#JobStatus[state="queued"] {{ color: {MC['muted']}; }}
+QLabel#JobStatus[state="failed"] {{ color: {MC['error']}; }}
+QLabel#JobEta, QLabel#JobSize, QLabel#JobWhen {{ color: {MC['text']}; font-family: "{MONO}"; font-size: 9pt; }}
+QLabel#JobError {{ color: {MC['error']}; font-size: 9pt; }}
+QProgressBar#JobProgress {{ background: {MC['track']}; border: none; border-radius: 3px; }}
+QProgressBar#JobProgress::chunk {{ border-radius: 3px; background: {MC['accent']}; }}
+QProgressBar#JobProgress[state="paused"]::chunk {{ background: {MC['paused']}; }}
+QProgressBar#JobProgress[state="failed"]::chunk {{ background: {MC['failed']}; }}
+
+/* ---- footer ---- */
+QFrame#DownloadFooter {{ background: {MC['page']}; border-top: 1px solid {MC['border']}; }}
+QLabel#FooterText {{ color: {MC['muted']}; font-size: 8.5pt; }}
+
+/* ---- scrollbars ---- */
+#DownloadPage QScrollBar:vertical {{ background: transparent; width: 10px; margin: 2px; }}
+#DownloadPage QScrollBar::handle:vertical {{ background: {MC['border_strong']}; border-radius: 4px; min-height: 30px; }}
+#DownloadPage QScrollBar::handle:vertical:hover {{ background: {MC['border_hover']}; }}
+#DownloadPage QScrollBar::add-line, #DownloadPage QScrollBar::sub-line {{ height: 0; }}
+"""
+
+
 class DownloadView(QWidget):
     """Shows all downloads and lets the user pause, resume, retry, cancel and open them."""
 
@@ -101,7 +217,8 @@ class DownloadView(QWidget):
     def __init__(self, facade: IBusinessFacade, parent: QWidget | None = None):
         super().__init__(parent)
         self.setObjectName("DownloadPage")
-        self.setStyleSheet(STYLESHEET)
+        self._modern = layout_mode.is_modern()
+        self.setStyleSheet(MODERN_STYLESHEET if self._modern else STYLESHEET)
         self._facade = facade
         self._rows: dict[str, tuple[CollapsibleSection, QWidget]] = {}
         self._peak = 0.0
@@ -114,14 +231,25 @@ class DownloadView(QWidget):
         self.banner = StatusBanner()
         self.banner.setContentsMargins(10, 6, 10, 6)  # wrapped labels ignore stylesheet padding
 
-        content = QWidget()
+        content = QWidget(objectName="DownloadContent")
         column = QVBoxLayout(content)
         column.setContentsMargins(24, 20, 24, 20)
         column.setSpacing(14)
-        column.addWidget(title)
-        column.addWidget(subtitle)
+        if self._modern:
+            column.setContentsMargins(22, 18, 22, 18)
+            column.setSpacing(16)
+            heading = QVBoxLayout()
+            heading.setSpacing(2)
+            heading.addWidget(QLabel("TRANSFER MANAGER", objectName="PageEyebrow"))
+            heading.addWidget(title)
+            heading.addWidget(subtitle)
+            subtitle.setWordWrap(True)
+            column.addLayout(heading)
+        else:
+            column.addWidget(title)
+            column.addWidget(subtitle)
         column.addWidget(self.banner)
-        column.addWidget(self._build_stats())
+        column.addWidget(self._build_modern_stats() if self._modern else self._build_stats())
         self.queued = CollapsibleSection("QUEUED", "Nothing is downloading. Start a download from Query Input.")
         self.paused = CollapsibleSection("PAUSED", "No paused downloads.")
         self.completed = CollapsibleSection("COMPLETED HISTORY", "Finished downloads appear here.")
@@ -185,6 +313,76 @@ class DownloadView(QWidget):
         self.change_chunk.clicked.connect(self.change_chunk_size)
         return card
 
+    def _build_modern_stats(self) -> QFrame:
+        """The same figures as ``_build_stats``, laid out as a transfer-manager card:
+        a title row, a strip of stat tiles, the speed chart with its legend, and the chunk setting."""
+        card = QFrame(objectName="StatsCard")
+
+        heading = QHBoxLayout()
+        heading.setContentsMargins(18, 14, 18, 12)
+        heading.setSpacing(8)
+        heading.addWidget(QLabel("●", objectName="LiveDot"))
+        heading.addWidget(QLabel("Live transfer", objectName="CardTitle"))
+        heading.addStretch(1)
+
+        tiles = QFrame(objectName="StatTiles")
+        strip = QHBoxLayout(tiles)
+        strip.setContentsMargins(0, 0, 0, 0)
+        strip.setSpacing(0)
+        self.stats: dict[str, QLabel] = {}
+        names = ("CURRENT", "PEAK", "DOWNLOADED", "REMAINING", "DISK USAGE", "MERGING SPEED")
+        for index, name in enumerate(names):
+            tile = QFrame(objectName="StatTile")
+            tile.setProperty("last", index == len(names) - 1)
+            cell = QVBoxLayout(tile)
+            cell.setContentsMargins(16, 12, 16, 12)
+            cell.setSpacing(6)
+            cell.addWidget(QLabel(name, objectName="StatName"))
+            value = QLabel(NONE, objectName="StatValue")
+            cell.addWidget(value)
+            self.stats[name] = value
+            strip.addWidget(tile, 1)
+
+        self.chart = SpeedChart()
+        self.chart.setMinimumHeight(190)
+        self.chart.set_colors(
+            background=MC["card"], border=MC["card"], grid=MC["grid"],
+            speed=MC["accent"], average=MC["second"], radius=0,
+            tooltip="Download speed over the last minute (lime) and the download's average speed (blue)",
+        )
+        legend = QHBoxLayout()
+        legend.setSpacing(16)
+        legend.addWidget(QLabel("━  Download speed", objectName="LegendSpeed"))
+        legend.addWidget(QLabel("━  Average speed", objectName="LegendAverage"))
+        legend.addStretch(1)
+        legend.addWidget(QLabel("SPEED / LAST MINUTE", objectName="ChartCaption"))
+        plot = QVBoxLayout()
+        plot.setContentsMargins(18, 14, 18, 10)
+        plot.setSpacing(6)
+        plot.addLayout(legend)
+        plot.addWidget(self.chart, 1)
+
+        self.chunk_setting = QLabel(objectName="ChunkSetting")
+        self.change_chunk = QPushButton("Change…", objectName="SecondaryButton")
+        self.change_chunk.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.change_chunk.setToolTip("Chunk size for downloads started from now on")
+        bar = QFrame(objectName="ChunkBar")
+        setting = QHBoxLayout(bar)
+        setting.setContentsMargins(18, 10, 18, 12)
+        setting.addWidget(self.chunk_setting)
+        setting.addStretch(1)
+        setting.addWidget(self.change_chunk)
+
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        layout.addLayout(heading)
+        layout.addWidget(tiles)
+        layout.addLayout(plot, 1)
+        layout.addWidget(bar)
+        self.change_chunk.clicked.connect(self.change_chunk_size)
+        return card
+
     def _build_footer(self) -> QFrame:
         footer = QFrame(objectName="DownloadFooter")
         self.location = QLabel(objectName="FooterText")
@@ -240,13 +438,13 @@ class DownloadView(QWidget):
     def _on_connection(self, available: bool) -> None:
         if available:
             self.connection.setText("GEE Connection: Active")
-            self.connection.setStyleSheet(f"color: {theme.SUCCESS};")
+            self.connection.setStyleSheet(f"color: {MC['success'] if self._modern else theme.SUCCESS};")
         else:
             self.connection.setText(
                 "GEE Connection: not available (check GEE_PROJECT, `earthengine authenticate` "
                 "and that the Earth Engine API is enabled for the project)"
             )
-            self.connection.setStyleSheet(f"color: {theme.ERROR};")
+            self.connection.setStyleSheet(f"color: {MC['error'] if self._modern else theme.ERROR};")
 
     def _start_job(self, job: DownloadJobDTO) -> None:
         action = self._facade.retry_failed_chunks if job.status == JOB_FAILED else self._facade.resume_download

@@ -28,6 +28,20 @@ class SpeedChart(QWidget):
         self.setMinimumSize(320, 120)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.setToolTip("Download speed over the last minute (blue) and the download's average speed (green)")
+        self._colors = {
+            "background": theme.FIELD_BG, "border": theme.BORDER, "grid": theme.CHART_GRID,
+            "speed": theme.OCEAN, "average": theme.LEAF,
+        }
+        self._radius = 8.0
+
+    def set_colors(self, *, background: str, border: str, grid: str, speed: str, average: str,
+                   radius: float = 8.0, tooltip: str | None = None) -> None:
+        """Repaint with other colours (the modern Downloads page uses its own per-theme set)."""
+        self._colors = {"background": background, "border": border, "grid": grid, "speed": speed, "average": average}
+        self._radius = radius
+        if tooltip:
+            self.setToolTip(tooltip)
+        self.update()
 
     def add_sample(self, bytes_per_second: float, average_bytes_per_second: float = 0.0) -> None:
         now = self._clock()
@@ -48,12 +62,13 @@ class SpeedChart(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         area = QRectF(self.rect()).adjusted(1, 1, -1, -1)
 
-        painter.setPen(QPen(QColor(theme.BORDER), 1))
-        painter.setBrush(QColor(theme.FIELD_BG))
-        painter.drawRoundedRect(area, 8, 8)
+        colors = self._colors
+        painter.setPen(QPen(QColor(colors["border"]), 1))
+        painter.setBrush(QColor(colors["background"]))
+        painter.drawRoundedRect(area, self._radius, self._radius)
 
         plot = area.adjusted(8, 10, -8, -8)
-        painter.setPen(QPen(QColor(theme.CHART_GRID), 1, Qt.PenStyle.DashLine))
+        painter.setPen(QPen(QColor(colors["grid"]), 1, Qt.PenStyle.DashLine))
         for step in (0.25, 0.5, 0.75):
             y = plot.top() + plot.height() * step
             painter.drawLine(QPointF(plot.left(), y), QPointF(plot.right(), y))
@@ -71,17 +86,17 @@ class SpeedChart(QWidget):
             fill.lineTo(_x(times[0], plot, now), plot.bottom())
             fill.closeSubpath()
             gradient = QLinearGradient(plot.topLeft(), plot.bottomLeft())
-            gradient.setColorAt(0.0, theme.color(theme.OCEAN, 110))
-            gradient.setColorAt(1.0, theme.color(theme.OCEAN, 25))
+            gradient.setColorAt(0.0, theme.color(colors["speed"], 110))
+            gradient.setColorAt(1.0, theme.color(colors["speed"], 25))
             painter.save()
             painter.setClipRect(plot)
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(gradient)
             painter.drawPath(fill)
             painter.setBrush(Qt.BrushStyle.NoBrush)
-            painter.setPen(QPen(theme.color(theme.OCEAN, 200), 1.6))
+            painter.setPen(QPen(theme.color(colors["speed"], 200), 1.6))
             painter.drawPath(speed_line)
-            painter.setPen(QPen(QColor(theme.LEAF), 2.0))
+            painter.setPen(QPen(QColor(colors["average"]), 2.0))
             painter.drawPath(average_line)
             painter.restore()
         painter.end()
