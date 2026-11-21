@@ -602,7 +602,7 @@ class HomeWindow(QMainWindow):
         """Save the chosen layout and restart, as it is applied while the window is built."""
         answer = QMessageBox.question(
             self, "Change layout",
-            f"GEE-Assist restarts to use the {layout_mode.LAYOUTS[name]}. A running download "
+            f"GEE-Assist restarts to switch to {layout_mode.LAYOUTS[name]}. A running download "
             "is paused and can be resumed afterwards.\n\nRestart now?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.Yes,
         )

@@ -135,8 +135,8 @@ def test_choosing_another_theme_asks_for_it(bar):
 
 
 def test_view_menu_has_a_layout_switcher_set_to_classical(bar):
-    assert _items(bar.layout_menu) == ["Classical layout", "Modern layout"]
-    assert [a.isChecked() for a in bar.layout_menu.actions()] == [True, False]  # classical by default
+    assert _items(bar.layout_menu) == ["Layout 1", "Layout 2"]
+    assert [a.isChecked() for a in bar.layout_menu.actions()] == [True, False]  # Layout 1 (classical) by default
 
 
 def test_choosing_another_layout_asks_for_it(bar):

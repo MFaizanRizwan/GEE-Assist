@@ -20,8 +20,8 @@ from pathlib import Path
 SETTINGS_FILE = Path(__file__).resolve().parents[1] / "workspace" / "layout.json"
 
 LAYOUTS = {                     # name -> label shown to the user
-    "classical": "Classical layout",
-    "modern": "Modern layout",
+    "classical": "Layout 1",
+    "modern": "Layout 2",
 }
 DEFAULT_LAYOUT = "classical"
 
