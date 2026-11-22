@@ -71,6 +71,8 @@ class HistogramSlider(QWidget):
         self._vmax = 1.0
         self._low = 0.0
         self._high = 1.0
+        self._ramp = symbology.DEFAULT_RAMP
+        self._invert = False
         self._drag: str | None = None
         self.setMinimumHeight(74)
         self.setMouseTracking(True)
@@ -82,6 +84,11 @@ class HistogramSlider(QWidget):
 
     def set_bounds(self, low: float, high: float) -> None:
         self._low, self._high = low, high
+        self.update()
+
+    def set_ramp(self, ramp: str, invert: bool) -> None:
+        """Colour the in-range bars by the layer's colour ramp, so the stretch matches the distribution."""
+        self._ramp, self._invert = ramp, invert
         self.update()
 
     def _x(self, value: float) -> float:
@@ -99,12 +106,20 @@ class HistogramSlider(QWidget):
             peak = max(self._counts) or 1
             n = len(self._counts)
             bw = self.width() / n
+            table = symbology.ramp_table(self._ramp, self._invert)
+            span = (self._high - self._low) or 1e-9
+            subtle = QColor(self._p.subtle)
             for i, count in enumerate(self._counts):
                 h = (count / peak) * bar_area
                 x = i * bw
-                frac = (i + 0.5) / n
-                inside = self._x(self._low) <= x + bw / 2 <= self._x(self._high)
-                colour = QColor(self._p.accent) if inside else QColor(self._p.subtle)
+                value = self._vmin + ((i + 0.5) / n) * (self._vmax - self._vmin)
+                if self._low <= value <= self._high:
+                    # The same colour the pixel gets: the ramp over the stretch window [low, high].
+                    pos = int(round(max(0.0, min(1.0, (value - self._low) / span)) * 255))
+                    r, g, b = table[pos]
+                    colour = QColor(int(r), int(g), int(b))
+                else:
+                    colour = subtle
                 painter.fillRect(int(x), int(bar_area - h), max(1, int(bw) - 1), int(h) + 1, colour)
         # the selected window + handles
         lo_x, hi_x = self._x(self._low), self._x(self._high)
@@ -497,6 +512,7 @@ class SymbologyPanel(QWidget):
         vmax = stats.get("max", edges[-1] if edges else 1.0)
         self.histogram.set_data(counts, vmin, vmax)
         self.histogram.set_bounds(self.state.low, self.state.high)
+        self.histogram.set_ramp(self.state.ramp, self.state.invert)
         self.gamma_slider.setValue(100)
         self.opacity_slider.setValue(round(self.state.opacity * 100))
         self._update_bounds_label()
@@ -608,11 +624,13 @@ class SymbologyPanel(QWidget):
         for other, button in self._ramp_buttons.items():
             button.setChecked(other == name)
         self._dist.set_ramp(self.state.ramp, self.state.invert)
+        self.histogram.set_ramp(self.state.ramp, self.state.invert)  # the stretch follows the ramp too
         self.changed.emit()
 
     def _on_invert(self, on: bool) -> None:
         self.state.invert = on
         self._dist.set_ramp(self.state.ramp, self.state.invert)
+        self.histogram.set_ramp(self.state.ramp, self.state.invert)
         self.changed.emit()
 
     def _on_stretch(self, key: str) -> None:

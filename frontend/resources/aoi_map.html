@@ -107,7 +107,28 @@
     }
   }
 
+  // A plain click (no drag) with the rectangle/circle tool makes a zero-size shape — not an AOI.
+  // Leaflet.draw still fires "created" for it, which would drop a stray rectangle on the map.
+  function isDegenerate(layer) {
+    if (layer instanceof L.Circle) return !(layer.getRadius() > 0);
+    if (layer instanceof L.Rectangle) {
+      var b = layer.getBounds();
+      return b.getWest() === b.getEast() || b.getSouth() === b.getNorth();
+    }
+    return false;
+  }
+
+  // Cancel an armed draw tool, so a shape set from code (a place search) can't leave the
+  // rectangle tool waiting to fire on the next click.
+  function cancelDraw() {
+    try {
+      var toolbars = drawControl && drawControl._toolbars;
+      if (toolbars && toolbars.draw && toolbars.draw._activeMode) toolbars.draw.disable();
+    } catch (err) { /* leaflet.draw internals absent: nothing to cancel */ }
+  }
+
   map.on(L.Draw.Event.CREATED, function (e) {
+    if (isDegenerate(e.layer)) return;   // a stray click, not a drawn AOI
     drawn.clearLayers();          // one AOI at a time
     drawn.addLayer(e.layer);
     emitShape(e.layer);
@@ -118,6 +139,7 @@
   // ---- called from Python ----
   var mode = null;
   function setMode(newMode) {
+    cancelDraw();
     if (newMode === mode) return;
     mode = newMode;
     if (mode === 'draw') {
@@ -134,6 +156,7 @@
   }
 
   function setBbox(west, south, east, north, fit) {
+    cancelDraw();
     drawn.clearLayers();
     var rect = L.rectangle([[south, west], [north, east]], shapeStyle);
     drawn.addLayer(rect);
@@ -143,6 +166,7 @@
   // A place's exact boundary (Polygon / MultiPolygon). Each polygon joins the drawn
   // group on its own, so the edit / delete tools work on it like a drawn shape.
   function setShape(text, fit) {
+    cancelDraw();
     drawn.clearLayers();
     L.geoJSON(JSON.parse(text), { style: function () { return shapeStyle; } })
       .eachLayer(function (layer) { drawn.addLayer(layer); });

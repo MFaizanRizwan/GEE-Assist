@@ -11,7 +11,7 @@ import math
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QFont, QLinearGradient, QPainter, QPen
-from PyQt6.QtWidgets import QFrame, QGridLayout, QHBoxLayout, QLabel, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QFrame, QGridLayout, QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget
 
 
 def _nice_distance(metres: float) -> float:
@@ -154,7 +154,11 @@ class _OverlayColourBar(QWidget):
         super().__init__(parent)
         self._colours = colours or ("#000000", "#FFFFFF")
         self._dark = dark
-        self.setFixedSize(168, 12)
+        # Fill the legend's width so the low / mid / high labels line up with the bar's ends
+        # (a long layer title no longer leaves the labels floating past the bar).
+        self.setFixedHeight(12)
+        self.setMinimumWidth(168)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
     def paintEvent(self, event) -> None:  # noqa: N802 (Qt API)
         painter = QPainter(self)
