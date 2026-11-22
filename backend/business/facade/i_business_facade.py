@@ -14,6 +14,7 @@ from backend.dto.report_dto import ExplanationFileDTO
 from backend.dto.settings_dto import AppSettingsDTO, AppSettingsUpdateDTO
 from backend.dto.result_dto import ResultDTO
 from backend.dto.vector_dto import VectorLayerDTO
+from backend.dto.terrain_dto import TerrainInfoDTO, TerrainProductDTO
 from backend.dto.user_dto import (
     GoogleSignInDTO,
     NewUserDTO,
@@ -267,6 +268,21 @@ class IBusinessFacade(ABC):
     @abstractmethod
     def load_shapefile(self, path: str) -> VectorLayerDTO:
         """Read a shapefile (.shp) and reproject it to WGS84 for the Vector Maps page."""
+
+    # ------------------------------------------------------------- digital elevation model (DEM)
+    @abstractmethod
+    def describe_dem(self, path: str) -> TerrainInfoDTO:
+        """Read a DEM GeoTIFF's details (extent, cell size, elevation range) for the DEM page."""
+
+    @abstractmethod
+    def render_terrain(self, info: TerrainInfoDTO, product: str, params: dict | None = None,
+                       max_size: int = 1600) -> TerrainProductDTO:
+        """Draw a derived surface: elevation (shaded relief), hillshade, slope, aspect or contours."""
+
+    @abstractmethod
+    def save_terrain_product(self, info: TerrainInfoDTO, product: str, path: str,
+                             params: dict | None = None) -> str:
+        """Write a derived surface as a GeoTIFF at the DEM's full resolution; returns its path."""
 
     # ------------------------------------------------------------- analysis (UC-06) and its formula table
     @abstractmethod

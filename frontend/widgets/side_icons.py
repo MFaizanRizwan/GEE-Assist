@@ -384,3 +384,55 @@ class VectorIcon(SideIcon):
             painter.setBrush(QColor(theme.LEAF if index == active else theme.WHITE))
             painter.drawRect(QRectF(corner.x() - node / 2, corner.y() - node / 2, node, node))
         painter.restore()
+
+
+class TerrainIcon(SideIcon):
+    """A mountain range with a snow cap and a sun (the Digital Elevation Model); animated, the
+    sun rises and the slope it lights up brightens, like a moving hillshade."""
+
+    period_ms = 2600
+
+    def paint(self, painter: QPainter, rect: QRectF, t: float | None) -> None:
+        s = rect.width()
+        line_width = max(1.4, s * 0.075)
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        floor = rect.top() + s * 0.82
+
+        # Sun: climbs across the top and back while animating.
+        sweep = 0.75 if t is None else 0.2 + 0.6 * (0.5 - 0.5 * math.cos(2 * math.pi * t))
+        sun = QPointF(rect.left() + s * sweep, rect.top() + s * (0.26 - 0.12 * math.sin(math.pi * sweep)))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(theme.LEAF))
+        painter.drawEllipse(sun, s * 0.1, s * 0.1)
+
+        # Back mountain.
+        back = QPainterPath(QPointF(rect.left() + s * 0.06, floor))
+        back.lineTo(rect.left() + s * 0.42, rect.top() + s * 0.34)
+        back.lineTo(rect.left() + s * 0.72, floor)
+        back.closeSubpath()
+        lit = QColor(theme.MINT)
+        lit.setAlpha(150)
+        painter.setBrush(lit)
+        painter.setPen(QPen(QColor(theme.OCEAN), line_width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap,
+                            Qt.PenJoinStyle.RoundJoin))
+        painter.drawPath(back)
+
+        # Front peak with a snow cap.
+        apex = QPointF(rect.left() + s * 0.62, rect.top() + s * 0.2)
+        front = QPainterPath(QPointF(rect.left() + s * 0.3, floor))
+        front.lineTo(apex)
+        front.lineTo(rect.right() - s * 0.04, floor)
+        front.closeSubpath()
+        painter.setBrush(QColor(theme.OCEAN))
+        painter.drawPath(front)
+        cap = QPainterPath(QPointF(apex.x() - s * 0.1, rect.top() + s * 0.33))
+        cap.lineTo(apex)
+        cap.lineTo(apex.x() + s * 0.1, rect.top() + s * 0.33)
+        cap.lineTo(apex.x() + s * 0.03, rect.top() + s * 0.3)
+        cap.lineTo(apex.x() - s * 0.02, rect.top() + s * 0.35)
+        cap.closeSubpath()
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(theme.WHITE))
+        painter.drawPath(cap)
+        painter.restore()

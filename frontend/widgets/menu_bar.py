@@ -125,6 +125,7 @@ class AppMenuBar(QMenuBar):
         self.view_analysis = self._action(self.view_menu, "A&nalysis", "Ctrl+5")
         self.view_reports = self._action(self.view_menu, "&Reports", "Ctrl+7")
         self.view_vector_maps = self._action(self.view_menu, "&Vector maps", "Ctrl+8")
+        self.view_dem = self._action(self.view_menu, "&Digital Elevation Model", "Ctrl+9")
         self.view_menu.addSeparator()
         # The analysis table (formulas and use cases of every index) is opened only from here.
         self.view_analysis_table = self._action(self.view_menu, "Show analysis ta&ble", "Ctrl+6")

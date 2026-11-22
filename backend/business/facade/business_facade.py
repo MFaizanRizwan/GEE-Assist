@@ -13,6 +13,7 @@ from backend.business.facade.i_business_facade import IBusinessFacade
 from backend.business.report.i_report_service import IReportService
 from backend.business.map.i_map_service import IMapService
 from backend.business.request.i_request_service import IRequestService
+from backend.business.terrain.i_terrain_service import ITerrainService
 from backend.business.vector.i_vector_service import IVectorService
 from backend.business.settings.i_settings_service import ISettingsService
 from backend.business.user.i_user_service import IUserService
@@ -27,12 +28,14 @@ from backend.dto.report_dto import ExplanationFileDTO
 from backend.dto.settings_dto import AppSettingsDTO, AppSettingsUpdateDTO
 from backend.dto.result_dto import ResultDTO
 from backend.dto.vector_dto import VectorLayerDTO
+from backend.dto.terrain_dto import TerrainInfoDTO, TerrainProductDTO
 from backend.exceptions import (
     AnalysisError,
     ExplanationError,
     GeeAssistError,
     ProjectError,
     ReportError,
+    TerrainError,
     VectorError,
 )
 from backend.dto.user_dto import (
@@ -66,6 +69,7 @@ class BusinessFacade(IBusinessFacade):
         explanation_service: IExplanationService | None = None,
         report_service: IReportService | None = None,
         vector_service: IVectorService | None = None,
+        terrain_service: ITerrainService | None = None,
     ):
         self._user_service = user_service
         self._request_service = request_service
@@ -76,6 +80,7 @@ class BusinessFacade(IBusinessFacade):
         self._explanation_service = explanation_service
         self._report_service = report_service
         self._vector_service = vector_service
+        self._terrain_service = terrain_service
 
     # ------------------------------------------------------------- authentication
     def is_server_available(self) -> bool:
@@ -334,6 +339,23 @@ class BusinessFacade(IBusinessFacade):
         if self._vector_service is None:
             raise VectorError("Vector maps are not set up in this build.")
         return self._vector_service
+
+    # ------------------------------------------------------------- digital elevation model (DEM)
+    def describe_dem(self, path: str) -> TerrainInfoDTO:
+        return self._terrain().describe(path)
+
+    def render_terrain(self, info: TerrainInfoDTO, product: str, params: dict | None = None,
+                       max_size: int = 1600) -> TerrainProductDTO:
+        return self._terrain().render(info, product, params, max_size)
+
+    def save_terrain_product(self, info: TerrainInfoDTO, product: str, path: str,
+                             params: dict | None = None) -> str:
+        return self._terrain().save_product(info, product, path, params)
+
+    def _terrain(self) -> ITerrainService:
+        if self._terrain_service is None:
+            raise TerrainError("The DEM tools are not set up in this build.")
+        return self._terrain_service
 
     # ------------------------------------------------------------- analysis (UC-06)
     def list_formulas(self) -> list[FormulaDTO]:

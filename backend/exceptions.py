@@ -62,6 +62,10 @@ class VectorError(GeeAssistError):
     """A shapefile cannot be shown: it is missing, unreadable, has no geometry, or cannot be reprojected."""
 
 
+class TerrainError(GeeAssistError):
+    """A DEM cannot be used: it is missing, unreadable, has no elevation band, or a surface cannot be derived."""
+
+
 class ExplanationError(GeeAssistError):
     """An analysis result cannot be explained: it is not saved in the project, or its files are missing."""
 
