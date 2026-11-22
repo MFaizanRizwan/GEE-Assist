@@ -44,7 +44,7 @@ def _run_now(owner, fn, *args, on_success=None, on_error=None):
 @pytest.fixture
 def page(app, monkeypatch):
     monkeypatch.setattr(view_module, "run_task", _run_now)
-    sources = CatalogService([EarthEngineProvider(lambda a, g, n: {}), NaturalEarthProvider(),
+    sources = CatalogService([EarthEngineProvider(lambda a, g, n, c: {}), NaturalEarthProvider(),
                               GeofabrikProvider(), HdxProvider()]).list_sources()
     facade = MagicMock()
     facade.get_current_project.return_value = None

@@ -33,7 +33,7 @@ def _write_fake_shapefile(dest_dir, stem):
 
 @pytest.fixture
 def service():
-    return CatalogService([EarthEngineProvider(lambda a, g, n: _poly_fc()),
+    return CatalogService([EarthEngineProvider(lambda a, g, n, c: _poly_fc()),
                            NaturalEarthProvider(), GeofabrikProvider(), HdxProvider()])
 
 

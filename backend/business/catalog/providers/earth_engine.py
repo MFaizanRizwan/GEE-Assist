@@ -22,19 +22,19 @@ from backend.dto.catalog_dto import (
 )
 from backend.exceptions import CatalogError
 
-# Callable that returns a FeatureCollection as GeoJSON: (asset_id, aoi_geojson, limit) -> dict.
-FeatureFetcher = Callable[[str, str, int], dict]
+# Callable returning a FeatureCollection as GeoJSON: (asset_id, aoi_geojson, limit, clip) -> dict.
+FeatureFetcher = Callable[[str, str, int, str], dict]
 
-# dataset id -> (label, GEE asset, description)
-_ASSETS: dict[str, tuple[str, str, str]] = {
-    "admin0": ("Admin boundaries — countries", "FAO/GAUL/2015/level0", "FAO GAUL national boundaries."),
-    "admin1": ("Admin boundaries — level 1", "FAO/GAUL/2015/level1", "FAO GAUL first-level boundaries."),
-    "admin2": ("Admin boundaries — level 2", "FAO/GAUL/2015/level2", "FAO GAUL second-level boundaries."),
-    "watersheds": ("Watersheds (HydroSHEDS)", "WWF/HydroSHEDS/v1/Basins/hybas_6",
+# dataset id -> (label, GEE asset, clip metric, description). clip: "area" (polygons) / "length" (lines).
+_ASSETS: dict[str, tuple[str, str, str, str]] = {
+    "admin0": ("Admin boundaries — countries", "FAO/GAUL/2015/level0", "area", "FAO GAUL national boundaries."),
+    "admin1": ("Admin boundaries — level 1", "FAO/GAUL/2015/level1", "area", "FAO GAUL first-level boundaries."),
+    "admin2": ("Admin boundaries — level 2", "FAO/GAUL/2015/level2", "area", "FAO GAUL second-level boundaries."),
+    "watersheds": ("Watersheds (HydroSHEDS)", "WWF/HydroSHEDS/v1/Basins/hybas_6", "area",
                    "HydroBASINS level-6 drainage basins."),
-    "rivers": ("Rivers (free-flowing)", "WWF/HydroSHEDS/v1/FreeFlowingRivers",
+    "rivers": ("Rivers (free-flowing)", "WWF/HydroSHEDS/v1/FreeFlowingRivers", "length",
                "HydroSHEDS free-flowing river network."),
-    "protected": ("Protected areas (WDPA)", "WCMC/WDPA/current/polygons",
+    "protected": ("Protected areas (WDPA)", "WCMC/WDPA/current/polygons", "area",
                   "World Database on Protected Areas polygons."),
 }
 
@@ -48,7 +48,7 @@ class EarthEngineProvider(CatalogProvider):
     def source(self) -> CatalogSourceDTO:
         datasets = tuple(
             CatalogDatasetDTO(key, label, kind="vector", open_in=OPEN_IN_VECTOR, description=desc, needs_area=True)
-            for key, (label, _asset, desc) in _ASSETS.items()
+            for key, (label, _asset, _clip, desc) in _ASSETS.items()
         )
         return CatalogSourceDTO(
             id=self.id, name="Earth Engine vectors", kind="earth_engine",
@@ -62,12 +62,12 @@ class EarthEngineProvider(CatalogProvider):
         asset = _ASSETS.get(request.dataset_id)
         if asset is None:
             raise CatalogError(f"Unknown Earth Engine dataset: {request.dataset_id!r}.")
-        label, asset_id, _desc = asset
+        label, asset_id, clip, _desc = asset
         if not request.aoi_geojson:
             raise CatalogError("Choose an area of interest first (search for a place) — Earth Engine clips to it.")
         if on_progress is not None:
             on_progress(0, 0)  # indeterminate: one getInfo call
-        geojson = self._fetch_features(asset_id, request.aoi_geojson, request.max_features)
+        geojson = self._fetch_features(asset_id, request.aoi_geojson, request.max_features, clip)
         count = len(geojson.get("features", []))
         stem = _safe_stem(f"{request.dataset_id}_{request.area_name or 'aoi'}")
         files = write_geojson(geojson, str(dest_dir / f"{stem}.shp"))

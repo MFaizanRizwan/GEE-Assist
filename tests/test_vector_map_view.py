@@ -79,6 +79,32 @@ def test_clicking_the_canvas_selects_the_row_and_identifies(page, tmp_path):
     assert page.table.selectionModel().selectedRows()[0].row() == 0
 
 
+def test_dense_polygon_is_decimated_in_the_cache(page, tmp_path):
+    """A high-vertex admin boundary must not be drawn vertex-for-vertex (that froze the app):
+    the cached screen geometry drops points that fall on the same pixel."""
+    import math
+
+    import shapefile
+
+    path = tmp_path / "dense.shp"
+    writer = shapefile.Writer(str(path), shapeType=shapefile.POLYGON)
+    writer.field("id", "N")
+    n = 20000
+    ring = [[math.cos(2 * math.pi * i / n) * 5 + 70, math.sin(2 * math.pi * i / n) * 5 + 30] for i in range(n + 1)]
+    writer.poly([ring])
+    writer.record(1)
+    writer.close()
+    path.with_suffix(".prj").write_text(
+        'GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563]],'
+        'PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433],AUTHORITY["EPSG","4326"]]')
+
+    page.load(str(path))
+    page.canvas.resize(800, 600)
+    page.canvas._ensure_cache()
+    cached_points = sum(r.shape[0] for r in page.canvas._cache[0].rings)
+    assert 50 < cached_points < n / 4  # far fewer screen points than the 20,001 input vertices
+
+
 def test_bad_file_shows_an_error_and_clears(page, tmp_path):
     bad = tmp_path / "broken.shp"
     bad.write_bytes(b"not a shapefile")

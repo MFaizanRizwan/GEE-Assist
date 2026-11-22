@@ -152,19 +152,37 @@ class GEEClient(IGEEClient):
         self._sign_in.cancel()
 
     # ------------------------------------------------------------- feature collections (vectors)
-    def fetch_feature_collection(self, asset_id: str, aoi_geojson: str = "", limit: int = 5000) -> dict:
+    def fetch_feature_collection(self, asset_id: str, aoi_geojson: str = "", limit: int = 5000,
+                                 clip: str = "area") -> dict:
+        """A FeatureCollection as GeoJSON, clipped to the area of interest.
+
+        ``clip`` controls how the area restricts polygon vs line features:
+
+        * ``"area"`` (polygons): each feature is intersected with the area and empty results are
+          dropped, so "Pakistan" returns Pakistan — not every country whose box overlaps it.
+        * ``"length"`` (lines): the same, keeping features that still have length inside the area.
+        * ``""`` (points, or no clipping): features intersecting the area are kept as they are.
+        """
         self._initialize()
         ee = self._ee()
         try:
             collection = ee.FeatureCollection(asset_id)
             if aoi_geojson:
-                collection = collection.filterBounds(ee.Geometry(json.loads(aoi_geojson)))
+                geometry = ee.Geometry(json.loads(aoi_geojson))
+                collection = collection.filterBounds(geometry)
+                if clip in ("area", "length"):
+                    collection = collection.map(
+                        lambda feature: feature.intersection(geometry, ee.ErrorMargin(1)))
+                    measure = (lambda f: f.geometry().area(1)) if clip == "area" else (lambda f: f.geometry().length(1))
+                    collection = (collection.map(lambda f: f.set("_measure", measure(f)))
+                                  .filter(ee.Filter.gt("_measure", 0)))
             data = collection.limit(int(limit)).getInfo()
         except GEEError:
             raise
         except Exception as exc:
             raise _error(exc, self._project) from exc
-        if not isinstance(data, dict) or not data.get("features"):
+        features = data.get("features") if isinstance(data, dict) else None
+        if not features:
             raise GEEError("Earth Engine returned no features for this area. Try a larger area or another dataset.")
         return data
 

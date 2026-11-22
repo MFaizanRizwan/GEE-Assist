@@ -37,8 +37,12 @@ class IGEEClient(ABC):
         """
 
     @abstractmethod
-    def fetch_feature_collection(self, asset_id: str, aoi_geojson: str = "", limit: int = 5000) -> dict:
+    def fetch_feature_collection(self, asset_id: str, aoi_geojson: str = "", limit: int = 5000,
+                                 clip: str = "area") -> dict:
         """A GEE FeatureCollection as a GeoJSON dict, clipped to ``aoi_geojson`` and capped at ``limit``.
+
+        ``clip`` is ``"area"`` for polygon layers, ``"length"`` for line layers, or ``""`` to keep
+        features whole (points, or no clipping).
 
         Raises:
             GEEError: GEE is not set up, the asset is unknown, or it has no features for the area.

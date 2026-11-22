@@ -4,12 +4,17 @@ double-click-to-fit, like a desktop GIS canvas.
 Everything is in WGS84 longitude/latitude; the canvas keeps a simple fit transform from
 geographic coordinates to screen pixels (latitude grows upward, so the y axis is flipped).
 It reports the feature under the pointer (``feature_hovered``) and the one clicked
-(``feature_clicked``) by their index in the layer, so the page can identify features and
-keep the attribute table in step.
+(``feature_clicked``) by their index in the layer.
+
+Admin-boundary layers have huge vertex counts, so the screen geometry is built once (with
+numpy) and cached: panning only shifts the cached geometry, a repaint (e.g. on hover) just
+redraws it, and vertices that fall on the same pixel are dropped. Only zooming or resizing
+rebuilds the cache. Off-screen features are skipped entirely.
 """
 
 from __future__ import annotations
 
+import numpy as np
 from PyQt6.QtCore import QPointF, QRectF, Qt, pyqtSignal
 from PyQt6.QtGui import QBrush, QColor, QPainter, QPainterPath, QPen, QPolygonF
 from PyQt6.QtWidgets import QWidget
@@ -24,6 +29,19 @@ MARGIN = 24          # screen pixels kept around the layer when fitted
 HIT_TOLERANCE = 6    # screen pixels: how close the pointer must be to pick a line or point
 
 
+class _Cached:
+    """Screen-space geometry of one feature, for the current zoom (shifted by pan at draw time)."""
+
+    __slots__ = ("kind", "path", "polys", "rings", "bbox")
+
+    def __init__(self, kind: str):
+        self.kind = kind
+        self.path: QPainterPath | None = None          # filled path for polygons (holes via even-odd)
+        self.polys: list[QPolygonF] = []               # polylines
+        self.rings: list[np.ndarray] = []              # decimated screen coords (M, 2) for hit-testing
+        self.bbox = (0.0, 0.0, 0.0, 0.0)               # screen bounds at cache pan
+
+
 class VectorCanvas(QWidget):
     feature_hovered = pyqtSignal(int)   # index of the feature under the pointer, or -1
     feature_clicked = pyqtSignal(int)   # index of the feature clicked, or -1
@@ -34,15 +52,19 @@ class VectorCanvas(QWidget):
         self.setMinimumSize(200, 200)
         self.setCursor(Qt.CursorShape.OpenHandCursor)
         self._layer: VectorLayerDTO | None = None
+        self._geo: list[list[np.ndarray]] = []          # per feature: list of rings as (N, 2) lon/lat arrays
         self._zoom = 1.0
-        self._pan = QPointF(0.0, 0.0)   # extra pixel offset on top of the fit transform
+        self._pan = QPointF(0.0, 0.0)
         self._selected = -1
         self._hover = -1
         self._dragging = False
         self._drag_from = QPointF()
         self._pan_from = QPointF()
         self._moved = False
-        # Symbology (ArcGIS-like defaults): translucent fill, solid outline, round point markers.
+        # Cache of screen geometry, valid for a (width, height, zoom) and built at ``_cache_pan``.
+        self._cache: list[_Cached] = []
+        self._cache_key: tuple | None = None
+        self._cache_pan = QPointF(0.0, 0.0)
         self._fill = QColor(theme.OCEAN)
         self._fill.setAlpha(90)
         self._outline = QColor(theme.OCEAN)
@@ -53,6 +75,11 @@ class VectorCanvas(QWidget):
         self._layer = layer
         self._selected = -1
         self._hover = -1
+        self._geo = []
+        if layer is not None:
+            for feature in layer.features:
+                self._geo.append([np.asarray(ring, dtype="float64").reshape(-1, 2) for ring in feature.parts if ring])
+        self._invalidate()
         self.fit()
 
     def set_colours(self, fill: QColor, outline: QColor) -> None:
@@ -75,34 +102,31 @@ class VectorCanvas(QWidget):
     def fit(self) -> None:
         self._zoom = 1.0
         self._pan = QPointF(0.0, 0.0)
+        self._invalidate()
         self.update()
 
     def zoom_to_feature(self, index: int) -> None:
-        """Centre and zoom in on one feature (ArcGIS "Zoom to selected")."""
         if self._layer is None or not (0 <= index < len(self._layer.features)):
             return
         minx, miny, maxx, maxy = self._layer.features[index].bounds
         lminx, lminy, lmaxx, lmaxy = self._padded_bounds()
         fw, fh = max(maxx - minx, 1e-9), max(maxy - miny, 1e-9)
         base_w, base_h = (lmaxx - lminx), (lmaxy - lminy)
-        # Zoom so the feature fills ~60% of the view, capped.
         self._zoom = min(MAX_ZOOM, max(1.0, 0.6 * min(base_w / fw, base_h / fh)))
-        base = self._base_scale()
-        scale = base * self._zoom
+        scale = self._base_scale() * self._zoom
         gcx, gcy = (lminx + lmaxx) / 2, (lminy + lmaxy) / 2
         fcx, fcy = (minx + maxx) / 2, (miny + maxy) / 2
-        # Pan so the feature's centre sits at the widget's centre.
         self._pan = QPointF((gcx - fcx) * scale, -(gcy - fcy) * scale)
         self._selected = index
+        self._invalidate()
         self.update()
 
     # ------------------------------------------------------------- transform
     def _padded_bounds(self) -> tuple[float, float, float, float]:
         minx, miny, maxx, maxy = self._layer.bounds
-        w, h = maxx - minx, maxy - miny
-        if w <= 0:
+        if maxx - minx <= 0:
             minx, maxx = minx - 0.5, maxx + 0.5
-        if h <= 0:
+        if maxy - miny <= 0:
             miny, maxy = miny - 0.5, maxy + 0.5
         return minx, miny, maxx, maxy
 
@@ -111,68 +135,111 @@ class VectorCanvas(QWidget):
         gw, gh = max(maxx - minx, 1e-9), max(maxy - miny, 1e-9)
         return min((self.width() - 2 * MARGIN) / gw, (self.height() - 2 * MARGIN) / gh)
 
-    def _to_screen(self, lon: float, lat: float) -> QPointF:
+    def _transform(self, pan: QPointF) -> tuple[float, float, float]:
+        """(scale, offset_x, offset_y): screen_x = lon*scale + ox, screen_y = -lat*scale + oy."""
         minx, miny, maxx, maxy = self._padded_bounds()
         gcx, gcy = (minx + maxx) / 2, (miny + maxy) / 2
         scale = self._base_scale() * self._zoom
         cx, cy = self.width() / 2, self.height() / 2
-        return QPointF(cx + (lon - gcx) * scale + self._pan.x(),
-                       cy - (lat - gcy) * scale + self._pan.y())
+        return scale, cx - gcx * scale + pan.x(), cy + gcy * scale + pan.y()
+
+    def _to_screen(self, lon: float, lat: float) -> QPointF:
+        scale, ox, oy = self._transform(self._pan)
+        return QPointF(lon * scale + ox, -lat * scale + oy)
 
     def _to_geo(self, x: float, y: float) -> tuple[float, float]:
-        minx, miny, maxx, maxy = self._padded_bounds()
-        gcx, gcy = (minx + maxx) / 2, (miny + maxy) / 2
-        scale = self._base_scale() * self._zoom
-        cx, cy = self.width() / 2, self.height() / 2
-        return (gcx + (x - self._pan.x() - cx) / scale,
-                gcy - (y - self._pan.y() - cy) / scale)
+        scale, ox, oy = self._transform(self._pan)
+        return (x - ox) / scale, (oy - y) / scale
+
+    # ------------------------------------------------------------- cache
+    def _invalidate(self) -> None:
+        self._cache_key = None
+
+    def _ensure_cache(self) -> None:
+        key = (self.width(), self.height(), round(self._zoom, 6))
+        if self._cache_key == key:
+            return
+        self._cache_pan = QPointF(self._pan)
+        scale, ox, oy = self._transform(self._cache_pan)
+        self._cache = [self._cache_feature(rings, self._layer.features[i].kind, scale, ox, oy)
+                       for i, rings in enumerate(self._geo)] if self._layer is not None else []
+        self._cache_key = key
+
+    def _cache_feature(self, rings: list[np.ndarray], kind: str, scale: float, ox: float, oy: float) -> _Cached:
+        cached = _Cached(kind)
+        bounds = [np.inf, np.inf, -np.inf, -np.inf]
+        path = QPainterPath() if kind == POLYGON else None
+        if path is not None:
+            path.setFillRule(Qt.FillRule.OddEvenFill)
+        for ring in rings:
+            if ring.shape[0] == 0:
+                continue
+            sx = ring[:, 0] * scale + ox
+            sy = -ring[:, 1] * scale + oy
+            sx, sy = _decimate(sx, sy)
+            if sx.size == 0:
+                continue
+            bounds[0] = min(bounds[0], float(sx.min()))
+            bounds[1] = min(bounds[1], float(sy.min()))
+            bounds[2] = max(bounds[2], float(sx.max()))
+            bounds[3] = max(bounds[3], float(sy.max()))
+            polygon = _polygon(sx, sy)
+            cached.rings.append(np.column_stack([sx, sy]))
+            if kind == POLYGON:
+                path.addPolygon(polygon)
+                path.closeSubpath()
+            else:
+                cached.polys.append(polygon)
+        cached.path = path
+        cached.bbox = tuple(bounds) if np.isfinite(bounds[0]) else (0.0, 0.0, 0.0, 0.0)
+        return cached
 
     # ------------------------------------------------------------- painting
     def paintEvent(self, event) -> None:  # noqa: N802 (Qt API)
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.fillRect(self.rect(), QColor(theme.FIELD_BG))
-        if self._layer is None or not self._layer.features:
+        if self._layer is None or not self._geo:
             painter.setPen(QColor(theme.MUTED))
             painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "Open a shapefile to see it here.")
             return
-        for index, feature in enumerate(self._layer.features):
-            self._draw_feature(painter, feature, index)
+        self._ensure_cache()
+        delta = self._pan - self._cache_pan
+        painter.translate(delta)
+        # Cull against the view in cache space (shift the widget rect by -delta).
+        view = QRectF(-delta.x(), -delta.y(), self.width(), self.height()).adjusted(-20, -20, 20, 20)
+        for index, cached in enumerate(self._cache):
+            if not _overlaps(cached.bbox, view):
+                continue
+            self._draw(painter, cached, index)
 
-    def _draw_feature(self, painter: QPainter, feature, index: int) -> None:
+    def _draw(self, painter: QPainter, cached: _Cached, index: int) -> None:
         selected = index == self._selected
-        hovered = index == self._hover
         outline = QColor(theme.LEAF) if selected else QColor(self._outline)
-        width = 3.0 if selected else (2.0 if hovered else 1.3)
+        width = 2.5 if selected else 1.2
         pen = QPen(outline, width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
 
-        if feature.kind == POLYGON:
-            path = QPainterPath()
-            path.setFillRule(Qt.FillRule.OddEvenFill)  # inner rings become holes
-            for ring in feature.parts:
-                polygon = QPolygonF([self._to_screen(lon, lat) for lon, lat in ring])
-                path.addPolygon(polygon)
-                path.closeSubpath()
+        if cached.kind == POLYGON and cached.path is not None:
             fill = QColor(self._fill)
             if selected:
                 fill = QColor(theme.MINT)
-                fill.setAlpha(150)
+                fill.setAlpha(160)
             painter.setBrush(QBrush(fill))
             painter.setPen(pen)
-            painter.drawPath(path)
-        elif feature.kind == POLYLINE:
+            painter.drawPath(cached.path)
+        elif cached.kind == POLYLINE:
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.setPen(pen)
-            for ring in feature.parts:
-                painter.drawPolyline(QPolygonF([self._to_screen(lon, lat) for lon, lat in ring]))
+            for polygon in cached.polys:
+                painter.drawPolyline(polygon)
         else:  # POINT / MULTIPOINT
             radius = (self._point_size + 3) / 2 if selected else self._point_size / 2
             painter.setPen(QPen(outline, 1.2))
-            painter.setBrush(QBrush(QColor(theme.LEAF) if selected else QColor(self._fill.red(), self._fill.green(),
-                                                                               self._fill.blue())))
-            for ring in feature.parts:
-                for lon, lat in ring:
-                    painter.drawEllipse(self._to_screen(lon, lat), radius, radius)
+            painter.setBrush(QBrush(QColor(theme.LEAF) if selected
+                                    else QColor(self._fill.red(), self._fill.green(), self._fill.blue())))
+            for ring in cached.rings:
+                for x, y in ring:
+                    painter.drawEllipse(QPointF(float(x), float(y)), radius, radius)
 
     # ------------------------------------------------------------- mouse
     def wheelEvent(self, event) -> None:  # noqa: N802 (Qt API)
@@ -182,8 +249,9 @@ class VectorCanvas(QWidget):
         before = self._to_geo(pos.x(), pos.y())
         factor = ZOOM_STEP if event.angleDelta().y() > 0 else 1 / ZOOM_STEP
         self._zoom = min(MAX_ZOOM, max(MIN_ZOOM, self._zoom * factor))
-        after_screen = self._to_screen(*before)
-        self._pan += QPointF(pos.x() - after_screen.x(), pos.y() - after_screen.y())  # keep point under cursor
+        after = self._to_screen(*before)
+        self._pan += QPointF(pos.x() - after.x(), pos.y() - after.y())  # keep the point under the cursor
+        self._invalidate()
         self.update()
         event.accept()
 
@@ -200,21 +268,20 @@ class VectorCanvas(QWidget):
             delta = event.position() - self._drag_from
             if abs(delta.x()) + abs(delta.y()) > 3:
                 self._moved = True
-            self._pan = self._pan_from + delta
+            self._pan = self._pan_from + delta  # panning only shifts the cached geometry; no rebuild
             self.update()
             return
         index = self._feature_at(event.position())
         if index != self._hover:
             self._hover = index
             self.feature_hovered.emit(index)
-            self.update()
 
     def mouseReleaseEvent(self, event) -> None:  # noqa: N802 (Qt API)
         if event.button() != Qt.MouseButton.LeftButton:
             return
         self._dragging = False
         self.setCursor(Qt.CursorShape.OpenHandCursor)
-        if not self._moved:  # a click, not a pan: identify the feature there
+        if not self._moved:
             index = self._feature_at(event.position())
             self._selected = index
             self.feature_clicked.emit(index)
@@ -227,71 +294,104 @@ class VectorCanvas(QWidget):
         if self._hover != -1:
             self._hover = -1
             self.feature_hovered.emit(-1)
-            self.update()
 
     def resizeEvent(self, event) -> None:  # noqa: N802 (Qt API)
+        self._invalidate()
         self.update()
 
     # ------------------------------------------------------------- hit testing
     def _feature_at(self, pos: QPointF) -> int:
         if self._layer is None:
             return -1
-        for index in range(len(self._layer.features) - 1, -1, -1):  # topmost (drawn last) first
-            feature = self._layer.features[index]
-            if feature.kind == POLYGON and self._in_polygon(feature, pos):
+        self._ensure_cache()
+        if not self._cache:
+            return -1
+        delta = self._pan - self._cache_pan
+        point = QPointF(pos.x() - delta.x(), pos.y() - delta.y())  # into cache space
+        x, y = point.x(), point.y()
+        for index in range(len(self._cache) - 1, -1, -1):  # topmost first
+            cached = self._cache[index]
+            minx, miny, maxx, maxy = cached.bbox
+            margin = HIT_TOLERANCE + (self._point_size if cached.kind in (POINT, MULTIPOINT) else 0)
+            if not (minx - margin <= x <= maxx + margin and miny - margin <= y <= maxy + margin):
+                continue
+            if cached.kind == POLYGON and _in_polygon(cached.rings, x, y):
                 return index
-            if feature.kind == POLYLINE and self._near_line(feature, pos):
+            if cached.kind == POLYLINE and _near_line(cached.rings, x, y):
                 return index
-            if feature.kind in (POINT, MULTIPOINT) and self._near_point(feature, pos):
+            if cached.kind in (POINT, MULTIPOINT) and _near_point(cached.rings, x, y, self._point_size / 2 + HIT_TOLERANCE):
                 return index
         return -1
 
-    def _in_polygon(self, feature, pos: QPointF) -> bool:
-        rings = [[self._to_screen(lon, lat) for lon, lat in ring] for ring in feature.parts]
-        if not rings or not _point_in_ring(rings[0], pos):
-            return False
-        return not any(_point_in_ring(hole, pos) for hole in rings[1:])  # inside a hole = outside
 
-    def _near_line(self, feature, pos: QPointF) -> bool:
-        for ring in feature.parts:
-            pts = [self._to_screen(lon, lat) for lon, lat in ring]
-            for a, b in zip(pts, pts[1:]):
-                if _distance_to_segment(pos, a, b) <= HIT_TOLERANCE:
-                    return True
+# ------------------------------------------------------------- numpy / geometry helpers
+def _decimate(sx: np.ndarray, sy: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Drop consecutive points that round to the same pixel (keeps the shape, far fewer points)."""
+    if sx.size <= 2:
+        return sx, sy
+    xr, yr = np.round(sx), np.round(sy)
+    keep = np.empty(sx.size, dtype=bool)
+    keep[0] = True
+    keep[1:] = (xr[1:] != xr[:-1]) | (yr[1:] != yr[:-1])
+    keep[-1] = True
+    return sx[keep], sy[keep]
+
+
+def _polygon(sx: np.ndarray, sy: np.ndarray) -> QPolygonF:
+    polygon = QPolygonF()
+    append = polygon.append
+    for i in range(sx.size):
+        append(QPointF(float(sx[i]), float(sy[i])))
+    return polygon
+
+
+def _overlaps(bbox: tuple[float, float, float, float], rect: QRectF) -> bool:
+    minx, miny, maxx, maxy = bbox
+    return not (maxx < rect.left() or minx > rect.right() or maxy < rect.top() or miny > rect.bottom())
+
+
+def _in_polygon(rings: list[np.ndarray], x: float, y: float) -> bool:
+    if not rings or not _ray_cast(rings[0], x, y):
         return False
-
-    def _near_point(self, feature, pos: QPointF) -> bool:
-        reach = self._point_size / 2 + HIT_TOLERANCE
-        for ring in feature.parts:
-            for lon, lat in ring:
-                screen = self._to_screen(lon, lat)
-                if (screen.x() - pos.x()) ** 2 + (screen.y() - pos.y()) ** 2 <= reach ** 2:
-                    return True
-        return False
+    return not any(_ray_cast(hole, x, y) for hole in rings[1:])
 
 
-def _point_in_ring(points: list[QPointF], pos: QPointF) -> bool:
-    """Ray-casting point-in-polygon test, in screen coordinates."""
-    inside = False
-    n = len(points)
+def _ray_cast(ring: np.ndarray, x: float, y: float) -> bool:
+    """Vectorised point-in-polygon (ray casting) on a screen-space ring."""
+    n = ring.shape[0]
     if n < 3:
         return False
-    x, y = pos.x(), pos.y()
-    j = n - 1
-    for i in range(n):
-        xi, yi = points[i].x(), points[i].y()
-        xj, yj = points[j].x(), points[j].y()
-        if (yi > y) != (yj > y) and x < (xj - xi) * (y - yi) / (yj - yi + 1e-12) + xi:
-            inside = not inside
-        j = i
-    return inside
+    xi, yi = ring[:, 0], ring[:, 1]
+    xj, yj = np.roll(xi, 1), np.roll(yi, 1)
+    crosses = ((yi > y) != (yj > y)) & (x < (xj - xi) * (y - yi) / (yj - yi + 1e-12) + xi)
+    return bool(np.count_nonzero(crosses) % 2)
 
 
-def _distance_to_segment(p: QPointF, a: QPointF, b: QPointF) -> float:
-    ax, ay, bx, by, px, py = a.x(), a.y(), b.x(), b.y(), p.x(), p.y()
-    dx, dy = bx - ax, by - ay
-    if dx == 0 and dy == 0:
-        return ((px - ax) ** 2 + (py - ay) ** 2) ** 0.5
-    t = max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy)))
+def _near_line(rings: list[np.ndarray], x: float, y: float, tolerance: float = HIT_TOLERANCE) -> bool:
+    for ring in rings:
+        if ring.shape[0] < 2:
+            continue
+        a, b = ring[:-1], ring[1:]
+        if _min_segment_distance(a, b, x, y) <= tolerance:
+            return True
+    return False
+
+
+def _min_segment_distance(a: np.ndarray, b: np.ndarray, x: float, y: float) -> float:
+    ax, ay = a[:, 0], a[:, 1]
+    dx, dy = b[:, 0] - ax, b[:, 1] - ay
+    length2 = dx * dx + dy * dy
+    length2 = np.where(length2 == 0, 1e-12, length2)
+    t = np.clip(((x - ax) * dx + (y - ay) * dy) / length2, 0.0, 1.0)
     cx, cy = ax + t * dx, ay + t * dy
-    return ((px - cx) ** 2 + (py - cy) ** 2) ** 0.5
+    return float(np.sqrt((x - cx) ** 2 + (y - cy) ** 2).min())
+
+
+def _near_point(rings: list[np.ndarray], x: float, y: float, reach: float) -> bool:
+    for ring in rings:
+        if ring.shape[0] == 0:
+            continue
+        d2 = (ring[:, 0] - x) ** 2 + (ring[:, 1] - y) ** 2
+        if float(d2.min()) <= reach * reach:
+            return True
+    return False
