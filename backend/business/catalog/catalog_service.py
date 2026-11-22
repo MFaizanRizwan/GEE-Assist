@@ -13,10 +13,25 @@ from typing import Optional, Sequence
 
 from backend.business.catalog.i_catalog_service import ICatalogService, ProgressCallback
 from backend.business.catalog.providers.base import CatalogProvider
-from backend.dto.catalog_dto import CatalogRequestDTO, CatalogResultDTO, CatalogSourceDTO
+from backend.dto.catalog_dto import (
+    OPEN_IN_DEM,
+    OPEN_IN_IDW,
+    OPEN_IN_VECTOR,
+    CatalogRequestDTO,
+    CatalogResultDTO,
+    CatalogSourceDTO,
+)
 from backend.exceptions import CatalogError, GeeAssistError
 
 logger = logging.getLogger(__name__)
+
+# Each kind of dataset is kept in its own sub-folder, so shapefiles, DEMs and IDW point data
+# never mix in the download directory.
+_TYPE_FOLDERS = {
+    OPEN_IN_VECTOR: "Vector shapefiles",
+    OPEN_IN_DEM: "DEM elevation",
+    OPEN_IN_IDW: "IDW point data",
+}
 
 
 class CatalogService(ICatalogService):
@@ -31,7 +46,8 @@ class CatalogService(ICatalogService):
         provider = self._providers.get(request.source_id)
         if provider is None:
             raise CatalogError(f"Unknown data source: {request.source_id!r}.")
-        folder = _fresh_folder(Path(dest_dir), self._folder_name(request))
+        base = Path(dest_dir) / _TYPE_FOLDERS.get(self._category(provider, request), _TYPE_FOLDERS[OPEN_IN_VECTOR])
+        folder = _fresh_folder(base, self._folder_name(request))
         try:
             return provider.download(request, folder, on_progress)
         except GeeAssistError:
@@ -39,6 +55,15 @@ class CatalogService(ICatalogService):
         except Exception as exc:  # a provider bug or an unexpected network/parse error
             logger.exception("Catalog download failed for %s", request.source_id)
             raise CatalogError(f"The download could not be completed: {exc}") from exc
+
+    def _category(self, provider: CatalogProvider, request: CatalogRequestDTO) -> str:
+        """Where the result belongs (vector / dem / idw): the dataset's, else the source's default."""
+        source = provider.source()
+        if request.dataset_id:
+            dataset = next((d for d in source.datasets if d.id == request.dataset_id), None)
+            if dataset is not None:
+                return dataset.open_in
+        return source.default_open_in or OPEN_IN_VECTOR
 
     def _folder_name(self, request: CatalogRequestDTO) -> str:
         parts = [request.source_id, request.dataset_id or request.region_id or request.query or "data"]

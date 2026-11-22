@@ -44,6 +44,7 @@ class CatalogSourceDTO:
     supports_search: bool = False                 # HDX: a free-text search box
     needs_area: bool = False                      # Earth Engine: an area of interest is required
     attribution: str = ""                         # the provider's name / licence note to show
+    default_open_in: str = OPEN_IN_VECTOR         # where a dataset-less source's result goes (folder + page)
 
 
 @dataclass(frozen=True)

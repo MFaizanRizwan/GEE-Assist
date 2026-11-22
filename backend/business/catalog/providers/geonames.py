@@ -32,7 +32,7 @@ class GeoNamesProvider(CatalogProvider):
             id=self.id, name="GeoNames places (for IDW)", kind="http",
             description="Populated places of a country as points with population and elevation — "
                         "interpolate either field on the IDW page.",
-            regions=options("iso2"), attribution="GeoNames (CC BY)",
+            regions=options("iso2"), attribution="GeoNames (CC BY)", default_open_in=OPEN_IN_IDW,
         )
 
     def download(self, request: CatalogRequestDTO, dest_dir: Path,

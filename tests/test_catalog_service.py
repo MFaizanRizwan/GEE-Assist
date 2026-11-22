@@ -18,6 +18,7 @@ from backend.business.catalog import (  # noqa: E402
 )
 from backend.business.catalog import providers  # noqa: E402
 from backend.business.catalog.downloader import _safe_extract  # noqa: E402
+from backend.business.vector import VectorService  # noqa: E402
 from backend.business.catalog.geojson_to_shapefile import write_geojson  # noqa: E402
 from backend.dto.catalog_dto import CatalogRequestDTO  # noqa: E402
 from backend.exceptions import CatalogError  # noqa: E402
@@ -183,6 +184,35 @@ def test_downloads_go_into_fresh_folders(service, tmp_path, monkeypatch):
     first = service.download(req, str(tmp_path))
     second = service.download(req, str(tmp_path))
     assert Path(first.primary_path).parent != Path(second.primary_path).parent
+
+
+def test_each_kind_is_saved_in_its_own_folder(service, tmp_path, monkeypatch):
+    from tests.test_terrain_service import east_ramp, write_dem
+
+    monkeypatch.setattr(providers.natural_earth, "download_and_extract",
+                        lambda url, dest_dir, on_progress=None, headers=None:
+                        _write_fake_shapefile(dest_dir, "ne_110m_admin_0_countries"))
+    monkeypatch.setattr(providers.diva_gis, "download_and_extract",
+                        lambda url, dest_dir, on_progress=None, headers=None:
+                        [Path(write_dem(Path(dest_dir) / "PAK_msk_alt.tif", east_ramp()))])
+
+    def fake_geonames(url, dest_dir, on_progress=None, headers=None):
+        table = Path(dest_dir) / "PK.txt"
+        table.write_text("1\tX\tX\t\t31.5\t74.3\tP\tPPL\tPK\t\t04\t\t\t\t100\t\t200\ttz\t2020", encoding="utf-8")
+        return [table]
+
+    monkeypatch.setattr(providers.geonames, "download_and_extract", fake_geonames)
+    pytest.importorskip("rasterio")
+
+    vector = service.download(CatalogRequestDTO(source_id="natural_earth", dataset_id="countries", scale_id="110m"),
+                              str(tmp_path))
+    dem = service.download(CatalogRequestDTO(source_id="diva_gis", dataset_id="elevation", region_id="PAK"),
+                           str(tmp_path))
+    idw = service.download(CatalogRequestDTO(source_id="geonames", region_id="PK"), str(tmp_path))
+
+    assert Path(vector.primary_path).is_relative_to(tmp_path / "Vector shapefiles")
+    assert Path(dem.primary_path).is_relative_to(tmp_path / "DEM elevation")
+    assert Path(idw.primary_path).is_relative_to(tmp_path / "IDW point data")
 
 
 def test_safe_extract_blocks_path_traversal(tmp_path):
