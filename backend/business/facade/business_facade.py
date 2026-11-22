@@ -12,6 +12,7 @@ from backend.business.explanation.i_explanation_service import IExplanationServi
 from backend.business.facade.i_business_facade import IBusinessFacade
 from backend.business.report.i_report_service import IReportService
 from backend.business.map.i_map_service import IMapService
+from backend.business.interpolation.i_interpolation_service import IInterpolationService
 from backend.business.request.i_request_service import IRequestService
 from backend.business.terrain.i_terrain_service import ITerrainService
 from backend.business.vector.i_vector_service import IVectorService
@@ -29,10 +30,12 @@ from backend.dto.settings_dto import AppSettingsDTO, AppSettingsUpdateDTO
 from backend.dto.result_dto import ResultDTO
 from backend.dto.vector_dto import VectorLayerDTO
 from backend.dto.terrain_dto import TerrainInfoDTO, TerrainProductDTO
+from backend.dto.interpolation_dto import IDWParamsDTO, IDWResultDTO
 from backend.exceptions import (
     AnalysisError,
     ExplanationError,
     GeeAssistError,
+    InterpolationError,
     ProjectError,
     ReportError,
     TerrainError,
@@ -70,6 +73,7 @@ class BusinessFacade(IBusinessFacade):
         report_service: IReportService | None = None,
         vector_service: IVectorService | None = None,
         terrain_service: ITerrainService | None = None,
+        interpolation_service: IInterpolationService | None = None,
     ):
         self._user_service = user_service
         self._request_service = request_service
@@ -81,6 +85,7 @@ class BusinessFacade(IBusinessFacade):
         self._report_service = report_service
         self._vector_service = vector_service
         self._terrain_service = terrain_service
+        self._interpolation_service = interpolation_service
 
     # ------------------------------------------------------------- authentication
     def is_server_available(self) -> bool:
@@ -356,6 +361,18 @@ class BusinessFacade(IBusinessFacade):
         if self._terrain_service is None:
             raise TerrainError("The DEM tools are not set up in this build.")
         return self._terrain_service
+
+    # ------------------------------------------------------------- IDW interpolation
+    def interpolate_idw(self, points, field: str, params: IDWParamsDTO | None = None) -> IDWResultDTO:
+        return self._interpolation().interpolate_idw(points, field, params)
+
+    def save_interpolation(self, result: IDWResultDTO, path: str) -> str:
+        return self._interpolation().save_surface(result, path)
+
+    def _interpolation(self) -> IInterpolationService:
+        if self._interpolation_service is None:
+            raise InterpolationError("Interpolation is not set up in this build.")
+        return self._interpolation_service
 
     # ------------------------------------------------------------- analysis (UC-06)
     def list_formulas(self) -> list[FormulaDTO]:

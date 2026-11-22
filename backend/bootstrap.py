@@ -8,6 +8,7 @@ from backend.business.analysis import AnalysisService
 from backend.business.download import Chunker, ChunkMerger, DownloadService
 from backend.business.explanation import ExplanationService
 from backend.business.facade import BusinessFacade, IBusinessFacade
+from backend.business.interpolation import InterpolationService
 from backend.business.map import MapService
 from backend.business.report import ReportService
 from backend.business.request import RequestService
@@ -84,4 +85,5 @@ def build_business_facade() -> IBusinessFacade:
         report_service=ReportService(map_service=map_service),
         vector_service=VectorService(),
         terrain_service=TerrainService(),
+        interpolation_service=InterpolationService(),
     )

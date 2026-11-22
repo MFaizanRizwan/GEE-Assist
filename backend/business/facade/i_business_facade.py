@@ -15,6 +15,7 @@ from backend.dto.settings_dto import AppSettingsDTO, AppSettingsUpdateDTO
 from backend.dto.result_dto import ResultDTO
 from backend.dto.vector_dto import VectorLayerDTO
 from backend.dto.terrain_dto import TerrainInfoDTO, TerrainProductDTO
+from backend.dto.interpolation_dto import IDWParamsDTO, IDWResultDTO, SamplePointDTO
 from backend.dto.user_dto import (
     GoogleSignInDTO,
     NewUserDTO,
@@ -283,6 +284,15 @@ class IBusinessFacade(ABC):
     def save_terrain_product(self, info: TerrainInfoDTO, product: str, path: str,
                              params: dict | None = None) -> str:
         """Write a derived surface as a GeoTIFF at the DEM's full resolution; returns its path."""
+
+    # ------------------------------------------------------------- IDW interpolation
+    @abstractmethod
+    def interpolate_idw(self, points, field: str, params: IDWParamsDTO | None = None) -> IDWResultDTO:
+        """Interpolate sample points (SamplePointDTO) into an inverse-distance-weighted raster surface."""
+
+    @abstractmethod
+    def save_interpolation(self, result: IDWResultDTO, path: str) -> str:
+        """Write an interpolated surface as a GeoTIFF (EPSG:4326); returns its path."""
 
     # ------------------------------------------------------------- analysis (UC-06) and its formula table
     @abstractmethod

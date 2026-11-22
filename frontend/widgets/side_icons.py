@@ -436,3 +436,35 @@ class TerrainIcon(SideIcon):
         painter.setBrush(QColor(theme.WHITE))
         painter.drawPath(cap)
         painter.restore()
+
+
+class InterpolateIcon(SideIcon):
+    """Sample points over an interpolated field (IDW); animated, rings spread out from each
+    point like distance-weighted influence."""
+
+    period_ms = 2200
+    POINTS = ((0.3, 0.32), (0.7, 0.26), (0.5, 0.6), (0.24, 0.72), (0.76, 0.7))
+
+    def paint(self, painter: QPainter, rect: QRectF, t: float | None) -> None:
+        s = rect.width()
+        line_width = max(1.2, s * 0.06)
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        centres = [QPointF(rect.left() + s * fx, rect.top() + s * fy) for fx, fy in self.POINTS]
+        grow = 0.0 if t is None else (t % 1.0)
+        ring = QColor(theme.OCEAN)
+        ring.setAlpha(110)
+        painter.setPen(QPen(ring, line_width))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        for centre in centres:  # expanding influence rings
+            radius = s * (0.08 + 0.16 * grow)
+            painter.drawEllipse(centre, radius, radius)
+
+        painter.setPen(QPen(QColor(theme.INK), line_width * 0.8))
+        for index, centre in enumerate(centres):
+            colour = QColor(theme.LEAF) if index == (0 if t is None else int(t * len(centres)) % len(centres)) \
+                else QColor(theme.OCEAN)
+            painter.setBrush(colour)
+            painter.drawEllipse(centre, s * 0.06, s * 0.06)
+        painter.restore()
