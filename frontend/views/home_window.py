@@ -65,6 +65,7 @@ from frontend.views.raster_viewer_view import RasterViewerView
 from frontend.views.vector_map_view import VectorMapView
 from frontend.views.dem_view import DemView
 from frontend.views.idw_view import IdwView
+from frontend.views.data_catalog_view import DataCatalogView
 from frontend.gkonsol.form_port import WidgetForm
 from frontend.gkonsol.help import REFERENCE_FILE
 from frontend.gkonsol.history import GkonsolStore, History
@@ -75,6 +76,7 @@ from frontend.widgets.menu_bar import AppMenuBar
 from frontend.widgets.side_bar import COLLAPSED_WIDTH, EXPANDED_WIDTH, LOGO_SIZE, SideBar
 from frontend.widgets.side_icons import (
     AnalysisIcon,
+    CatalogIcon,
     DownloadIcon,
     ExplainIcon,
     InterpolateIcon,
@@ -253,6 +255,8 @@ class HomeWindow(QMainWindow):
         self.dem_button.setToolTip("Digital Elevation Model: hillshade, slope, aspect and contours from a DEM (Ctrl+9)")
         self.idw_button = self.side_bar.add_button("IDW Interpolation", "I", icon=InterpolateIcon())
         self.idw_button.setToolTip("IDW: interpolate a point shapefile's values into a surface (Ctrl+0)")
+        self.catalog_button = self.side_bar.add_button("Data Catalog", "C", icon=CatalogIcon())
+        self.catalog_button.setToolTip("Data Catalog: download boundaries, basemaps and OSM data (Ctrl+Shift+D)")
         self.explain_button = self.side_bar.add_button("AI Explanation", "AI", icon=ExplainIcon())
         self.explain_button.setToolTip("AI Explanation: choose an analysis result of the open project and "
                                        "let Gemini explain it")
@@ -289,6 +293,7 @@ class HomeWindow(QMainWindow):
         self.vector_maps = VectorMapView(facade)
         self.dem = DemView(facade)
         self.idw = IdwView(facade)
+        self.data_catalog = DataCatalogView(facade)
         self.explanation = ExplanationView(facade)
         self.reports = ReportsView(facade)
         self.analysis_table = AnalysisTableView(facade)
@@ -323,6 +328,7 @@ class HomeWindow(QMainWindow):
         self.pages.addWidget(self.vector_maps)
         self.pages.addWidget(self.dem)
         self.pages.addWidget(self.idw)
+        self.pages.addWidget(self.data_catalog)
         self.pages.addWidget(self.explanation)
         self.pages.addWidget(self.reports)
         self.pages.addWidget(self.analysis_table)
@@ -335,6 +341,7 @@ class HomeWindow(QMainWindow):
             self.vector_maps: self.vector_button,
             self.dem: self.dem_button,
             self.idw: self.idw_button,
+            self.data_catalog: self.catalog_button,
             self.explanation: self.explain_button,
         }
 
@@ -371,6 +378,8 @@ class HomeWindow(QMainWindow):
         self.vector_button.clicked.connect(self.show_vector_maps)
         self.dem_button.clicked.connect(self.show_dem)
         self.idw_button.clicked.connect(self.show_idw)
+        self.catalog_button.clicked.connect(self.show_data_catalog)
+        self.data_catalog.open_requested.connect(self.open_downloaded_dataset)
         self.explain_button.clicked.connect(self.explain_saved_result)
         self.result_chooser = choose_result  # (results, project name, parent) -> result or None; tests replace it
         self.terminal_button.clicked.connect(self.toggle_terminal)
@@ -521,6 +530,22 @@ class HomeWindow(QMainWindow):
     def show_idw(self) -> None:
         """The IDW Interpolation page: interpolate point data into a surface. No project needed."""
         self._show_page(self.idw)
+
+    def show_data_catalog(self) -> None:
+        """The Data Catalog page: download geodata from providers. No project needed."""
+        self._show_page(self.data_catalog)
+
+    def open_downloaded_dataset(self, path: str, open_in: str) -> None:
+        """Open a dataset downloaded from the Data Catalog in the page it belongs to."""
+        if open_in == "dem":
+            self.dem.load(path)
+            self.show_dem()
+        elif open_in == "idw":
+            self.idw.load(path)
+            self.show_idw()
+        else:
+            self.vector_maps.load(path)
+            self.show_vector_maps()
 
     def show_reports(self, explanation_path: str = "") -> None:
         """The Reports page; given a saved explanation, its PDF report is created there at once."""
@@ -735,6 +760,7 @@ class HomeWindow(QMainWindow):
         bar.view_vector_maps.triggered.connect(self.show_vector_maps)
         bar.view_dem.triggered.connect(self.show_dem)
         bar.view_idw.triggered.connect(self.show_idw)
+        bar.view_data_catalog.triggered.connect(self.show_data_catalog)
         bar.view_reports.triggered.connect(lambda: self.show_reports())
         bar.view_analysis_table.triggered.connect(self.show_analysis_table)
         bar.toggle_side_bar.setChecked(self.side_bar.is_pinned())  # "Side bar": keep it open

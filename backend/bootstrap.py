@@ -7,6 +7,13 @@ import os
 from backend.business.analysis import AnalysisService
 from backend.business.download import Chunker, ChunkMerger, DownloadService
 from backend.business.explanation import ExplanationService
+from backend.business.catalog import (
+    CatalogService,
+    EarthEngineProvider,
+    GeofabrikProvider,
+    HdxProvider,
+    NaturalEarthProvider,
+)
 from backend.business.facade import BusinessFacade, IBusinessFacade
 from backend.business.interpolation import InterpolationService
 from backend.business.map import MapService
@@ -38,9 +45,10 @@ def build_business_facade() -> IBusinessFacade:
     session = AuthSession(auth_api, session_store)  # the sign-in tokens, shared by UserService and UserDAO
 
     llm = load_llm_settings()
+    gee_client = GEEClient(project=settings.gee_project)
     data_facade = DataFacade(
         gemini_client=GeminiClient(api_key=llm.api_key, model=llm.model),
-        gee_client=GEEClient(project=settings.gee_project),
+        gee_client=gee_client,
         user_dao=UserDAO(auth_api, session, PROFILE_PHOTO_DIR),
         project_dao=ProjectDAO(PROJECT_HISTORY_FILE),  # project folders and their history, on this computer
         geocoding_client=NominatimClient(),
@@ -86,4 +94,10 @@ def build_business_facade() -> IBusinessFacade:
         vector_service=VectorService(),
         terrain_service=TerrainService(),
         interpolation_service=InterpolationService(),
+        catalog_service=CatalogService([
+            EarthEngineProvider(gee_client.fetch_feature_collection),
+            NaturalEarthProvider(),
+            GeofabrikProvider(),
+            HdxProvider(),
+        ]),
     )

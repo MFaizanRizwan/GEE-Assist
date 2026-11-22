@@ -16,6 +16,7 @@ from backend.dto.result_dto import ResultDTO
 from backend.dto.vector_dto import VectorLayerDTO
 from backend.dto.terrain_dto import TerrainInfoDTO, TerrainProductDTO
 from backend.dto.interpolation_dto import IDWParamsDTO, IDWResultDTO, SamplePointDTO
+from backend.dto.catalog_dto import CatalogRequestDTO, CatalogResultDTO, CatalogSourceDTO
 from backend.dto.user_dto import (
     GoogleSignInDTO,
     NewUserDTO,
@@ -293,6 +294,16 @@ class IBusinessFacade(ABC):
     @abstractmethod
     def save_interpolation(self, result: IDWResultDTO, path: str) -> str:
         """Write an interpolated surface as a GeoTIFF (EPSG:4326); returns its path."""
+
+    # ------------------------------------------------------------- data catalog (downloading datasets)
+    @abstractmethod
+    def list_data_sources(self) -> list[CatalogSourceDTO]:
+        """The data providers (Earth Engine, Natural Earth, Geofabrik, HDX) and their choices."""
+
+    @abstractmethod
+    def download_dataset(self, request: CatalogRequestDTO, dest_dir: str,
+                         on_progress=None) -> CatalogResultDTO:
+        """Download a dataset from a provider into a fresh folder under ``dest_dir``."""
 
     # ------------------------------------------------------------- analysis (UC-06) and its formula table
     @abstractmethod

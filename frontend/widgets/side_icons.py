@@ -468,3 +468,54 @@ class InterpolateIcon(SideIcon):
             painter.setBrush(colour)
             painter.drawEllipse(centre, s * 0.06, s * 0.06)
         painter.restore()
+
+
+class CatalogIcon(SideIcon):
+    """A globe with a download arrow (fetching data from providers); animated, the arrow
+    descends into a tray, as data lands on the computer."""
+
+    period_ms = 1300
+
+    def paint(self, painter: QPainter, rect: QRectF, t: float | None) -> None:
+        s = rect.width()
+        line_width = max(1.4, s * 0.075)
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # Globe (top).
+        globe = QPointF(rect.left() + s * 0.5, rect.top() + s * 0.32)
+        radius = s * 0.22
+        painter.setPen(QPen(QColor(theme.OCEAN), line_width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawEllipse(globe, radius, radius)
+        painter.drawLine(QPointF(globe.x() - radius, globe.y()), QPointF(globe.x() + radius, globe.y()))
+        meridian = QRectF(globe.x() - radius * 0.5, globe.y() - radius, radius, radius * 2)
+        painter.drawArc(meridian, 90 * 16, 180 * 16)
+        painter.drawArc(meridian, -90 * 16, 180 * 16)
+
+        # Tray at the bottom.
+        tray_top, bottom = rect.top() + s * 0.74, rect.top() + s * 0.9
+        tray = QPainterPath(QPointF(rect.left() + s * 0.2, tray_top))
+        tray.lineTo(rect.left() + s * 0.2, bottom)
+        tray.lineTo(rect.right() - s * 0.2, bottom)
+        tray.lineTo(rect.right() - s * 0.2, tray_top)
+        painter.setPen(QPen(QColor(theme.INK), line_width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap,
+                            Qt.PenJoinStyle.RoundJoin))
+        painter.drawPath(tray)
+
+        # Download arrow between globe and tray.
+        lane = QRectF(rect.left(), globe.y() + radius * 0.4, s, s * 0.28)
+        offset = (t or 0.0) * lane.height()
+        painter.setClipRect(lane)
+        painter.setPen(QPen(QColor(theme.LEAF), line_width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap,
+                            Qt.PenJoinStyle.RoundJoin))
+        x = globe.x()
+        for shift in (offset, offset - lane.height()):
+            top = lane.top() + shift
+            tip = top + s * 0.14
+            painter.drawLine(QPointF(x, top), QPointF(x, tip))
+            head = QPainterPath(QPointF(x - s * 0.08, tip - s * 0.08))
+            head.lineTo(x, tip)
+            head.lineTo(x + s * 0.08, tip - s * 0.08)
+            painter.drawPath(head)
+        painter.restore()

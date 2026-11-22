@@ -70,6 +70,11 @@ class InterpolationError(GeeAssistError):
     """A surface cannot be interpolated: no sample points, no numeric field, or bad parameters."""
 
 
+class CatalogError(GeeAssistError):
+    """A dataset could not be fetched from a provider: the download failed, the file was empty,
+    or Earth Engine returned no features for the area."""
+
+
 class ExplanationError(GeeAssistError):
     """An analysis result cannot be explained: it is not saved in the project, or its files are missing."""
 

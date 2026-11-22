@@ -37,6 +37,14 @@ class IGEEClient(ABC):
         """
 
     @abstractmethod
+    def fetch_feature_collection(self, asset_id: str, aoi_geojson: str = "", limit: int = 5000) -> dict:
+        """A GEE FeatureCollection as a GeoJSON dict, clipped to ``aoi_geojson`` and capped at ``limit``.
+
+        Raises:
+            GEEError: GEE is not set up, the asset is unknown, or it has no features for the area.
+        """
+
+    @abstractmethod
     def validate_access(self) -> bool:
         """True if Earth Engine is signed in and the configured project can be used."""
 

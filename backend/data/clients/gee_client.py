@@ -151,6 +151,23 @@ class GEEClient(IGEEClient):
     def cancel_sign_in(self) -> None:
         self._sign_in.cancel()
 
+    # ------------------------------------------------------------- feature collections (vectors)
+    def fetch_feature_collection(self, asset_id: str, aoi_geojson: str = "", limit: int = 5000) -> dict:
+        self._initialize()
+        ee = self._ee()
+        try:
+            collection = ee.FeatureCollection(asset_id)
+            if aoi_geojson:
+                collection = collection.filterBounds(ee.Geometry(json.loads(aoi_geojson)))
+            data = collection.limit(int(limit)).getInfo()
+        except GEEError:
+            raise
+        except Exception as exc:
+            raise _error(exc, self._project) from exc
+        if not isinstance(data, dict) or not data.get("features"):
+            raise GEEError("Earth Engine returned no features for this area. Try a larger area or another dataset.")
+        return data
+
     # ------------------------------------------------------------- access
     def validate_access(self) -> bool:
         try:

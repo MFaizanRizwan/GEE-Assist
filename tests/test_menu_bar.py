@@ -39,8 +39,8 @@ def test_menus_hold_the_expected_items(bar):
     assert _items(bar.edit_menu) == ["&Undo", "&Redo", "Cu&t", "&Copy", "&Paste", "Select &all"]
     assert _items(bar.view_menu) == ["&Dashboard", "&Query Input", "Do&wnloads", "&Account", "A&nalysis",
                                      "&Reports", "&Vector maps", "&Digital Elevation Model", "&IDW interpolation",
-                                     "Show analysis ta&ble", "&Side bar", "&Terminal", "&Full screen",
-                                     "&Layout", "&Theme"]
+                                     "Data &catalog", "Show analysis ta&ble", "&Side bar", "&Terminal",
+                                     "&Full screen", "&Layout", "&Theme"]
     assert _items(bar.terminal_menu)[:4] == ["&Show terminal	Ctrl+`", "&Maximise terminal", "&Clear terminal",
                                              "S&top running command"]
     assert _items(bar.options_menu) == ["&Settings…", "Download &chunk size…", "&Manage users…"]
