@@ -13,6 +13,7 @@ from backend.dto.project_dto import AnalysisRecordDTO, ProjectDTO
 from backend.dto.report_dto import ExplanationFileDTO
 from backend.dto.settings_dto import AppSettingsDTO, AppSettingsUpdateDTO
 from backend.dto.result_dto import ResultDTO
+from backend.dto.vector_dto import VectorLayerDTO
 from backend.dto.user_dto import (
     GoogleSignInDTO,
     NewUserDTO,
@@ -261,6 +262,11 @@ class IBusinessFacade(ABC):
 
     @abstractmethod
     def raster_values_at(self, info: RasterInfoDTO, lon: float, lat: float) -> dict[str, float | None]: ...
+
+    # ------------------------------------------------------------- vector maps (shapefiles)
+    @abstractmethod
+    def load_shapefile(self, path: str) -> VectorLayerDTO:
+        """Read a shapefile (.shp) and reproject it to WGS84 for the Vector Maps page."""
 
     # ------------------------------------------------------------- analysis (UC-06) and its formula table
     @abstractmethod

@@ -13,6 +13,7 @@ from backend.business.facade.i_business_facade import IBusinessFacade
 from backend.business.report.i_report_service import IReportService
 from backend.business.map.i_map_service import IMapService
 from backend.business.request.i_request_service import IRequestService
+from backend.business.vector.i_vector_service import IVectorService
 from backend.business.settings.i_settings_service import ISettingsService
 from backend.business.user.i_user_service import IUserService
 from backend.dto import CheckDTO, DownloadJobDTO, FormDTO, PlaceDTO, ValidationDTO
@@ -25,7 +26,15 @@ from backend.dto.project_dto import AnalysisRecordDTO, ProjectDTO
 from backend.dto.report_dto import ExplanationFileDTO
 from backend.dto.settings_dto import AppSettingsDTO, AppSettingsUpdateDTO
 from backend.dto.result_dto import ResultDTO
-from backend.exceptions import AnalysisError, ExplanationError, GeeAssistError, ProjectError, ReportError
+from backend.dto.vector_dto import VectorLayerDTO
+from backend.exceptions import (
+    AnalysisError,
+    ExplanationError,
+    GeeAssistError,
+    ProjectError,
+    ReportError,
+    VectorError,
+)
 from backend.dto.user_dto import (
     GoogleSignInDTO,
     NewUserDTO,
@@ -56,6 +65,7 @@ class BusinessFacade(IBusinessFacade):
         settings_service: ISettingsService | None = None,
         explanation_service: IExplanationService | None = None,
         report_service: IReportService | None = None,
+        vector_service: IVectorService | None = None,
     ):
         self._user_service = user_service
         self._request_service = request_service
@@ -65,6 +75,7 @@ class BusinessFacade(IBusinessFacade):
         self._settings_service = settings_service
         self._explanation_service = explanation_service
         self._report_service = report_service
+        self._vector_service = vector_service
 
     # ------------------------------------------------------------- authentication
     def is_server_available(self) -> bool:
@@ -314,6 +325,15 @@ class BusinessFacade(IBusinessFacade):
 
     def raster_values_at(self, info: RasterInfoDTO, lon: float, lat: float) -> dict[str, float | None]:
         return self._map_service.values_at(info, lon, lat)
+
+    # ------------------------------------------------------------- vector maps (shapefiles)
+    def load_shapefile(self, path: str) -> VectorLayerDTO:
+        return self._vector().load_shapefile(path)
+
+    def _vector(self) -> IVectorService:
+        if self._vector_service is None:
+            raise VectorError("Vector maps are not set up in this build.")
+        return self._vector_service
 
     # ------------------------------------------------------------- analysis (UC-06)
     def list_formulas(self) -> list[FormulaDTO]:

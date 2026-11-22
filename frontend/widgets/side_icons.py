@@ -348,3 +348,39 @@ class ExplainIcon(SideIcon):
                 star.lineTo(corner)
         star.closeSubpath()
         return star
+
+
+class VectorIcon(SideIcon):
+    """A map polygon with its vertex nodes (vector maps / shapefiles); animated, the nodes
+    light up one after another, as if the shape were being digitised."""
+
+    period_ms = 2000
+    # Vertices of a simple closed polygon, as shares of the icon (an arrow-like parcel outline).
+    VERTICES = ((0.2, 0.32), (0.52, 0.16), (0.84, 0.4), (0.72, 0.82), (0.3, 0.74))
+
+    def paint(self, painter: QPainter, rect: QRectF, t: float | None) -> None:
+        s = rect.width()
+        line_width = max(1.4, s * 0.075)
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        corners = [QPointF(rect.left() + s * fx, rect.top() + s * fy) for fx, fy in self.VERTICES]
+        shape = QPainterPath(corners[0])
+        for corner in corners[1:]:
+            shape.lineTo(corner)
+        shape.closeSubpath()
+        fill = QColor(theme.MINT)
+        fill.setAlpha(120)
+        painter.setBrush(fill)
+        painter.setPen(QPen(QColor(theme.OCEAN), line_width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap,
+                            Qt.PenJoinStyle.RoundJoin))
+        painter.drawPath(shape)
+
+        # Vertex nodes: square handles; the "active" one (lit in turn while animating) is green.
+        active = None if t is None else int(t * len(corners)) % len(corners)
+        node = s * 0.11
+        painter.setPen(QPen(QColor(theme.INK), line_width * 0.8))
+        for index, corner in enumerate(corners):
+            painter.setBrush(QColor(theme.LEAF if index == active else theme.WHITE))
+            painter.drawRect(QRectF(corner.x() - node / 2, corner.y() - node / 2, node, node))
+        painter.restore()

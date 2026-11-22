@@ -62,6 +62,7 @@ from frontend.views.dashboard_view import DashboardView
 from frontend.views.download_view import DownloadView
 from frontend.views.main_window import MainWindow
 from frontend.views.raster_viewer_view import RasterViewerView
+from frontend.views.vector_map_view import VectorMapView
 from frontend.gkonsol.form_port import WidgetForm
 from frontend.gkonsol.help import REFERENCE_FILE
 from frontend.gkonsol.history import GkonsolStore, History
@@ -70,7 +71,14 @@ from frontend.gkonsol.ports import MemoryForm
 from frontend.views.user_admin_view import UserAdminDialog
 from frontend.widgets.menu_bar import AppMenuBar
 from frontend.widgets.side_bar import COLLAPSED_WIDTH, EXPANDED_WIDTH, LOGO_SIZE, SideBar
-from frontend.widgets.side_icons import AnalysisIcon, DownloadIcon, ExplainIcon, TerminalIcon, WritingIcon
+from frontend.widgets.side_icons import (
+    AnalysisIcon,
+    DownloadIcon,
+    ExplainIcon,
+    TerminalIcon,
+    VectorIcon,
+    WritingIcon,
+)
 from frontend.views.result_picker_dialog import choose_result
 
 PAGE_BACKGROUND = (
@@ -235,6 +243,8 @@ class HomeWindow(QMainWindow):
         self.downloads_button = self.side_bar.add_button("Downloads", "D", icon=DownloadIcon())
         self.analysis_button = self.side_bar.add_button("Analysis", "A", icon=AnalysisIcon())
         self.analysis_button.setToolTip("Analysis: run vegetation, water, burn, ... analyses on a dataset (Ctrl+5)")
+        self.vector_button = self.side_bar.add_button("Vector Maps", "V", icon=VectorIcon())
+        self.vector_button.setToolTip("Vector Maps: open a shapefile (.shp) and explore its features (Ctrl+8)")
         self.explain_button = self.side_bar.add_button("AI Explanation", "AI", icon=ExplainIcon())
         self.explain_button.setToolTip("AI Explanation: choose an analysis result of the open project and "
                                        "let Gemini explain it")
@@ -268,6 +278,7 @@ class HomeWindow(QMainWindow):
         self.downloads = DownloadView(facade)
         self.viewer = RasterViewerView(facade)
         self.analysis = AnalysisView(facade)
+        self.vector_maps = VectorMapView(facade)
         self.explanation = ExplanationView(facade)
         self.reports = ReportsView(facade)
         self.analysis_table = AnalysisTableView(facade)
@@ -299,6 +310,7 @@ class HomeWindow(QMainWindow):
         self.pages.addWidget(account_page)
         self.pages.addWidget(self.viewer)
         self.pages.addWidget(self.analysis)
+        self.pages.addWidget(self.vector_maps)
         self.pages.addWidget(self.explanation)
         self.pages.addWidget(self.reports)
         self.pages.addWidget(self.analysis_table)
@@ -308,6 +320,7 @@ class HomeWindow(QMainWindow):
             self.query_input: self.query_input_button,
             self.downloads: self.downloads_button,
             self.analysis: self.analysis_button,
+            self.vector_maps: self.vector_button,
             self.explanation: self.explain_button,
         }
 
@@ -341,6 +354,7 @@ class HomeWindow(QMainWindow):
         self.query_input_button.clicked.connect(self.show_query_input)
         self.downloads_button.clicked.connect(self.show_downloads)
         self.analysis_button.clicked.connect(self.show_analysis)
+        self.vector_button.clicked.connect(self.show_vector_maps)
         self.explain_button.clicked.connect(self.explain_saved_result)
         self.result_chooser = choose_result  # (results, project name, parent) -> result or None; tests replace it
         self.terminal_button.clicked.connect(self.toggle_terminal)
@@ -479,6 +493,10 @@ class HomeWindow(QMainWindow):
         if self.analysis.isVisibleTo(self.pages) or self.analysis._loaded:
             self.analysis.refresh_datasets()  # a download may have finished since (the first visit loads anyway)
         self._show_page(self.analysis)
+
+    def show_vector_maps(self) -> None:
+        """The Vector Maps page: open and explore shapefiles. No project needed (works on any file)."""
+        self._show_page(self.vector_maps)
 
     def show_reports(self, explanation_path: str = "") -> None:
         """The Reports page; given a saved explanation, its PDF report is created there at once."""
@@ -690,6 +708,7 @@ class HomeWindow(QMainWindow):
         bar.view_downloads.triggered.connect(self.show_downloads)
         bar.view_account.triggered.connect(self.show_account)
         bar.view_analysis.triggered.connect(self.show_analysis)
+        bar.view_vector_maps.triggered.connect(self.show_vector_maps)
         bar.view_reports.triggered.connect(lambda: self.show_reports())
         bar.view_analysis_table.triggered.connect(self.show_analysis_table)
         bar.toggle_side_bar.setChecked(self.side_bar.is_pinned())  # "Side bar": keep it open

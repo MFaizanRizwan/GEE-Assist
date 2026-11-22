@@ -58,6 +58,10 @@ class ProjectError(GeeAssistError):
         self.field = field
 
 
+class VectorError(GeeAssistError):
+    """A shapefile cannot be shown: it is missing, unreadable, has no geometry, or cannot be reprojected."""
+
+
 class ExplanationError(GeeAssistError):
     """An analysis result cannot be explained: it is not saved in the project, or its files are missing."""
 

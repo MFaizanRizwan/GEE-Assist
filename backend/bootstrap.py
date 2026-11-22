@@ -13,6 +13,7 @@ from backend.business.report import ReportService
 from backend.business.request import RequestService
 from backend.business.settings import SettingsService
 from backend.business.user import UserService
+from backend.business.vector import VectorService
 from backend.config import DEFAULT_DOWNLOAD_DIR, DownloadSettingsStore
 from backend.config.llm import load_llm_settings
 from backend.config.settings import APP_SETTINGS_FILE, PROFILE_PHOTO_DIR, PROJECT_HISTORY_FILE, get_settings
@@ -80,4 +81,5 @@ def build_business_facade() -> IBusinessFacade:
         settings_service=settings_service,
         explanation_service=ExplanationService(data_facade=data_facade, map_service=map_service),
         report_service=ReportService(map_service=map_service),
+        vector_service=VectorService(),
     )
