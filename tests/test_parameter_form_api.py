@@ -73,6 +73,33 @@ def view(app, monkeypatch, tmp_path):
     form.deleteLater()
 
 
+def test_focus_out_of_coord_spins_keeps_a_searched_boundary(view):
+    """Clicking elsewhere on the page fires editingFinished on the coordinate spins even when
+    nothing was typed; it must not replace a searched polygon with its 4-corner bounding box."""
+    from backend.dto import PlaceDTO
+
+    lahore = {"type": "Polygon",
+              "coordinates": [[[74.0, 31.3], [74.6, 31.3], [74.6, 31.7], [74.3, 31.8], [74.0, 31.6], [74.0, 31.3]]]}
+    view.set_place_area(PlaceDTO(name="Lahore", display_name="Lahore, Pakistan", kind="city",
+                                 aoi=json.dumps(lahore)))
+    assert json.loads(view._drawn_aoi) == lahore  # the polygon is the AOI
+
+    view._on_bbox_typed()  # as when focus leaves a spin after a click elsewhere
+    assert json.loads(view._drawn_aoi) == lahore          # still the polygon, not a rectangle
+    assert view._drawn_name != "Rectangle"
+
+
+def test_typing_new_coordinates_still_makes_a_rectangle(view):
+    from backend.dto import PlaceDTO
+
+    view.set_place_area(PlaceDTO(name="Lahore", display_name="Lahore, Pakistan", kind="city",
+                                 aoi=json.dumps(SQUARE)))
+    view.min_lon_spin.setValue(70.0)  # the user actually changes a coordinate
+    view._on_bbox_typed()
+    assert view._drawn_name == "Rectangle"
+    assert len(json.loads(view._drawn_aoi)["coordinates"][0]) == 5  # a 4-corner box (closed ring)
+
+
 def test_fields_are_set_as_the_user_would(view):
     view.set_dataset("landsat8_l2")
     view.set_bands(["SR_B5", "SR_B4"])

@@ -153,6 +153,7 @@ class ParameterFormView(QWidget):
         self._imported_name: str = ""
         self._drawn_aoi: str = ""  # GeoJSON of the rectangle / circle / polygon on the map
         self._drawn_name: str = ""
+        self._bbox_snapshot: tuple[float, float, float, float] | None = None  # spins' value, to tell real edits apart
         self._places: list[PlaceDTO] = []  # matches of the last place search
         self._place_search_id = 0          # ignores answers to searches that were superseded
         self._error_labels: dict[str, QLabel] = {}
@@ -852,6 +853,9 @@ class ParameterFormView(QWidget):
             spin.blockSignals(True)
             spin.setValue(value)
             spin.blockSignals(False)
+        # Remember what the spins now hold, so a later editingFinished (which also fires just on
+        # focus-out) does not mistake an unchanged box for a typed one and overwrite the AOI.
+        self._bbox_snapshot = self._bbox_values()
 
     def _bbox_values(self) -> tuple[float, float, float, float]:
         lon_a, lat_a, lon_b, lat_b = (s.value() for s in self._bbox_spins)
@@ -903,7 +907,14 @@ class ParameterFormView(QWidget):
         self._clear_drawn_shape()
 
     def _on_bbox_typed(self) -> None:
-        min_lon, min_lat, max_lon, max_lat = self._bbox_values()
+        bbox = self._bbox_values()
+        # editingFinished also fires when the spins merely lose focus (a click elsewhere on the
+        # page). If the coordinates are unchanged, keep the current AOI — do not replace a searched
+        # or imported boundary (e.g. Lahore's 463-vertex outline) with its 4-corner bounding box.
+        if self._bbox_snapshot is not None and all(abs(a - b) < 1e-9 for a, b in zip(bbox, self._bbox_snapshot)):
+            return
+        self._bbox_snapshot = bbox
+        min_lon, min_lat, max_lon, max_lat = bbox
         if min_lon < max_lon and min_lat < max_lat:
             self._set_drawn_shape(
                 bbox_polygon(min_lon, min_lat, max_lon, max_lat),
