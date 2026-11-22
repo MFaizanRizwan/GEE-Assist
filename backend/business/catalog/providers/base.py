@@ -28,3 +28,11 @@ def first_shapefile(paths: list[Path]) -> Optional[Path]:
     shps = [p for p in paths if p.suffix.lower() == ".shp"]
     shps.sort(key=lambda p: (p.stat().st_size if p.exists() else 0), reverse=True)
     return shps[0] if shps else None
+
+
+def first_raster(paths: list[Path]) -> Optional[Path]:
+    """The raster to open first: a GeoTIFF, or a GDAL .vrt / DIVA .grd, largest first."""
+    order = {".tif": 0, ".tiff": 0, ".vrt": 1, ".grd": 2}
+    rasters = [p for p in paths if p.suffix.lower() in order]
+    rasters.sort(key=lambda p: (order[p.suffix.lower()], -(p.stat().st_size if p.exists() else 0)))
+    return rasters[0] if rasters else None

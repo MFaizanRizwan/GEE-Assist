@@ -9,8 +9,10 @@ pytest.importorskip("shapefile")
 
 from backend.business.catalog import (  # noqa: E402
     CatalogService,
+    DivaGisProvider,
     EarthEngineProvider,
     GeofabrikProvider,
+    GeoNamesProvider,
     HdxProvider,
     NaturalEarthProvider,
 )
@@ -34,16 +36,74 @@ def _write_fake_shapefile(dest_dir, stem):
 @pytest.fixture
 def service():
     return CatalogService([EarthEngineProvider(lambda a, g, n, c: _poly_fc()),
-                           NaturalEarthProvider(), GeofabrikProvider(), HdxProvider()])
+                           NaturalEarthProvider(), DivaGisProvider(), GeoNamesProvider(),
+                           GeofabrikProvider(), HdxProvider()])
 
 
 def test_lists_every_source_with_its_selectors(service):
     by_id = {s.id: s for s in service.list_sources()}
-    assert set(by_id) == {"earth_engine", "natural_earth", "geofabrik", "hdx"}
+    assert set(by_id) == {"earth_engine", "natural_earth", "diva_gis", "geonames", "geofabrik", "hdx"}
     assert by_id["earth_engine"].needs_area and by_id["earth_engine"].datasets
     assert by_id["natural_earth"].scales and by_id["natural_earth"].datasets
+    assert by_id["diva_gis"].datasets and by_id["diva_gis"].regions  # themes + countries
+    assert by_id["geonames"].regions and not by_id["geonames"].datasets
     assert by_id["geofabrik"].regions
     assert by_id["hdx"].supports_search
+
+
+def test_diva_gis_vector_builds_the_country_url(service, tmp_path, monkeypatch):
+    captured = {}
+
+    def fake_extract(url, dest_dir, on_progress=None, headers=None):
+        captured["url"] = url
+        return _write_fake_shapefile(dest_dir, "PAK_adm1")
+
+    monkeypatch.setattr(providers.diva_gis, "download_and_extract", fake_extract)
+    result = service.download(CatalogRequestDTO(source_id="diva_gis", dataset_id="admin", region_id="PAK"),
+                              str(tmp_path))
+    assert captured["url"] == "https://geodata.ucdavis.edu/diva/adm/PAK_adm.zip"
+    assert result.open_in == "vector" and Path(result.primary_path).is_file()
+
+
+def test_diva_gis_elevation_converts_to_geotiff_for_the_dem_page(service, tmp_path, monkeypatch):
+    rasterio = pytest.importorskip("rasterio")
+    from tests.test_terrain_service import east_ramp, write_dem
+
+    def fake_extract(url, dest_dir, on_progress=None, headers=None):
+        assert url == "https://geodata.ucdavis.edu/diva/msk_alt/PAK_msk_alt.zip"
+        return [Path(write_dem(Path(dest_dir) / "PAK_msk_alt.tif", east_ramp()))]
+
+    monkeypatch.setattr(providers.diva_gis, "download_and_extract", fake_extract)
+    result = service.download(CatalogRequestDTO(source_id="diva_gis", dataset_id="elevation", region_id="PAK"),
+                              str(tmp_path))
+    assert result.open_in == "dem" and result.kind == "raster"
+    with rasterio.open(result.primary_path) as src:
+        assert src.count == 1  # a readable GeoTIFF for the DEM page
+
+
+def test_geonames_writes_a_point_shapefile_for_idw(service, tmp_path, monkeypatch):
+    def fake_extract(url, dest_dir, on_progress=None, headers=None):
+        assert url == "https://download.geonames.org/export/dump/PK.zip"
+        rows = [
+            "1\tLahore\tLahore\t\t31.55\t74.34\tP\tPPLA\tPK\t\t04\t\t\t\t11000000\t\t217\tAsia/Karachi\t2020",
+            "2\tMurree\tMurree\t\t33.9\t73.39\tP\tPPL\tPK\t\t04\t\t\t\t20000\t\t2291\tAsia/Karachi\t2020",
+            "3\tPort\tPort\t\t24.8\t66.9\tP\tPPL\tPK\t\t02\t\t\t\t0\t\t-9999\tAsia/Karachi\t2020",
+            "9\tK2\tK2\t\t35.88\t76.51\tT\tMT\tPK\t\t\t\t\t\t0\t\t8611\tAsia/Karachi\t2020",  # not a place (T)
+        ]
+        table = Path(dest_dir) / "PK.txt"
+        table.write_text("\n".join(rows), encoding="utf-8")
+        return [table]
+
+    monkeypatch.setattr(providers.geonames, "download_and_extract", fake_extract)
+    result = service.download(CatalogRequestDTO(source_id="geonames", region_id="PK"), str(tmp_path))
+    assert result.open_in == "idw" and result.kind == "points"
+
+    layer = VectorService().load_shapefile(result.primary_path)
+    assert layer.kind == "point" and layer.feature_count == 3  # the mountain (class T) is excluded
+    assert [f.name for f in layer.fields] == ["name", "population", "elevation"]
+    # -9999 elevation became 0 (not a poisoned value for IDW)
+    elevations = [f.attributes["elevation"] for f in layer.features]
+    assert min(elevations) == 0 and max(elevations) == 2291
 
 
 def test_earth_engine_download_writes_a_shapefile(service, tmp_path):

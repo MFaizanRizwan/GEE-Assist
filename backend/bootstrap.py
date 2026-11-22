@@ -9,8 +9,10 @@ from backend.business.download import Chunker, ChunkMerger, DownloadService
 from backend.business.explanation import ExplanationService
 from backend.business.catalog import (
     CatalogService,
+    DivaGisProvider,
     EarthEngineProvider,
     GeofabrikProvider,
+    GeoNamesProvider,
     HdxProvider,
     NaturalEarthProvider,
 )
@@ -97,6 +99,8 @@ def build_business_facade() -> IBusinessFacade:
         catalog_service=CatalogService([
             EarthEngineProvider(gee_client.fetch_feature_collection),
             NaturalEarthProvider(),
+            DivaGisProvider(),
+            GeoNamesProvider(),
             GeofabrikProvider(),
             HdxProvider(),
         ]),
