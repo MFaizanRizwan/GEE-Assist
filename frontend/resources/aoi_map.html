@@ -118,16 +118,21 @@
     return false;
   }
 
-  // Cancel an armed draw tool, so a shape set from code (a place search) can't leave the
-  // rectangle tool waiting to fire on the next click.
+  // Disarm every draw/edit tool, so a shape set from code (a place search) — or a tool that
+  // Leaflet.draw leaves armed after a draw — can't fire on the next map click.
   function cancelDraw() {
     try {
       var toolbars = drawControl && drawControl._toolbars;
-      if (toolbars && toolbars.draw && toolbars.draw._activeMode) toolbars.draw.disable();
+      if (!toolbars) return;
+      Object.keys(toolbars).forEach(function (key) {
+        var bar = toolbars[key];
+        if (bar && typeof bar.disable === 'function') bar.disable();
+      });
     } catch (err) { /* leaflet.draw internals absent: nothing to cancel */ }
   }
 
   map.on(L.Draw.Event.CREATED, function (e) {
+    cancelDraw();                 // never stay in drawing mode after one shape
     if (isDegenerate(e.layer)) return;   // a stray click, not a drawn AOI
     drawn.clearLayers();          // one AOI at a time
     drawn.addLayer(e.layer);
@@ -144,6 +149,7 @@
     mode = newMode;
     if (mode === 'draw') {
       map.addControl(drawControl);
+      cancelDraw();   // some Leaflet.draw builds arm the first tool on add — undo that
       hint.addTo(map);
       map.removeLayer(footprint);
       map.addLayer(drawn);

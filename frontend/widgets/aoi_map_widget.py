@@ -109,6 +109,11 @@ class AoiMapWidget(QWidget):
         self._ready = False
         self._pending: list[str] = []
         self._view = None
+        # Remembered map state, re-applied if the page reloads (the modern layout reparents the
+        # web view, which can reload it): without this the map would come back blank or in a
+        # stale draw state after being moved.
+        self._mode: str | None = None
+        self._content: str | None = None  # the last shape/bbox/geojson script
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -159,20 +164,26 @@ class AoiMapWidget(QWidget):
 
     def set_mode(self, mode: str) -> None:
         """``"draw"`` (draw a shape) or ``"file"`` (show imported GeoJSON)."""
+        self._mode = mode
         self._run(f"setMode({json.dumps(mode)})")
 
     def set_bbox(self, min_lon: float, min_lat: float, max_lon: float, max_lat: float, fit: bool = True) -> None:
-        self._run(f"setBbox({min_lon}, {min_lat}, {max_lon}, {max_lat}, {'true' if fit else 'false'})")
+        self._remember(f"setBbox({min_lon}, {min_lat}, {max_lon}, {max_lat}, {'true' if fit else 'false'})")
 
     def set_shape(self, geojson: str, fit: bool = True) -> None:
         """Show a Polygon / MultiPolygon (e.g. a city's boundary) as the drawn, editable shape."""
-        self._run(f"setShape({json.dumps(geojson)}, {'true' if fit else 'false'})")
+        self._remember(f"setShape({json.dumps(geojson)}, {'true' if fit else 'false'})")
 
     def clear_shape(self) -> None:
-        self._run("clearShape()")
+        self._remember("clearShape()")
 
     def show_geojson(self, geojson: str) -> None:
-        self._run(f"showGeoJSON({json.dumps(geojson)})")
+        self._remember(f"showGeoJSON({json.dumps(geojson)})")
+
+    def _remember(self, script: str) -> None:
+        """Run ``script`` and keep it as the current AOI, so it is re-applied if the page reloads."""
+        self._content = script
+        self._run(script)
 
     def show_image(self, png: bytes, bounds: tuple[float, float, float, float], title: str,
                    opacity: float = 0.8) -> None:
@@ -213,6 +224,12 @@ class AoiMapWidget(QWidget):
 
     def _on_ready(self) -> None:
         self._ready = True
+        # Re-apply the remembered state first: ``ready`` fires again when the page reloads
+        # (e.g. the modern layout reparents the view), and the fresh page starts blank.
+        if self._mode is not None:
+            self._view.page().runJavaScript(f"setMode({json.dumps(self._mode)})")
+        if self._content is not None:
+            self._view.page().runJavaScript(self._content)
         for script in self._pending:
             self._view.page().runJavaScript(script)
         self._pending.clear()
