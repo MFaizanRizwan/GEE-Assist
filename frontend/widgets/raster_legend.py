@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QLinearGradient, QPainter, QPen
 from PyQt6.QtWidgets import QGridLayout, QHBoxLayout, QLabel, QVBoxLayout, QWidget
@@ -15,6 +17,12 @@ RGB_CHANNELS = (("Red", "#E0453A"), ("Green", "#3DAA5C"), ("Blue", "#3A7BE0"))
 def format_value(value: float | None) -> str:
     """A band or index value, as briefly as it reads well (e.g. 0.42, 1530, 4.5e-05)."""
     if value is None:
+        return "no data"
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return "no data"
+    if not math.isfinite(value):  # NaN / inf: no-data pixel (e.g. outside the DEM's coverage)
         return "no data"
     magnitude = abs(value)
     if magnitude >= 1000 or value == int(value):

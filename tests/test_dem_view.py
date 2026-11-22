@@ -76,6 +76,16 @@ def test_reads_elevation_under_the_pointer(page, tmp_path):
     assert page.pointer_label.text().startswith("Elevation (shaded relief):")
 
 
+def test_pointer_over_a_no_data_pixel_does_not_crash(page, tmp_path):
+    import numpy as np
+
+    page.load(str(write_dem(tmp_path / "dem.tif", east_ramp())))
+    page.product.values[0, 0] = np.float32("nan")  # a no-data pixel
+    page._pointer = (0.0, 0.0)
+    page._read_value()  # used to raise ValueError: cannot convert float NaN to integer
+    assert "no data" in page.pointer_label.text()
+
+
 def test_bad_dem_shows_an_error(page, tmp_path):
     bad = tmp_path / "broken.tif"
     bad.write_bytes(b"not a geotiff")

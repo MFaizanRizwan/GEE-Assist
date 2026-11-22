@@ -309,15 +309,12 @@ class IdwView(QWidget):
     def _read_value(self) -> None:
         if self._pointer is None or self.result is None:
             return
-        import math
-
         x, y = self._pointer
         values = self.result.values
         col = min(values.shape[1] - 1, max(0, int(x)))
         row = min(values.shape[0] - 1, max(0, int(y)))
-        value = values[row, col]
-        text = "no estimate" if value is None or (isinstance(value, float) and math.isnan(value)) \
-            else format_value(float(value))
+        formatted = format_value(values[row, col])  # NaN (unestimated cell) -> "no data"
+        text = "no estimate" if formatted == "no data" else formatted
         self.pointer_label.setText(f"{self.result.field}: {text}")
 
     def _open_folder(self) -> None:

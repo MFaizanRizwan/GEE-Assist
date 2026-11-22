@@ -314,10 +314,8 @@ class DemView(QWidget):
         col = min(values.shape[1] - 1, max(0, int(x)))
         row = min(values.shape[0] - 1, max(0, int(y)))
         value = values[row, col]
-        import math
-
-        text = "no data" if value is None or (isinstance(value, float) and math.isnan(value)) else \
-            f"{format_value(float(value))}{self.product.unit}"
+        formatted = format_value(value)  # "no data" for a NaN (no-data) pixel; NumPy floats included
+        text = formatted if formatted == "no data" else f"{formatted}{self.product.unit}"
         self.pointer_label.setText(f"{self.product.label}: {text}")
 
     def _open_folder(self) -> None:
