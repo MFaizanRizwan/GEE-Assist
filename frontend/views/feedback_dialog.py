@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import QDialog, QHBoxLayout, QLabel, QPushButton, QVBoxLayo
 
 from backend.config.settings import get_settings
 from frontend import theme
+from frontend import theming
 
 RATE, FEEDBACK, SUGGEST = "rate", "feedback", "suggest"
 
@@ -25,7 +26,8 @@ CHOICES: dict[str, tuple[str, str, str]] = {
     SUGGEST: ("Suggest a feature", "Tell us what to build next.", "✦"),
 }
 
-STYLESHEET = f"""
+def _stylesheet():
+    return f"""
 QDialog {{ background: {theme.WHITE}; }}
 QLabel#FeedbackTitle {{ font-family: "{theme.SERIF}"; font-size: 16pt; color: {theme.INK}; }}
 QPushButton#FeedbackChoice {{
@@ -56,7 +58,7 @@ class FeedbackDialog(QDialog):
         self.setWindowTitle("Help us improve GEE-Assist")
         self.setModal(True)
         self.setMinimumWidth(440)
-        self.setStyleSheet(STYLESHEET)
+        theming.styled(self, _stylesheet)
         self._open_url = open_url or QDesktopServices.openUrl
         self._base_url = base_url
         self.choice: str | None = None

@@ -21,12 +21,13 @@ stopped after its window closes, which would freeze the bar half-way.
 from __future__ import annotations
 
 from PyQt6.QtCore import QEasingCurve, QElapsedTimer, QRectF, QSize, Qt, QTimer, pyqtSignal
-from PyQt6.QtGui import QIcon, QPainter, QPixmap
+from PyQt6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
 from PyQt6.QtWidgets import (
     QWIDGETSIZE_MAX,
     QApplication,
     QBoxLayout,
     QFrame,
+    QLabel,
     QPushButton,
     QSizePolicy,
     QToolButton,
@@ -34,7 +35,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from frontend import theme
+from frontend import theme, theming
 from frontend.widgets.side_icons import SideIcon
 
 LOGO_SIZE = 64
@@ -50,7 +51,8 @@ BUTTON_HEIGHT = 40  # collapsed, a button is as wide as it is high: a circle
 ICON_SIZE = 22
 ICON_LEFT = 14      # expanded: the icon's distance from the button's left edge
 
-STYLESHEET = f"""
+def _stylesheet():
+    return f"""
 #SideBar {{ background: {theme.WHITE}; border: none; border-right: {BORDER}px solid {theme.BORDER}; }}
 QToolButton#SideLogo {{ border: none; background: transparent; padding: 0; }}
 QPushButton#SideButton {{
@@ -62,8 +64,36 @@ QPushButton#SideButton[compact="true"] {{ text-align: center; padding: 0; border
 QPushButton#SideButton:hover {{ background: {theme.FOAM}; }}
 QPushButton#SideButton:pressed, QPushButton#SideButton:checked {{ background: {theme.MINT}; }}
 QPushButton#SideButton[current="true"], QPushButton#SideButton[current="true"]:hover {{
-    background: {theme.MINT}; border: 1px solid {theme.LEAF};
+    background: {theme.MINT}; border: 1px solid {theme.ACCENT_SOLID};
 }}
+""" + _fieldbook_stylesheet()
+
+
+def _fieldbook_stylesheet() -> str:
+    """Layout 3: the bar is the field book's graphite cover with its yellow spine."""
+    from frontend import fieldbook
+
+    if not fieldbook.active():
+        return ""
+    cover, raised = fieldbook.cover(), fieldbook.cover_raised()
+    text, muted = fieldbook.cover_text(), fieldbook.cover_muted()
+    divisions = "\n".join(
+        f'QLabel#SideDivision[division="{name}"] {{ color: {fieldbook.division_on_cover(name)}; }}'
+        for name in fieldbook.DIVISION_NAMES
+    )
+    return f"""
+#SideBar {{ background: {cover}; border: none; border-right: 6px solid {fieldbook.SPINE}; }}
+QPushButton#SideButton {{ color: {text}; font-weight: 500; }}
+QPushButton#SideButton:hover {{ background: {raised}; }}
+QPushButton#SideButton:pressed, QPushButton#SideButton:checked {{ background: {raised}; }}
+QPushButton#SideButton[current="true"], QPushButton#SideButton[current="true"]:hover {{
+    background: {raised}; border: 1px solid {fieldbook.SPINE}; color: #FFFFFF; font-weight: 600;
+}}
+QLabel#SideDivision {{ font-size: 9pt; font-weight: 600; padding: 12px 14px 2px 14px; background: transparent; }}
+{divisions}
+QLabel {{ color: {text}; }}
+QLabel#Muted {{ color: {muted}; }}
+#ProfileButton:hover {{ background: {raised}; }}
 """
 
 
@@ -78,6 +108,7 @@ class SideButton(QPushButton):
         super().__init__(text, parent)
         self.full_text, self.short_text = text, short
         self.icon_drawing = icon
+        self.index_label = ""  # Layout 3: the page's shortcut key, drawn where the icon would be
         self._compact = False
         self._frames = QTimer(self)  # repaints while hovered; a plain timer, like the slide
         self._frames.setInterval(FRAME_MS)
@@ -145,8 +176,31 @@ class SideButton(QPushButton):
             self._frames.stop()
             self.update()  # back to the icon at rest
 
+    def set_index(self, label: str) -> None:
+        """Show ``label`` (the page's keyboard shortcut, e.g. "5") in the icon's place."""
+        self.index_label = label
+        self.setProperty("hasIcon", True)
+        self.style().unpolish(self)
+        self.style().polish(self)
+        self.update()
+
     def paintEvent(self, event) -> None:  # noqa: N802 (Qt API)
         super().paintEvent(event)
+        if self.index_label:
+            from frontend import fieldbook
+
+            painter = QPainter(self)
+            font = QFont(fieldbook.MONO, 10)
+            font.setStyleHint(QFont.StyleHint.Monospace)
+            font.setBold(True)
+            painter.setFont(font)
+            painter.setPen(QColor(fieldbook.SPINE))
+            left = 0 if self._compact else ICON_LEFT
+            width = self.width() if self._compact else ICON_SIZE
+            painter.drawText(QRectF(left, 0, width, self.height()),
+                             int(Qt.AlignmentFlag.AlignCenter), self.index_label)
+            painter.end()
+            return
         if self.icon_drawing is None:
             return
         left = (self.width() - ICON_SIZE) / 2 if self._compact else ICON_LEFT
@@ -164,7 +218,7 @@ class SideBar(QFrame):
     def __init__(self, logo: QPixmap, parent: QWidget | None = None, expanded: bool = False):
         super().__init__(parent)
         self.setObjectName("SideBar")
-        self.setStyleSheet(STYLESHEET)
+        theming.styled(self, _stylesheet)
         self._expanded = expanded
         self._pinned = expanded       # kept open whatever the pointer does
         self._hovered = False
@@ -223,6 +277,19 @@ class SideBar(QFrame):
         if hasattr(widget, "set_compact"):
             self._compact_widgets.append(widget)
             self._apply_compact(widget, not self._expanded)
+
+    def arrange(self, sequence: list) -> None:
+        """Re-order the bar's items: ``sequence`` holds the item widgets in their new order, with
+        ``("division", key, label)`` tuples where a division heading starts (Layout 3)."""
+        for entry in sequence:
+            if isinstance(entry, tuple):
+                _kind, key, text = entry
+                heading = QLabel(text, objectName="SideDivision")
+                heading.setProperty("division", key)
+                self._items.addWidget(heading)
+                continue
+            self._items.removeWidget(entry)
+            self._items.addWidget(entry)
 
     # ------------------------------------------------------------- sliding
     def is_expanded(self) -> bool:

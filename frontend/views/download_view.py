@@ -34,7 +34,7 @@ from backend.config.download_settings import MAX_CHUNK_SIZE_MB, MIN_CHUNK_SIZE_M
 from backend.dto import DownloadJobDTO, FormDTO
 from backend.dto.download_dto import JOB_COMPLETED, JOB_FAILED, JOB_PAUSED, JOB_QUEUED, JOB_RUNNING
 from backend.exceptions import GeeAssistError
-from frontend import form_theme, layout_mode, palette, theme
+from frontend import accent, form_theme, layout_mode, palette, theme, theming
 from frontend.download_format import format_size, format_speed
 from frontend.widgets.download_rows import CollapsibleSection, CompletedRow, JobRow
 from frontend.widgets.form_parts import StatusBanner
@@ -45,7 +45,8 @@ from frontend.workers.task_worker import run_task
 REFRESH_MS = 500
 NONE = "–"   # shown when no download is running
 
-STYLESHEET = f"""
+def _stylesheet():
+    return f"""
 #DownloadPage {{ background: transparent; }}
 QLabel#PageTitle {{ font-family: "{theme.SERIF}"; font-size: 20pt; color: {theme.INK}; }}
 QLabel#PageSubtitle {{ color: {theme.MUTED}; }}
@@ -73,15 +74,15 @@ QLabel#JobError {{ color: {theme.ERROR}; font-size: 9pt; }}
 QProgressBar#JobProgress {{ background: {theme.PROGRESS_TRACK}; border: none; border-radius: 4px; }}
 QProgressBar#JobProgress::chunk {{
     border-radius: 4px;
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {theme.LEAF}, stop:1 {theme.OCEAN});
+    background: {theme.ACCENT_SOLID};
 }}
 QProgressBar#JobProgress[state="paused"]::chunk {{ background: {theme.PROGRESS_PAUSED}; }}
 QProgressBar#JobProgress[state="failed"]::chunk {{ background: {theme.PROGRESS_FAILED}; }}
 QPushButton#OpenButton {{
-    color: {theme.WHITE}; font-size: 11pt; border: none; border-radius: 6px; padding: 0;
-    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 {theme.OPEN_BUTTON_TOP}, stop:1 {theme.LEAF});
+    color: {theme.ACCENT_TEXT}; font-size: 11pt; border: none; border-radius: 6px; padding: 0;
+    background: {theme.ACCENT_SOLID};
 }}
-QPushButton#OpenButton:hover {{ background: {theme.LEAF_DARK}; }}
+QPushButton#OpenButton:hover {{ background: {theme.ACCENT_SOLID_HOVER}; }}
 QPushButton#ViewButton {{
     color: {theme.INK}; background: {theme.WHITE}; border: 1px solid {theme.BORDER_STRONG};
     border-radius: 6px; padding: 0 14px; font-size: 9.5pt;
@@ -120,11 +121,18 @@ _MODERN_COLORS = {
         paused="#7A7A7A", failed="#D08A80", error="#FF8A80", success="#A6E22E",
     ),
 }
-MC = _MODERN_COLORS.get(palette.THEME, _MODERN_COLORS["dark-green"])
+def _mc() -> dict:
+    """The modern colours for the active theme; the accent follows the theme like every button."""
+    colors = dict(_MODERN_COLORS.get(palette.THEME, _MODERN_COLORS["dark-green"]))
+    colors.update(accent=accent.SOLID, accent_dk=accent.SOLID_HOVER, accent_text=accent.SOLID,
+                  on_accent=accent.TEXT)
+    return colors
 MONO = "Consolas"
 SIDE_WIDTH = 300
 
-MODERN_STYLESHEET = f"""
+def _modern_stylesheet():
+    MC = _mc()
+    return f"""
 #DownloadPage, QWidget#DownloadContent {{ background: {MC['page']}; }}
 #DownloadPage QScrollArea {{ background: {MC['page']}; border: none; }}
 #DownloadPage QLabel {{ background: transparent; color: {MC['text']}; }}
@@ -232,7 +240,7 @@ class DownloadView(QWidget):
         super().__init__(parent)
         self.setObjectName("DownloadPage")
         self._modern = layout_mode.is_modern()
-        self.setStyleSheet(MODERN_STYLESHEET if self._modern else STYLESHEET)
+        theming.styled(self, _modern_stylesheet if self._modern else _stylesheet)
         self._facade = facade
         self._rows: dict[str, tuple[CollapsibleSection, QWidget]] = {}
         self._peak = 0.0

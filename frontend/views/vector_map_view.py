@@ -35,14 +35,15 @@ from PyQt6.QtWidgets import (
 from backend.business.facade import IBusinessFacade
 from backend.dto.vector_dto import POINT, POLYGON, VectorLayerDTO
 from backend.exceptions import GeeAssistError
-from frontend import theme
+from frontend import theme, theming
 from frontend.widgets.form_parts import StatusBanner
 from frontend.widgets.vector_canvas import VectorCanvas
 from frontend.workers.task_worker import run_task
 
 PANEL_WIDTH = 300
 
-STYLESHEET = f"""
+def _stylesheet():
+    return f"""
 #VectorPage {{ background: transparent; }}
 QLabel#PageTitle {{ font-family: "{theme.SERIF}"; font-size: 20pt; color: {theme.INK}; }}
 QLabel#PageSubtitle {{ color: {theme.MUTED}; }}
@@ -76,7 +77,7 @@ class VectorMapView(QWidget):
     def __init__(self, facade: IBusinessFacade, parent: QWidget | None = None):
         super().__init__(parent)
         self.setObjectName("VectorPage")
-        self.setStyleSheet(STYLESHEET)
+        theming.styled(self, _stylesheet)
         self._facade = facade
         self._layer: VectorLayerDTO | None = None
         self._fill = QColor(theme.OCEAN)

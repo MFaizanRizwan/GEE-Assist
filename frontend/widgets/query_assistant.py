@@ -26,6 +26,7 @@ from PyQt6.QtWidgets import (
 )
 
 from frontend import form_theme as theme
+from frontend import theming
 from frontend.widgets.form_parts import StatusBanner
 from frontend.widgets.sparkle_button import SparkleButton
 
@@ -98,7 +99,7 @@ class QueryAssistant(QWidget):
         self.setObjectName("QueryAssistant")
         # Lives outside the parameter form, so it carries the form's stylesheet
         # itself (buttons, banner, input and progress bar styles).
-        self.setStyleSheet(theme.FORM_STYLESHEET)
+        theming.styled(self, lambda: theme.FORM_STYLESHEET)
 
         # ---- toggle button
         self.button = SparkleButton()  # sparkle twinkles while hovered

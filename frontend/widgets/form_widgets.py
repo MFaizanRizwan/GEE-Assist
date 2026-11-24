@@ -14,6 +14,7 @@ from PyQt6.QtWidgets import (
 )
 
 from frontend import theme
+from frontend import theming
 from frontend.widgets.icons import eye_icon
 
 
@@ -160,7 +161,7 @@ def add_soft_shadow(widget: QWidget, blur: int = 48, alpha: int = 34, y_offset: 
 def h_line() -> QFrame:
     line = QFrame()
     line.setFixedHeight(1)
-    line.setStyleSheet(f"background: {theme.BORDER}; border: none;")
+    theming.styled(line, lambda: f"background: {theme.BORDER}; border: none;")
     return line
 
 

@@ -26,6 +26,7 @@ from backend.auth_exceptions import AuthError, SessionExpiredError
 from backend.business.facade import IBusinessFacade
 from backend.dto.user_dto import UserDTO, UserPageDTO
 from frontend import theme
+from frontend import theming
 from frontend.views.account_dialogs import ChangePasswordDialog, CreateUserDialog, EditDetailsDialog
 from frontend.views.account_view import Avatar, format_date
 from frontend.widgets.form_widgets import Banner, BusyButton
@@ -71,7 +72,7 @@ class UserDetailsPanel(QFrame):
         self.avatar = Avatar(56)
         self.name = QLabel("Select a user")
         self.name.setWordWrap(True)
-        self.name.setStyleSheet(f"font-family: '{theme.SERIF}'; font-size: 15pt; color: {theme.INK};")
+        theming.styled(self.name, lambda: f"font-family: '{theme.SERIF}'; font-size: 15pt; color: {theme.INK};")
         self.meta = QLabel("", objectName="Muted")
         self.meta.setWordWrap(True)
         self.meta.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)

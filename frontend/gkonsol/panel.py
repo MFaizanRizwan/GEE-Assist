@@ -29,6 +29,7 @@ from PyQt6.QtWidgets import (
 )
 
 from frontend import theme
+from frontend import theming
 from frontend.gkonsol import colors, text
 from frontend.gkonsol.command import Registry
 from frontend.gkonsol.commands import build_registry
@@ -137,7 +138,7 @@ class GkonsolPanel(QFrame):
         super().__init__(parent)
         self.setObjectName("GkonsolPanel")
         font = colors.monospace_font()
-        self.setStyleSheet(stylesheet(font))
+        theming.styled(self, lambda: stylesheet(font))  # re-themes live
         self.shell: Optional[Shell] = None
         self._panel: Optional[PanelPort] = None
         self._frame = 0
@@ -163,6 +164,7 @@ class GkonsolPanel(QFrame):
         self.prompt = QLabel(objectName="GkonsolPrompt")
         self.prompt.setFont(font)
         self.prompt.setTextFormat(Qt.TextFormat.RichText)
+        theming.on_theme_changed(self.refresh_prompt)  # the prompt's colours follow a live theme change
         self.input = PromptLine(self._history_entries)
         self.input.setFont(font)
         input_row = QWidget(objectName="GkonsolInputRow")
@@ -341,7 +343,7 @@ class TerminalArea(QSplitter):
         super().__init__(Qt.Orientation.Vertical, parent)
         self.setObjectName("TerminalArea")
         self.setHandleWidth(4)
-        self.setStyleSheet(f"""
+        theming.styled(self, lambda: f"""
             QSplitter#TerminalArea::handle {{ background: {colors.BORDER}; }}
             QSplitter#TerminalArea::handle:hover, QSplitter#TerminalArea::handle:pressed {{ background: {theme.OCEAN}; }}
         """)

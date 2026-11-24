@@ -6,7 +6,7 @@ from PyQt6.QtWidgets import QDockWidget, QMainWindow
 from backend.business.facade import IBusinessFacade
 from backend.dto import FormDTO
 from frontend import form_theme as theme
-from frontend import layout_mode
+from frontend import layout_mode, theming
 from frontend.views.kept_requests_view import KeptRequestsView
 from frontend.views.parameter_form_view import ParameterFormView
 
@@ -22,10 +22,15 @@ class MainWindow(QMainWindow):
         self._facade = facade
         self.setWindowTitle("GEE-Assist")
         self.resize(1150, 760)
-        style = theme.MAIN_WINDOW_STYLESHEET
-        if layout_mode.is_modern():
-            style += theme.MODERN_WINDOW_STYLESHEET
-        self.setStyleSheet(style)
+        def _build_style() -> str:
+            style = theme.MAIN_WINDOW_STYLESHEET
+            if layout_mode.is_modern():
+                style += theme.MODERN_WINDOW_STYLESHEET
+            elif layout_mode.is_studio():
+                style += theme.STUDIO_WINDOW_STYLESHEET
+            return style
+
+        theming.styled(self, _build_style)
 
         self.form_view = ParameterFormView(facade)
         self.setCentralWidget(self.form_view)

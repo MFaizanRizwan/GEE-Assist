@@ -24,9 +24,10 @@ from PyQt6.QtWidgets import (
 )
 
 from backend.dto.version_dto import AppVersionDTO
-from frontend import appearance, layout_mode, palette, theme
+from frontend import appearance, layout_mode, palette, theme, theming
 
-STYLESHEET = f"""
+def _stylesheet():
+    return f"""
 QMenuBar {{
     background: {theme.WHITE}; border: none; border-bottom: 1px solid {theme.BORDER};
     padding: 2px 6px; color: {theme.INK};
@@ -82,13 +83,13 @@ class AppMenuBar(QMenuBar):
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
-        self.setStyleSheet(STYLESHEET)
+        theming.styled(self, _stylesheet)
 
         self.file_menu = self._menu("&File")
         self.new_project = self._action(self.file_menu, "New &project…", "Ctrl+Shift+N")
         self.open_project = self._action(self.file_menu, "Open pro&ject…", "Ctrl+Shift+O")
         self.recent_projects_menu = self.file_menu.addMenu("Recen&t projects")
-        self.recent_projects_menu.setStyleSheet(theme.MENU_STYLE)
+        theming.styled(self.recent_projects_menu, lambda: theme.MENU_STYLE)
         self.rename_project = self._action(self.file_menu, "Rena&me project…")
         self.move_project = self._action(self.file_menu, "Mo&ve project…")
         self.close_project = self._action(self.file_menu, "C&lose project")
@@ -138,7 +139,7 @@ class AppMenuBar(QMenuBar):
         self.view_menu.addSeparator()
         # Layout: the original "classical" workspace, or the "modern" map-first panel.
         self.layout_menu = self.view_menu.addMenu("&Layout")
-        self.layout_menu.setStyleSheet(theme.MENU_STYLE)
+        theming.styled(self.layout_menu, lambda: theme.MENU_STYLE)
         self.layout_actions: dict[str, QAction] = {}
         layout_group = QActionGroup(self)  # one layout at a time
         current_layout = layout_mode.current_layout()
@@ -149,7 +150,7 @@ class AppMenuBar(QMenuBar):
             layout_group.addAction(action)
             self.layout_actions[name] = action
         self.theme_menu = self.view_menu.addMenu("&Theme")
-        self.theme_menu.setStyleSheet(theme.MENU_STYLE)
+        theming.styled(self.theme_menu, lambda: theme.MENU_STYLE)
         self.theme_actions: dict[str, QAction] = {}
         group = QActionGroup(self)  # one theme at a time
         for name, label in appearance.THEMES.items():
@@ -294,7 +295,7 @@ class AppMenuBar(QMenuBar):
 
     def _menu(self, title: str) -> QMenu:
         menu = self.addMenu(title)
-        menu.setStyleSheet(theme.MENU_STYLE)
+        theming.styled(menu, lambda: theme.MENU_STYLE)
         return menu
 
     def _action(self, menu: QMenu, text: str, shortcut=None, checkable: bool = False) -> QAction:

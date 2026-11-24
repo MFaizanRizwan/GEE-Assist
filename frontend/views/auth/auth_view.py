@@ -16,6 +16,7 @@ from backend.auth_exceptions import AuthError
 from backend.business.facade import IBusinessFacade
 from backend.dto.user_dto import SignupResultDTO, UserDTO
 from frontend import theme
+from frontend import theming
 from frontend.views.auth.forgot_password_page import ForgotPasswordPage
 from frontend.views.auth.google_page import GooglePage
 from frontend.views.auth.hero_panel import HeroPanel, brand_row
@@ -44,7 +45,7 @@ class AuthView(QWidget):
         # Paint the background itself: otherwise the window behind shows through around the card,
         # e.g. under the logo at the top (white in the dark themes).
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.setStyleSheet(f"#AuthView {{ background: {theme.WHITE}; }}")
+        theming.styled(self, lambda: f"#AuthView {{ background: {theme.WHITE}; }}")
 
         # ---- pages
         self.login_page = LoginPage(facade)
@@ -99,7 +100,7 @@ class AuthView(QWidget):
         scroll.setWidget(inner)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setMinimumWidth(CARD_WIDTH + 2 * 32 + 12)
-        scroll.setStyleSheet(f"QScrollArea, QScrollArea > QWidget > QWidget {{ background: {theme.WHITE}; }}")
+        theming.styled(scroll, lambda: f"QScrollArea, QScrollArea > QWidget > QWidget {{ background: {theme.WHITE}; }}")
 
         left = QWidget()
         left_layout = QVBoxLayout(left)

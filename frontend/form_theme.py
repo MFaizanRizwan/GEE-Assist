@@ -12,43 +12,51 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QPalette
 from PyQt6.QtWidgets import QApplication
 
-from frontend import palette
+from frontend import accent, fonts, palette
 
 # ----------------------------------------------------------------------------- palette
-_P = palette.ACTIVE
-WHITE = _P["WHITE"]
-INK = _P["INK"]
-TEXT = _P["TEXT"]
-MUTED = _P["MUTED"]
-SUBTLE = _P["SUBTLE"]
-BORDER = _P["BORDER"]
-BORDER_STRONG = _P["BORDER_STRONG"]
-BORDER_HOVER = _P["BORDER_HOVER"]
-FIELD_BG = _P["FIELD_BG"]
-DISABLED_BG = _P["DISABLED_BG"]
-LEAF = _P["LEAF"]
-LEAF_DARK = _P["LEAF_DARK"]
-OCEAN = _P["OCEAN"]
-OCEAN_DARK = _P["OCEAN_DARK"]
-MINT = _P["MINT"]
-SKY = _P["SKY"]
-FOAM = _P["FOAM"]
-PAGE_BG = _P["PAGE_BG"]
-HEADER_GREEN = _P["HEADER_GREEN"]
-HEADER_BLUE = _P["HEADER_BLUE"]
-HEADER_LINE = _P["HEADER_LINE"]
-ERROR = _P["ERROR"]
-SUCCESS = _P["SUCCESS"]
-ERROR_BG = _P["ERROR_BG"]
-SUCCESS_BG = _P["SUCCESS_BG"]
-INFO_BG = _P["INFO_BG"]
-ERROR_BORDER = _P["ERROR_BORDER"]
-SUCCESS_BORDER = _P["SUCCESS_BORDER"]
-INFO_BORDER = _P["INFO_BORDER"]
-ERROR_FIELD_BG = _P["ERROR_FIELD_BG"]
+# Every theme-dependent colour is (re)assigned by _apply_colors(), re-run by refresh() so a
+# live theme change recolours the form, the main-window chrome and the modern/studio panels.
+WHITE = INK = TEXT = MUTED = SUBTLE = BORDER = BORDER_STRONG = BORDER_HOVER = FIELD_BG = DISABLED_BG = ""
+LEAF = LEAF_DARK = OCEAN = OCEAN_DARK = MINT = SKY = FOAM = PAGE_BG = HEADER_GREEN = HEADER_BLUE = HEADER_LINE = ""
+ERROR = SUCCESS = ERROR_BG = SUCCESS_BG = INFO_BG = ERROR_BORDER = SUCCESS_BORDER = INFO_BORDER = ERROR_FIELD_BG = ""
+ACCENT_SOLID = ACCENT_SOLID_HOVER = ACCENT_FROM = ACCENT_TO = ACCENT_FROM_HOVER = ACCENT_TO_HOVER = ACCENT_TEXT = ACCENT_SOFT = ""
+# Modern console + studio accents follow the theme (owned here, not in the M_*/S_* blocks below).
+M_ACCENT = M_ACCENT_DK = ""
+S_ACCENT_FROM = S_ACCENT_TO = S_ACCENT_FROM_HOVER = S_ACCENT_TO_HOVER = S_ACCENT_TEXT = ""
 
-SERIF = "Georgia"
-SANS = "Segoe UI"
+
+def _apply_colors() -> None:
+    global WHITE, INK, TEXT, MUTED, SUBTLE, BORDER, BORDER_STRONG, BORDER_HOVER, FIELD_BG, DISABLED_BG
+    global LEAF, LEAF_DARK, OCEAN, OCEAN_DARK, MINT, SKY, FOAM, PAGE_BG, HEADER_GREEN, HEADER_BLUE, HEADER_LINE
+    global ERROR, SUCCESS, ERROR_BG, SUCCESS_BG, INFO_BG, ERROR_BORDER, SUCCESS_BORDER, INFO_BORDER, ERROR_FIELD_BG
+    global ACCENT_SOLID, ACCENT_SOLID_HOVER, ACCENT_FROM, ACCENT_TO, ACCENT_FROM_HOVER, ACCENT_TO_HOVER, ACCENT_TEXT, ACCENT_SOFT
+    global M_ACCENT, M_ACCENT_DK, S_ACCENT_FROM, S_ACCENT_TO, S_ACCENT_FROM_HOVER, S_ACCENT_TO_HOVER, S_ACCENT_TEXT
+    accent.refresh()
+    _P = palette.ACTIVE
+    WHITE = _P["WHITE"]; INK = _P["INK"]; TEXT = _P["TEXT"]; MUTED = _P["MUTED"]; SUBTLE = _P["SUBTLE"]
+    BORDER = _P["BORDER"]; BORDER_STRONG = _P["BORDER_STRONG"]; BORDER_HOVER = _P["BORDER_HOVER"]
+    FIELD_BG = _P["FIELD_BG"]; DISABLED_BG = _P["DISABLED_BG"]
+    LEAF = _P["LEAF"]; LEAF_DARK = _P["LEAF_DARK"]; OCEAN = _P["OCEAN"]; OCEAN_DARK = _P["OCEAN_DARK"]
+    MINT = _P["MINT"]; SKY = _P["SKY"]; FOAM = _P["FOAM"]; PAGE_BG = _P["PAGE_BG"]
+    HEADER_GREEN = _P["HEADER_GREEN"]; HEADER_BLUE = _P["HEADER_BLUE"]; HEADER_LINE = _P["HEADER_LINE"]
+    ERROR = _P["ERROR"]; SUCCESS = _P["SUCCESS"]; ERROR_BG = _P["ERROR_BG"]; SUCCESS_BG = _P["SUCCESS_BG"]
+    INFO_BG = _P["INFO_BG"]; ERROR_BORDER = _P["ERROR_BORDER"]; SUCCESS_BORDER = _P["SUCCESS_BORDER"]
+    INFO_BORDER = _P["INFO_BORDER"]; ERROR_FIELD_BG = _P["ERROR_FIELD_BG"]
+    ACCENT_SOLID = accent.SOLID; ACCENT_SOLID_HOVER = accent.SOLID_HOVER
+    ACCENT_FROM = accent.FROM; ACCENT_TO = accent.TO; ACCENT_FROM_HOVER = accent.FROM_HOVER
+    ACCENT_TO_HOVER = accent.TO_HOVER; ACCENT_TEXT = accent.TEXT; ACCENT_SOFT = accent.SOFT
+    M_ACCENT = accent.SOLID; M_ACCENT_DK = accent.SOLID_HOVER
+    S_ACCENT_FROM = S_ACCENT_TO = accent.SOLID
+    S_ACCENT_FROM_HOVER = S_ACCENT_TO_HOVER = accent.SOLID_HOVER
+    S_ACCENT_TEXT = accent.TEXT
+
+
+_apply_colors()
+
+SERIF = fonts.DISPLAY   # headings (Space Grotesk)
+SANS = fonts.BODY       # body / controls (Inter)
+WARNING = fonts.WARNING # banners / field errors
 
 _ICONS = Path(__file__).resolve().parent / "resources" / "icons"
 CHECK_ICON = (_ICONS / "check.svg").as_posix()
@@ -106,7 +114,8 @@ def apply_palette(app: QApplication) -> None:
 # ----------------------------------------------------------------------------- stylesheet
 FIELDS = "QComboBox, QSpinBox, QDoubleSpinBox, QDateEdit"
 
-FORM_STYLESHEET = f"""
+def _form_stylesheet():
+    return f"""
 #ParameterForm, #ParameterFormContent {{ background: {PAGE_BG}; }}
 #ParameterForm QWidget {{ font-family: "{SANS}"; font-size: 10pt; color: {TEXT}; }}
 #QueryAssistant QWidget {{ font-family: "{SANS}"; font-size: 10pt; color: {TEXT}; }}
@@ -134,11 +143,12 @@ QFrame#SectionCard QWidget {{ background: transparent; }}
 /* ---- field labels / hints / errors (sign-in FormField style) ---- */
 #ParameterForm QLabel#FieldLabel {{ color: {INK}; font-weight: 600; font-size: 9.5pt; }}
 #ParameterForm QLabel#FieldHint {{ color: {SUBTLE}; font-size: 8.5pt; }}
-#ParameterForm QLabel#FieldError {{ color: {ERROR}; font-size: 8.5pt; }}
+#ParameterForm QLabel#FieldError {{ color: {ERROR}; font-family: "{WARNING}"; font-size: 8.5pt; }}
 
 /* ---- status banners in the action bar ---- */
 QLabel#ErrorBanner, QLabel#SuccessBanner, QLabel#InfoBanner {{
     border-radius: 8px; padding: 7px 12px; font-size: 9.5pt;
+    font-family: "{WARNING}"; font-weight: 600;
 }}
 QLabel#ErrorBanner {{ background: {ERROR_BG}; color: {ERROR}; border: 1px solid {ERROR_BORDER}; }}
 QLabel#SuccessBanner {{ background: {SUCCESS_BG}; color: {SUCCESS}; border: 1px solid {SUCCESS_BORDER}; }}
@@ -254,8 +264,8 @@ QPushButton#SegmentButton[segment="last"] {{
 }}
 QPushButton#SegmentButton:hover {{ background: {FOAM}; }}
 QPushButton#SegmentButton:checked {{
-    color: {WHITE}; border-color: {LEAF};
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {LEAF}, stop:1 {OCEAN});
+    color: {ACCENT_TEXT}; border-color: {ACCENT_FROM};
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {ACCENT_FROM}, stop:1 {ACCENT_TO});
 }}
 
 /* ---- check lists ---- */
@@ -298,18 +308,16 @@ QPushButton:hover {{ background: {FOAM}; border-color: {BORDER_HOVER}; }}
 QPushButton:pressed {{ background: {MINT}; }}
 QPushButton:disabled {{ color: {SUBTLE}; border-color: {BORDER}; }}
 QPushButton#PrimaryButton {{
-    color: {WHITE}; border: none; padding: 9px 22px; border-radius: 9px; font-size: 10.5pt;
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {LEAF}, stop:1 {OCEAN});
+    color: {ACCENT_TEXT}; border: none; padding: 9px 22px; border-radius: {accent.BUTTON_RADIUS}px; font-size: 10.5pt;
+    background: {ACCENT_SOLID};
 }}
-QPushButton#PrimaryButton:hover {{
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {LEAF_DARK}, stop:1 {OCEAN_DARK});
-}}
-QPushButton#PrimaryButton:pressed {{ padding-top: 10px; padding-bottom: 8px; }}
+QPushButton#PrimaryButton:hover {{ background: {ACCENT_SOLID_HOVER}; }}
+QPushButton#PrimaryButton:pressed {{ background: {ACCENT_SOLID_HOVER}; padding-top: 10px; padding-bottom: 8px; }}
 QPushButton#SecondaryButton {{
     color: {INK}; background: {WHITE}; border: 1px solid {BORDER_STRONG};
-    border-radius: 9px; padding: 8px 18px; font-size: 10.5pt;
+    border-radius: {accent.BUTTON_RADIUS}px; padding: 8px 18px; font-size: 10.5pt;
 }}
-QPushButton#SecondaryButton:hover {{ background: {FOAM}; border-color: {BORDER_HOVER}; }}
+QPushButton#SecondaryButton:hover {{ background: {FOAM}; border-color: {INK}; }}
 QPushButton#SecondaryButton:pressed {{ background: {MINT}; }}
 
 /* ---- bottom action bar ---- */
@@ -319,13 +327,13 @@ QPushButton#SecondaryButton:pressed {{ background: {MINT}; }}
 #QueryAssistant QLabel#FieldHint {{ color: {SUBTLE}; font-size: 8.5pt; }}
 QPushButton#AssistantButton {{
     border: none; border-radius: 29px; padding: 0;
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {LEAF}, stop:1 {OCEAN});
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {ACCENT_FROM}, stop:1 {ACCENT_TO});
 }}
 QPushButton#AssistantButton:hover {{
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {LEAF_DARK}, stop:1 {OCEAN_DARK});
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {ACCENT_FROM_HOVER}, stop:1 {ACCENT_TO_HOVER});
 }}
 QPushButton#AssistantButton:checked {{
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {LEAF_DARK}, stop:1 {OCEAN_DARK});
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {ACCENT_FROM_HOVER}, stop:1 {ACCENT_TO_HOVER});
 }}
 QFrame#AssistantPanel {{ background: {WHITE}; border: 1px solid {BORDER}; border-radius: 12px; }}
 QFrame#AssistantPanel QLabel {{ background: transparent; }}
@@ -354,7 +362,7 @@ QProgressBar#BusyBar {{
 }}
 QProgressBar#BusyBar::chunk {{
     border-radius: 2px;
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {LEAF}, stop:1 {OCEAN});
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {ACCENT_FROM}, stop:1 {ACCENT_TO});
 }}
 
 /* ---- scrolling ---- */
@@ -369,7 +377,8 @@ QScrollBar::add-page, QScrollBar::sub-page {{ background: transparent; }}
 
 # ----------------------------------------------------------------------------- main window
 # Only targeted selectors here: this cascades into every page of the window.
-MAIN_WINDOW_STYLESHEET = f"""
+def _main_window_stylesheet():
+    return f"""
 QStatusBar {{
     background: {WHITE};
     border-top: 1px solid {BORDER};
@@ -380,16 +389,16 @@ QStatusBar::item {{ border: none; }}
 QStatusBar QLabel#ModeCaption {{ color: {MUTED}; padding-right: 2px; }}
 
 QToolButton#ModeSwitcher {{
-    color: {WHITE};
+    color: {ACCENT_TEXT};
     font-weight: 600;
     padding: 6px 16px;
     margin: 4px 10px 4px 4px;
     border: none;
     border-radius: 8px;
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {LEAF}, stop:1 {OCEAN});
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {ACCENT_FROM}, stop:1 {ACCENT_TO});
 }}
 QToolButton#ModeSwitcher:hover {{
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {LEAF_DARK}, stop:1 {OCEAN_DARK});
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {ACCENT_FROM_HOVER}, stop:1 {ACCENT_TO_HOVER});
 }}
 
 QMenu#ModeMenu {{
@@ -423,14 +432,16 @@ M_TEXT = "#E7EEEA"
 M_INK = "#F3F8F5"
 M_MUTED = "#93A79D"
 M_SUBTLE = "#6E8278"
-M_ACCENT = "#A6E22E"        # lime accent
-M_ACCENT_DK = "#8CC81F"
+# M_ACCENT / M_ACCENT_DK are theme-reactive now (set in _apply_colors), so the modern
+# console's accent and buttons change with the theme like everywhere else.
 M_ACCENT_SOFT = "#1B2A1C"   # active tab / selection tint
 M_DISABLED_BG = "#141E1A"
 M_NEEDED = "#F5B83D"         # amber: required field still empty
 M_ERROR = "#FF8A80"
 
-MODERN_FORM_STYLESHEET = f"""
+
+def _modern_form_stylesheet():
+    return f"""
 #ParameterForm {{ background: {M_MAP_BG}; }}
 #ModernMapPanel {{ background: {M_MAP_BG}; border-right: 1px solid {M_BORDER}; }}
 #ModernMapPanel QLabel {{ color: {M_MUTED}; }}
@@ -497,13 +508,13 @@ QPushButton#ModernTab[state="error"]:checked {{ border-bottom: 2px solid {M_ERRO
 }}
 #ModernPanel QPushButton#SegmentButton:hover {{ background: {M_ACCENT_SOFT}; }}
 #ModernPanel QPushButton#SegmentButton:checked {{
-    color: {M_BG}; border-color: {M_ACCENT};
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {M_ACCENT}, stop:1 {M_ACCENT_DK});
+    color: {ACCENT_TEXT}; border-color: {M_ACCENT};
+    background: {M_ACCENT};
 }}
 
 /* ---- secondary buttons (Reset, Browse, Import, Find place) ---- */
 #ModernPanel QPushButton#SecondaryButton, #ModernFooter QPushButton#SecondaryButton {{
-    color: {M_TEXT}; background: {M_FIELD}; border: 1px solid {M_BORDER_STRONG}; border-radius: 9px;
+    color: {M_TEXT}; background: {M_FIELD}; border: 1px solid {M_BORDER_STRONG}; border-radius: {accent.BUTTON_RADIUS}px;
 }}
 #ModernPanel QPushButton#SecondaryButton:hover, #ModernFooter QPushButton#SecondaryButton:hover {{
     background: {M_ACCENT_SOFT}; border-color: {M_BORDER_HOVER};
@@ -512,10 +523,10 @@ QPushButton#ModernTab[state="error"]:checked {{ border-bottom: 2px solid {M_ERRO
 /* ---- footer with the Run analysis button ---- */
 #ModernFooter {{ background: {M_BG}; border-top: 1px solid {M_BORDER}; }}
 #ModernFooter QPushButton#PrimaryButton {{
-    color: {M_BG}; border: none; border-radius: 9px; padding: 10px 22px; font-size: 10.5pt; font-weight: 700;
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {M_ACCENT}, stop:1 {M_ACCENT_DK});
+    color: {ACCENT_TEXT}; border: none; border-radius: {accent.BUTTON_RADIUS}px; padding: 10px 22px; font-size: 10.5pt; font-weight: 700;
+    background: {M_ACCENT};
 }}
-#ModernFooter QPushButton#PrimaryButton:hover {{ background: {M_ACCENT}; }}
+#ModernFooter QPushButton#PrimaryButton:hover {{ background: {M_ACCENT_DK}; }}
 #ModernFooter QPushButton#PrimaryButton:pressed {{ padding-top: 11px; padding-bottom: 9px; }}
 
 /* ---- checkboxes / radios inside the panel ---- */
@@ -548,7 +559,8 @@ QPushButton#ModernTab[state="error"]:checked {{ border-bottom: 2px solid {M_ERRO
 
 # The signed-in window chrome around a modern query-input page: the kept-requests dock,
 # the status bar and the mode switcher, darkened to match the modern panel.
-MODERN_WINDOW_STYLESHEET = f"""
+def _modern_window_stylesheet():
+    return f"""
 QMainWindow, QDockWidget {{ background: {M_BG}; }}
 QDockWidget {{ color: {M_INK}; titlebar-close-icon: none; titlebar-normal-icon: none; }}
 QDockWidget::title {{
@@ -564,11 +576,109 @@ QDockWidget QListWidget, QDockWidget QPlainTextEdit {{
 }}
 QDockWidget QListWidget::item:selected {{ background: {M_ACCENT_SOFT}; color: {M_INK}; }}
 QDockWidget QPushButton#PrimaryButton {{
-    color: {M_BG}; border: none; border-radius: 9px; padding: 9px 18px; font-weight: 700;
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {M_ACCENT}, stop:1 {M_ACCENT_DK});
+    color: {ACCENT_TEXT}; border: none; border-radius: {accent.BUTTON_RADIUS}px; padding: 9px 18px; font-weight: 700;
+    background: {M_ACCENT};
 }}
-QDockWidget QPushButton#PrimaryButton:hover {{ background: {M_ACCENT}; }}
+QDockWidget QPushButton#PrimaryButton:hover {{ background: {M_ACCENT_DK}; }}
 QDockWidget QPushButton#PrimaryButton:disabled {{ background: {M_DISABLED_BG}; color: {M_SUBTLE}; }}
 QStatusBar {{ background: {M_MAP_BG}; border-top: 1px solid {M_BORDER}; color: {M_MUTED}; min-height: 40px; }}
 QStatusBar::item {{ border: none; }}
 """
+
+
+# ----------------------------------------------------------------------------- studio layout
+# A third layout: a left nav rail of sections, the chosen section's card in the centre and a
+# persistent map-preview card on the right, over the theme's light "workspace" canvas. Its
+# buttons use the theme accent (S_ACCENT_* are set in _apply_colors), so they change with the theme.
+def _fb():
+    from frontend import fieldbook  # late: fieldbook imports theme
+
+    return fieldbook
+
+
+def _studio_form_stylesheet():
+    return f"""
+/* ---- header ---- */
+#ParameterForm QLabel#StudioTitle {{ font-family: "{SERIF}"; font-size: 21pt; color: {INK}; }}
+#ParameterForm QLabel#StudioSubtitle {{ color: {MUTED}; font-size: 10pt; }}
+#ParameterForm QLabel#StudioStepTitle {{ font-family: "{SERIF}"; font-size: 15pt; color: {INK}; }}
+
+/* ---- the form's index: field-book tabs (Area, Data, Time, Output) ---- */
+#StudioRail {{ background: transparent; border-right: 1px solid {BORDER}; }}
+#StudioRail QLabel#StudioRailKicker {{ color: {_fb().division("work")}; font-size: 9pt; font-weight: 600; }}
+QPushButton#StudioNav {{
+    text-align: left; color: {TEXT}; background: transparent;
+    border: 1px solid transparent; border-radius: {accent.BUTTON_RADIUS}px;
+    padding: 10px 14px; font-weight: 600; font-size: 10.5pt;
+}}
+QPushButton#StudioNav:hover {{ background: {FOAM}; color: {INK}; }}
+QPushButton#StudioNav:checked {{ color: {INK}; background: {WHITE}; border: 1px solid {_fb().SPINE}; }}
+QPushButton#StudioNav[state="missing"] {{ color: {_fb().yellow_ink()}; }}
+QPushButton#StudioNav[state="error"] {{ color: {ERROR}; }}
+
+/* ---- map preview: a page of the book ---- */
+#StudioMapCard {{ background: {WHITE}; border: 1px solid {BORDER}; border-radius: {_fb().CARD_RADIUS}px; }}
+#StudioMapCard QLabel#StudioMapCaption {{ color: {MUTED}; font-size: 9pt; }}
+
+/* ---- footer action bar ---- */
+#StudioFooter {{ background: {WHITE}; border-top: 1px solid {BORDER}; }}
+
+/* ---- signature accent: primary / segmented / assistant buttons go indigo→violet ---- */
+#ParameterForm QPushButton#PrimaryButton, #StudioFooter QPushButton#PrimaryButton {{
+    color: {S_ACCENT_TEXT}; border: none; padding: 10px 24px; border-radius: 10px;
+    font-size: 10.5pt; font-weight: 700;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {S_ACCENT_FROM}, stop:1 {S_ACCENT_TO});
+}}
+#ParameterForm QPushButton#PrimaryButton:hover, #StudioFooter QPushButton#PrimaryButton:hover {{
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {S_ACCENT_FROM_HOVER}, stop:1 {S_ACCENT_TO_HOVER});
+}}
+#ParameterForm QPushButton#SegmentButton:checked {{
+    color: {S_ACCENT_TEXT}; border-color: {S_ACCENT_FROM};
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {S_ACCENT_FROM}, stop:1 {S_ACCENT_TO});
+}}
+#ParameterForm QProgressBar#BusyBar::chunk {{
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {S_ACCENT_FROM}, stop:1 {S_ACCENT_TO});
+}}
+"""
+
+
+# The signed-in window chrome around a studio query-input page: it stays light, but the dock's
+# "Start Download" button and the mode switcher take the studio accent so the window reads as one piece.
+def _studio_window_stylesheet():
+    return f"""
+QToolButton#ModeSwitcher {{
+    color: {S_ACCENT_TEXT};
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {S_ACCENT_FROM}, stop:1 {S_ACCENT_TO});
+}}
+QToolButton#ModeSwitcher:hover {{
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {S_ACCENT_FROM_HOVER}, stop:1 {S_ACCENT_TO_HOVER});
+}}
+QDockWidget QPushButton#PrimaryButton {{
+    color: {S_ACCENT_TEXT}; border: none; border-radius: {accent.BUTTON_RADIUS}px; padding: 9px 18px; font-weight: 700;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {S_ACCENT_FROM}, stop:1 {S_ACCENT_TO});
+}}
+QDockWidget QPushButton#PrimaryButton:hover {{
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {S_ACCENT_FROM_HOVER}, stop:1 {S_ACCENT_TO_HOVER});
+}}
+"""
+
+
+# Built from the active theme; refresh() rebuilds them all for a live theme change.
+FORM_STYLESHEET = MAIN_WINDOW_STYLESHEET = MODERN_FORM_STYLESHEET = ""
+MODERN_WINDOW_STYLESHEET = STUDIO_FORM_STYLESHEET = STUDIO_WINDOW_STYLESHEET = ""
+
+
+def refresh() -> None:
+    """Recompute the colours and rebuild every stylesheet from the active palette."""
+    global FORM_STYLESHEET, MAIN_WINDOW_STYLESHEET, MODERN_FORM_STYLESHEET
+    global MODERN_WINDOW_STYLESHEET, STUDIO_FORM_STYLESHEET, STUDIO_WINDOW_STYLESHEET
+    _apply_colors()
+    FORM_STYLESHEET = _form_stylesheet()
+    MAIN_WINDOW_STYLESHEET = _main_window_stylesheet()
+    MODERN_FORM_STYLESHEET = _modern_form_stylesheet()
+    MODERN_WINDOW_STYLESHEET = _modern_window_stylesheet()
+    STUDIO_FORM_STYLESHEET = _studio_form_stylesheet()
+    STUDIO_WINDOW_STYLESHEET = _studio_window_stylesheet()
+
+
+refresh()

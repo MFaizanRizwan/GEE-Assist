@@ -68,7 +68,7 @@ def _theme(ctx: Context, args: Args) -> Generator:
             ctx.out.print(Span("● " if current else "○ ", text.ACCENT if current else text.MUTED),
                           Span(name.ljust(12), text.ACCENT if current else text.TEXT), label,
                           Span("  (current)" if current else "", text.MUTED))
-        ctx.out.hint("theme <name>  switches (GEE-Assist restarts)")
+        ctx.out.hint("theme <name>  switches it straight away (no restart)")
         return
     name = args.words[0].lower()
     if name not in appearance.THEMES:
@@ -76,12 +76,9 @@ def _theme(ctx: Context, args: Args) -> Generator:
     if name == palette.THEME:
         ctx.out.muted(f"GEE-Assist already uses the {appearance.THEMES[name]} theme.")
         return
-    question = (f"GEE-Assist restarts to use the {appearance.THEMES[name]} theme; a running download is paused "
-                "and can be resumed. Restart now?")
-    if not (yield from confirm(question, args.flag("yes"))):
-        ctx.out.muted("The theme is unchanged.")
-        return
-    ctx.app.restart_with_theme(name)
+    ctx.app.switch_theme(name)  # live: the whole app recolours, nothing restarts
+    ctx.out.muted(f"Switched to the {appearance.THEMES[name]} theme.")
+    yield from ()  # keep this a generator, like the other commands that may ask
 
 
 def _panel(ctx: Context, args: Args) -> None:

@@ -26,6 +26,7 @@ from backend.business.facade import IBusinessFacade
 from backend.dto.user_dto import UserDTO
 from backend.dto.validation_dto import ValidationDTO
 from frontend import theme
+from frontend import theming
 from frontend.views.account_dialogs import PASSWORD_HINT
 from frontend.widgets.form_widgets import Banner, BusyButton, PasswordField, add_soft_shadow
 from frontend.widgets.inline_edit import InlineEdit
@@ -86,9 +87,8 @@ class Avatar(QLabel):
         # Scoped to the avatar itself: unscoped, the circle style also applied to the avatar's tooltip,
         # drawing it as a huge gradient banner.
         self.setStyleSheet(
-            f"QLabel#Avatar {{ border-radius: {size // 2}px; color: {theme.WHITE}; font-family: '{theme.SERIF}';"
-            f"font-size: {max(9, size // 4)}pt;"
-            f"background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {theme.LEAF}, stop:1 {theme.OCEAN}); }}"
+            f"QLabel#Avatar {{ border-radius: {size // 2}px; color: {theme.ACCENT_TEXT}; font-family: '{theme.SERIF}';"
+            f"font-size: {max(9, size // 4)}pt; background: {theme.ACCENT_SOLID}; }}"
         )
 
     def set_user(self, user: UserDTO, photo: bytes | None = None) -> None:
@@ -173,7 +173,7 @@ class AccountView(QFrame):
                 value = QLabel()
                 value.setMinimumHeight(38)
                 value.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-                value.setStyleSheet(f"color: {theme.INK}; padding-left: 5px;")  # lines up with the editors
+                theming.styled(value, lambda: f"color: {theme.INK}; padding-left: 5px;")  # lines up with the editors
                 grid.addWidget(value, row, 1, Qt.AlignmentFlag.AlignTop)
                 self._values[key] = value
         grid.setColumnStretch(1, 1)
@@ -182,11 +182,11 @@ class AccountView(QFrame):
         self.photo = PhotoButton(184)
         self.greeting = QLabel(alignment=Qt.AlignmentFlag.AlignCenter)
         self.greeting.setWordWrap(True)
-        self.greeting.setStyleSheet(f"font-family: '{theme.SERIF}'; font-size: 17pt; color: {theme.INK};")
+        theming.styled(self.greeting, lambda: f"font-family: '{theme.SERIF}'; font-size: 17pt; color: {theme.INK};")
         photo_hint = QLabel("Click the photo to change it", objectName="FieldHint",
                             alignment=Qt.AlignmentFlag.AlignCenter)
         self.photo_menu = QMenu(self)
-        self.photo_menu.setStyleSheet(theme.MENU_STYLE)
+        theming.styled(self.photo_menu, lambda: theme.MENU_STYLE)
         self.change_photo_action = self.photo_menu.addAction("Change photo…")
         self.remove_photo_action = self.photo_menu.addAction("Remove photo")
         photo_column = QVBoxLayout()
@@ -207,7 +207,7 @@ class AccountView(QFrame):
         # ---- password (only for accounts that sign in with one)
         self.password_section = QWidget()
         heading = QLabel("Change password")
-        heading.setStyleSheet(f"font-family: '{theme.SERIF}'; font-size: 14pt; color: {theme.INK};")
+        theming.styled(heading, lambda: f"font-family: '{theme.SERIF}'; font-size: 14pt; color: {theme.INK};")
         intro = QLabel("Type your current password, then the new one twice. It is changed when you save.",
                        objectName="Muted")
         intro.setWordWrap(True)
@@ -224,7 +224,7 @@ class AccountView(QFrame):
             password_row.addWidget(field, 1, Qt.AlignmentFlag.AlignTop)
         separator = QFrame()
         separator.setFixedHeight(1)
-        separator.setStyleSheet(f"background: {theme.BORDER};")
+        theming.styled(separator, lambda: f"background: {theme.BORDER};")
         password_layout = QVBoxLayout(self.password_section)
         password_layout.setContentsMargins(0, 0, 0, 0)
         password_layout.setSpacing(10)

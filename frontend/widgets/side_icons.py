@@ -27,6 +27,26 @@ from PyQt6.QtGui import QColor, QPainter, QPainterPath, QPen
 from frontend import theme
 
 
+# Layout 3 draws the side bar as a graphite cover in every theme, so its icons take the cover's
+# colours there; elsewhere they take the theme's.
+def _ink() -> str:
+    from frontend import fieldbook
+
+    return fieldbook.cover_text() if fieldbook.active() else theme.INK
+
+
+def _muted() -> str:
+    from frontend import fieldbook
+
+    return fieldbook.cover_muted() if fieldbook.active() else theme.MUTED
+
+
+def _paper() -> str:
+    from frontend import fieldbook
+
+    return fieldbook.cover_raised() if fieldbook.active() else theme.WHITE
+
+
 class SideIcon:
     """An icon drawn in a square ``rect``; ``period_ms`` is the length of one animation loop."""
 
@@ -41,7 +61,7 @@ class DownloadIcon(SideIcon):
 
     def paint(self, painter: QPainter, rect: QRectF, t: float | None) -> None:
         s = rect.width()
-        pen = QPen(QColor(theme.INK), max(1.6, s * 0.09), Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap,
+        pen = QPen(QColor(_ink()), max(1.6, s * 0.09), Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap,
                    Qt.PenJoinStyle.RoundJoin)
         painter.save()
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -91,7 +111,7 @@ class WritingIcon(SideIcon):
     def paint(self, painter: QPainter, rect: QRectF, t: float | None) -> None:
         s = rect.width()
         line_width = max(1.4, s * 0.075)
-        pen = QPen(QColor(theme.INK), line_width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap,
+        pen = QPen(QColor(_ink()), line_width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap,
                    Qt.PenJoinStyle.RoundJoin)
         painter.save()
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -99,11 +119,11 @@ class WritingIcon(SideIcon):
         # Paper.
         paper = QRectF(rect.left() + s * 0.08, rect.top() + s * 0.06, s * 0.62, s * 0.86)
         painter.setPen(pen)
-        painter.setBrush(QColor(theme.WHITE))
+        painter.setBrush(QColor(_paper()))
         painter.drawRoundedRect(paper, s * 0.08, s * 0.08)
 
         # Writing: at rest every line is written; animated, the lines are written one by one.
-        writing = QPen(QColor(theme.MUTED), line_width * 0.85, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
+        writing = QPen(QColor(_muted()), line_width * 0.85, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
         painter.setPen(writing)
         painter.setBrush(Qt.BrushStyle.NoBrush)
         tip = None
@@ -148,7 +168,7 @@ class WritingIcon(SideIcon):
         painter.rotate(-45)  # the pencil points down-left, its body up-right
         length, width = s * 0.62, s * 0.2
         body = QRectF(width * 0.9, -width / 2, length - width * 0.9, width)
-        painter.setPen(QPen(QColor(theme.INK), line_width * 0.9, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap,
+        painter.setPen(QPen(QColor(_ink()), line_width * 0.9, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap,
                             Qt.PenJoinStyle.RoundJoin))
         painter.setBrush(QColor(theme.OCEAN))
         painter.drawRoundedRect(body, width * 0.25, width * 0.25)
@@ -156,7 +176,7 @@ class WritingIcon(SideIcon):
         point.lineTo(width * 0.9, -width / 2)
         point.lineTo(width * 0.9, width / 2)
         point.closeSubpath()
-        painter.setBrush(QColor(theme.WHITE))
+        painter.setBrush(QColor(_paper()))
         painter.drawPath(point)
         painter.restore()
 
@@ -174,7 +194,7 @@ class TerminalIcon(SideIcon):
 
         # The window.
         window = QRectF(rect.left() + s * 0.06, rect.top() + s * 0.14, s * 0.88, s * 0.72)
-        painter.setPen(QPen(QColor(theme.INK), line_width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap,
+        painter.setPen(QPen(QColor(_ink()), line_width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap,
                             Qt.PenJoinStyle.RoundJoin))
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawRoundedRect(window, s * 0.1, s * 0.1)
@@ -192,12 +212,12 @@ class TerminalIcon(SideIcon):
         baseline = middle + s * 0.12
         x = left + s * 0.22
         step = s * 0.13
-        painter.setPen(QPen(QColor(theme.MUTED), line_width * 0.9, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        painter.setPen(QPen(QColor(_muted()), line_width * 0.9, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
         for _ in range(self.typed(t)):
             painter.drawLine(QPointF(x, baseline - s * 0.05), QPointF(x + s * 0.06, baseline - s * 0.05))
             x += step
         if self.cursor_visible(t):
-            painter.setPen(QPen(QColor(theme.INK), line_width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+            painter.setPen(QPen(QColor(_ink()), line_width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
             painter.drawLine(QPointF(x, baseline), QPointF(x + s * 0.12, baseline))
         painter.restore()
 
@@ -230,7 +250,7 @@ class AnalysisIcon(SideIcon):
         axis = QPainterPath(QPointF(rect.left() + s * 0.08, rect.top() + s * 0.1))
         axis.lineTo(rect.left() + s * 0.08, floor)
         axis.lineTo(rect.right() - s * 0.04, floor)
-        painter.setPen(QPen(QColor(theme.INK), line_width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap,
+        painter.setPen(QPen(QColor(_ink()), line_width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap,
                             Qt.PenJoinStyle.RoundJoin))
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawPath(axis)
@@ -252,10 +272,10 @@ class AnalysisIcon(SideIcon):
         # Lens: a ring with a handle, sweeping over the bars.
         radius = s * 0.17
         centre = QPointF(rect.left() + s * lens_x, rect.top() + s * (0.34 + 0.04 * math.sin(2 * math.pi * (t or 0))))
-        glass = QColor(theme.WHITE)
+        glass = QColor(_paper())
         glass.setAlpha(110)
         painter.setBrush(glass)
-        painter.setPen(QPen(QColor(theme.INK), line_width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        painter.setPen(QPen(QColor(_ink()), line_width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
         painter.drawEllipse(centre, radius, radius)
         handle = QPointF(math.cos(math.radians(45)), math.sin(math.radians(45)))
         painter.drawLine(centre + handle * radius, centre + handle * (radius + s * 0.17))
@@ -298,7 +318,7 @@ class ExplainIcon(SideIcon):
         tail.lineTo(left + s * 0.1, rect.top() + s * 0.92)
         tail.lineTo(left + s * 0.34, bottom - s * 0.02)
         bubble = bubble.united(tail)
-        painter.setPen(QPen(QColor(theme.INK), line_width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap,
+        painter.setPen(QPen(QColor(_ink()), line_width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap,
                             Qt.PenJoinStyle.RoundJoin))
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawPath(bubble)
@@ -379,9 +399,9 @@ class VectorIcon(SideIcon):
         # Vertex nodes: square handles; the "active" one (lit in turn while animating) is green.
         active = None if t is None else int(t * len(corners)) % len(corners)
         node = s * 0.11
-        painter.setPen(QPen(QColor(theme.INK), line_width * 0.8))
+        painter.setPen(QPen(QColor(_ink()), line_width * 0.8))
         for index, corner in enumerate(corners):
-            painter.setBrush(QColor(theme.LEAF if index == active else theme.WHITE))
+            painter.setBrush(QColor(theme.LEAF if index == active else _paper()))
             painter.drawRect(QRectF(corner.x() - node / 2, corner.y() - node / 2, node, node))
         painter.restore()
 
@@ -433,7 +453,7 @@ class TerrainIcon(SideIcon):
         cap.lineTo(apex.x() - s * 0.02, rect.top() + s * 0.35)
         cap.closeSubpath()
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor(theme.WHITE))
+        painter.setBrush(QColor(_paper()))
         painter.drawPath(cap)
         painter.restore()
 
@@ -461,7 +481,7 @@ class InterpolateIcon(SideIcon):
             radius = s * (0.08 + 0.16 * grow)
             painter.drawEllipse(centre, radius, radius)
 
-        painter.setPen(QPen(QColor(theme.INK), line_width * 0.8))
+        painter.setPen(QPen(QColor(_ink()), line_width * 0.8))
         for index, centre in enumerate(centres):
             colour = QColor(theme.LEAF) if index == (0 if t is None else int(t * len(centres)) % len(centres)) \
                 else QColor(theme.OCEAN)
@@ -499,7 +519,7 @@ class CatalogIcon(SideIcon):
         tray.lineTo(rect.left() + s * 0.2, bottom)
         tray.lineTo(rect.right() - s * 0.2, bottom)
         tray.lineTo(rect.right() - s * 0.2, tray_top)
-        painter.setPen(QPen(QColor(theme.INK), line_width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap,
+        painter.setPen(QPen(QColor(_ink()), line_width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap,
                             Qt.PenJoinStyle.RoundJoin))
         painter.drawPath(tray)
 

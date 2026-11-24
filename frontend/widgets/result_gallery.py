@@ -12,11 +12,13 @@ from PyQt6.QtGui import QImage, QMouseEvent, QPixmap
 from PyQt6.QtWidgets import QFrame, QGridLayout, QLabel, QVBoxLayout, QWidget
 
 from frontend import theme
+from frontend import theming
 
 THUMBNAIL = 220                                 # longer side of a picture, in pixels
 COLUMNS = 3
 
-STYLESHEET = f"""
+def _stylesheet():
+    return f"""
 QFrame#ResultMap {{ background: {theme.FOAM}; border: 1px solid {theme.BORDER}; border-radius: 10px; }}
 QFrame#ResultMap:hover {{ border-color: {theme.LEAF}; }}
 QLabel#ResultMapPicture {{ background: {theme.WHITE}; border-radius: 6px; color: {theme.MUTED}; }}
@@ -76,7 +78,7 @@ class ResultGallery(QWidget):
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
-        self.setStyleSheet(STYLESHEET)
+        theming.styled(self, _stylesheet)
         self.tiles: dict[str, ResultMapTile] = {}
         self._grid = QGridLayout(self)
         self._grid.setContentsMargins(0, 0, 0, 0)

@@ -22,8 +22,10 @@ from PyQt6.QtWidgets import (
 
 from backend.dto.result_dto import ResultDTO
 from frontend import theme
+from frontend import theming
 
-STYLESHEET = f"""
+def _stylesheet():
+    return f"""
 QDialog {{ background: {theme.WHITE}; }}
 QLabel#PickerTitle {{ font-family: "{theme.SERIF}"; font-size: 16pt; color: {theme.INK}; }}
 QListWidget {{
@@ -55,7 +57,7 @@ class ResultPickerDialog(QDialog):
         self.setWindowTitle("AI explanation")
         self.setModal(True)
         self.setMinimumSize(560, 420)
-        self.setStyleSheet(STYLESHEET)
+        theming.styled(self, _stylesheet)
         self.results = list(results)
 
         title = QLabel("Which result should be explained?", objectName="PickerTitle")
@@ -73,7 +75,7 @@ class ResultPickerDialog(QDialog):
         if self.results:
             self.list.setCurrentRow(0)
 
-        self.explain_button = QPushButton("✦ Explain with AI", objectName="PrimaryButton")
+        self.explain_button = QPushButton("Explain with AI", objectName="PrimaryButton")
         self.cancel_button = QPushButton("Cancel", objectName="SecondaryButton")
         for button in (self.explain_button, self.cancel_button):
             button.setCursor(Qt.CursorShape.PointingHandCursor)

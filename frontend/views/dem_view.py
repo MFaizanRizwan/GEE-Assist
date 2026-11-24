@@ -33,7 +33,7 @@ from backend.business.facade import IBusinessFacade
 from backend.business.terrain import PRODUCTS
 from backend.dto.terrain_dto import TerrainInfoDTO, TerrainProductDTO
 from backend.exceptions import GeeAssistError
-from frontend import theme
+from frontend import theme, theming
 from frontend.download_format import format_size
 from frontend.widgets.form_parts import StatusBanner
 from frontend.widgets.raster_canvas import RasterCanvas, rgba_to_image
@@ -43,7 +43,8 @@ from frontend.workers.task_worker import run_task
 PANEL_WIDTH = 320
 HOVER_DELAY_MS = 40
 
-STYLESHEET = f"""
+def _stylesheet():
+    return f"""
 #DemPage {{ background: transparent; }}
 QLabel#PageTitle {{ font-family: "{theme.SERIF}"; font-size: 20pt; color: {theme.INK}; }}
 QLabel#PageSubtitle {{ color: {theme.MUTED}; }}
@@ -68,7 +69,7 @@ class DemView(QWidget):
     def __init__(self, facade: IBusinessFacade, parent: QWidget | None = None):
         super().__init__(parent)
         self.setObjectName("DemPage")
-        self.setStyleSheet(STYLESHEET)
+        theming.styled(self, _stylesheet)
         self._facade = facade
         self.info: TerrainInfoDTO | None = None
         self.product: TerrainProductDTO | None = None

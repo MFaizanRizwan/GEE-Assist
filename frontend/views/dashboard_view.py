@@ -11,18 +11,24 @@ from __future__ import annotations
 
 import re
 from datetime import datetime
+from datetime import datetime
 
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QImage, QMouseEvent
+from PyQt6.QtGui import QColor, QFont, QImage, QMouseEvent
 from PyQt6.QtWidgets import (
+    QWIDGETSIZE_MAX,
+    QAbstractItemView,
     QDialog,
     QDialogButtonBox,
     QFrame,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QPushButton,
     QScrollArea,
     QStackedWidget,
+    QTableWidget,
+    QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
@@ -30,7 +36,7 @@ from PyQt6.QtWidgets import (
 from backend.dto.project_dto import AnalysisRecordDTO, ProjectDTO
 from backend.dto.user_dto import UserDTO
 from backend.business.facade import IBusinessFacade
-from frontend import theme
+from frontend import accent, fieldbook, theme, theming
 from frontend.widgets.project_charts import CategoryBarChart, MetricTrendChart
 from frontend.widgets.raster_canvas import rgba_to_image
 from frontend.widgets.result_gallery import ResultGallery
@@ -44,7 +50,8 @@ MAPS_SHOWN = 6                                  # the open project's newest resu
 MAP_PICTURE_SIZE = 480                          # longer side the maps are drawn at (then fitted in their tile)
 _CATEGORY_LABELS = {"LULC": "Land cover", "LST": "Surface temperature"}
 
-STYLESHEET = f"""
+def _stylesheet():
+    return f"""
 QFrame#DashboardPanel {{
     background: {theme.WHITE};
     border: 1px solid {theme.BORDER};
@@ -65,15 +72,14 @@ QFrame#RecentProject:hover {{ border-color: {theme.LEAF}; }}
 QFrame#RecentProject[current="true"] {{ border-color: {theme.LEAF}; }}
 QFrame#ResultRow {{ border: none; border-top: 1px solid {theme.BORDER}; border-radius: 0; background: transparent; }}
 QPushButton#PrimaryButton {{
-    color: {theme.WHITE}; border: none; border-radius: 9px; padding: 9px 20px; font-weight: 600;
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {theme.LEAF}, stop:1 {theme.OCEAN});
+    color: {theme.ACCENT_TEXT}; border: none; border-radius: {accent.BUTTON_RADIUS}px; padding: 9px 20px; font-weight: 600;
+    background: {theme.ACCENT_SOLID};
 }}
-QPushButton#PrimaryButton:hover {{
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {theme.LEAF_DARK}, stop:1 {theme.OCEAN_DARK});
-}}
+QPushButton#PrimaryButton:hover {{ background: {theme.ACCENT_SOLID_HOVER}; }}
+QPushButton#PrimaryButton:pressed {{ background: {theme.ACCENT_SOLID_HOVER}; padding-top: 10px; padding-bottom: 8px; }}
 QPushButton#SecondaryButton {{
     color: {theme.INK}; background: {theme.WHITE}; border: 1px solid {theme.BORDER_STRONG};
-    border-radius: 9px; padding: 8px 18px; font-weight: 600;
+    border-radius: {accent.BUTTON_RADIUS}px; padding: 8px 18px; font-weight: 600;
 }}
 QPushButton#SecondaryButton:hover {{ background: {theme.FOAM}; border-color: {theme.BORDER_HOVER}; }}
 QPushButton#SecondaryButton:pressed {{ background: {theme.MINT}; }}
@@ -174,6 +180,17 @@ class RecentProjectItem(QFrame):
         if event.button() == Qt.MouseButton.LeftButton and self.rect().contains(event.position().toPoint()):
             self.clicked.emit(self.project.folder)
         super().mouseReleaseEvent(event)
+
+
+def _short_when(created_at: str) -> str:
+    """Layout 3's results table: "24 Nov 18:05" (the full date is in the row's tooltip)."""
+    try:
+        return datetime.fromisoformat(created_at).strftime("%d %b %H:%M")
+    except (TypeError, ValueError):
+        return format_when(created_at)
+
+
+FIELD_COLUMNS = ["#", "Analysis", "Dataset", "When", "Result", "Run"]  # Layout 3's results table
 
 
 class ResultRow(QFrame):
@@ -287,7 +304,7 @@ class AnalysisResultsDialog(QDialog):
         self.setWindowTitle(f"Analysis results — {project_name}")
         self.setModal(True)
         self.setMinimumSize(760, 460)
-        self.setStyleSheet(STYLESHEET + f"QDialog {{ background: {theme.WHITE}; }}")
+        theming.styled(self, lambda: _stylesheet() + f"QDialog {{ background: {theme.WHITE}; }}")
         self.rows: list[ResultRow] = []
 
         title = QLabel(f"Analysis results of {project_name}", objectName="ProjectName")
@@ -417,7 +434,7 @@ class DashboardView(QWidget):
 
     def __init__(self, facade: IBusinessFacade | None = None, parent: QWidget | None = None):
         super().__init__(parent)
-        self.setStyleSheet(STYLESHEET)
+        theming.styled(self, _stylesheet)
         self._facade = facade
         self._map_pictures: dict[str, QImage | None] = {}  # drawn result maps, by GeoTIFF: drawn once
         self._maps_for = ""  # the project whose maps are being shown (answers for another are dropped)
@@ -427,7 +444,7 @@ class DashboardView(QWidget):
         self.greeting = QLabel(objectName="Title")
 
         # ---- quick actions, top-left: create or open a project
-        self.create_project_button = QPushButton("＋  Create project", objectName="PrimaryButton")
+        self.create_project_button = QPushButton("+  Create project", objectName="PrimaryButton")
         self.create_project_button.setToolTip("Start a new project (its downloads and analysis results are kept in it)")
         self.open_project_button = QPushButton("Open project", objectName="SecondaryButton")
         self.open_project_button.setToolTip("Open an existing project folder on this computer")
@@ -498,15 +515,21 @@ class DashboardView(QWidget):
         column.addWidget(self.maps_panel)
         column.addStretch(1)
 
-        # ---- the two columns: the left one takes the room, the recent projects keep to the right edge
-        row = QHBoxLayout()
-        row.setSpacing(28)
-        row.addLayout(column, 1)
-        row.addWidget(self.recent_panel, 0, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
+        if fieldbook.active():
+            row = self._fieldbook_spread(column)
+        else:
+            # ---- the two columns: the left one takes the room, the recent projects keep to the right edge
+            row = QHBoxLayout()
+            row.setSpacing(28)
+            row.addLayout(column, 1)
+            row.addWidget(self.recent_panel, 0, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
 
         content = QWidget()
         content_layout = QVBoxLayout(content)
-        content_layout.setContentsMargins(36, 32, 36, 32)
+        if fieldbook.active():
+            content_layout.setContentsMargins(24, 20, 24, 20)  # a power workspace: denser margins
+        else:
+            content_layout.setContentsMargins(36, 32, 36, 32)
         content_layout.addLayout(row)
         content_layout.addStretch(1)  # from the top, not centred
         scroll = QScrollArea()
@@ -521,6 +544,116 @@ class DashboardView(QWidget):
         layout.addWidget(scroll)
 
         self.set_projects(None, [], [])
+
+    def _fieldbook_spread(self, column: QVBoxLayout) -> QVBoxLayout:
+        """Layout 3: the dashboard as a field-book spread. The open project is the heading, with its
+        actions beside it; the glance row; then two pages: results and recent projects on the left,
+        result maps and charts on the right, behind the book's yellow gutter."""
+        for widget in (self.greeting, self.project_heading, self.results_panel, self.glance_panel,
+                       self.charts_panel, self.maps_panel):
+            column.removeWidget(widget)
+        column.removeItem(self.project_actions_row)
+        self.greeting.hide()  # the project is the heading; a welcome line would sit above it
+        stretch = self.project_actions_row.takeAt(self.project_actions_row.count() - 1)  # actions sit right
+        del stretch
+        self.recent_panel.setMinimumWidth(0)
+        self.recent_panel.setMaximumWidth(QWIDGETSIZE_MAX)
+
+        head = QHBoxLayout()
+        head.setSpacing(16)
+        head.addWidget(self.project_heading, 1)
+        head.addLayout(self.project_actions_row)
+
+        left = QVBoxLayout()
+        left.setSpacing(16)
+        left.addWidget(self.results_panel)
+        left.addWidget(self.recent_panel)
+        left.addStretch(1)
+        self.results_table = QTableWidget(0, len(FIELD_COLUMNS), objectName="FieldTable")
+        self.results_table.setHorizontalHeaderLabels(FIELD_COLUMNS)
+        for column in (4, 5):  # Result and Run hold right-aligned figures: their headings sit over them
+            self.results_table.horizontalHeaderItem(column).setTextAlignment(
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self.results_table.verticalHeader().hide()
+        self.results_table.setShowGrid(False)
+        self.results_table.setWordWrap(False)
+        self.results_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.results_table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
+        self.results_table.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.results_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        header = self.results_table.horizontalHeader()
+        header.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        for column in range(len(FIELD_COLUMNS)):
+            header.setSectionResizeMode(column, QHeaderView.ResizeMode.Stretch if column == 1  # the analysis name takes the room
+                                        else QHeaderView.ResizeMode.ResizeToContents)
+        self.results_table.setTextElideMode(Qt.TextElideMode.ElideRight)
+        self.results_panel.layout().insertWidget(2, self.results_table)  # under the panel's own list
+        theming.on_theme_changed(self._refill_field_table)
+
+        right_page = QWidget(objectName="FieldRightPage")
+        right_page.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        right = QVBoxLayout(right_page)
+        right.setContentsMargins(20, 0, 0, 0)
+        right.setSpacing(16)
+        right.addWidget(self.maps_panel)
+        right.addWidget(self.charts_panel)
+        right.addStretch(1)
+        sheet = QFrame(objectName="FieldSpread")  # one bound sheet; the yellow rule is its gutter
+        spread = QHBoxLayout(sheet)
+        spread.setContentsMargins(4, 4, 4, 4)
+        spread.setSpacing(20)
+        spread.addLayout(left, 11)
+        spread.addWidget(right_page, 10)
+
+        page = QVBoxLayout()
+        page.setSpacing(16)
+        page.addLayout(head)
+        page.addWidget(self.glance_panel)
+        page.addWidget(sheet)
+        return page
+
+    def _refill_field_table(self) -> None:
+        self._fill_field_table(self.result_rows)  # recolour after a live theme change
+
+    def _fill_field_table(self, records: list) -> None:
+        """Layout 3: the latest results as ruled rows: entry number, analysis, dataset, when, the first
+        figure and where it ran. Figures are right-aligned in the book's measurement face."""
+        table = self.results_table
+        table.setRowCount(len(records))
+        mono = QFont(fieldbook.MONO, 9)
+        left = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        right = Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        for row, record in enumerate(records):
+            processes = ", ".join(record.processes[:3])
+            _name, value = next(iter(record.metrics.items()), ("", None))
+            satellite, _place = dataset_summary(record.dataset)
+            run = f"{record.device} {record.seconds:.1f} s" if record.device else "–"
+            cells = (
+                (f"{len(self._results) - row:02d}", True, left),
+                (category_label(record.category) + (f" · {processes}" if processes else ""), False, left),
+                (satellite or "–", False, left),
+                (_short_when(record.created_at), True, left),
+                (format_number(value) if value is not None else "–", True, right),
+                (run, True, right),
+            )
+            tip = "\n".join([format_when(record.created_at)]
+                            + [f"{k}: {format_number(v)}" for k, v in record.metrics.items()]
+                            + ["saved" if record.saved else "not saved (only the numbers are kept)"])
+            for column, (text, is_mono, align) in enumerate(cells):
+                item = QTableWidgetItem(text)
+                item.setTextAlignment(align)
+                item.setToolTip(tip)
+                if is_mono:
+                    item.setFont(mono)
+                if column == 0:
+                    item.setForeground(QColor(fieldbook.yellow_ink()))
+                elif not record.saved:
+                    item.setForeground(QColor(theme.MUTED))
+                table.setItem(row, column, item)
+        table.setVisible(bool(records))
+        table.resizeRowsToContents()
+        height = table.horizontalHeader().height() + sum(table.rowHeight(r) for r in range(len(records)))
+        table.setFixedHeight(height + 4)
 
     def set_user(self, user: UserDTO) -> None:
         first_name = (user.full_name or "").split(" ")[0] or "there"
@@ -544,10 +677,14 @@ class DashboardView(QWidget):
         _clear(self.results_list)
         self.result_rows = []
         self._current, self._results = current, (list(results) if current is not None else [])
-        for record in self._results[:RESULTS_SHOWN]:
-            row = ResultRow(record)
-            self.results_list.addWidget(row)
-            self.result_rows.append(row)
+        if fieldbook.active():  # Layout 3: one ruled table, entries numbered by their place in the project
+            self.result_rows = list(self._results[:RESULTS_SHOWN])
+            self._fill_field_table(self.result_rows)
+        else:
+            for record in self._results[:RESULTS_SHOWN]:
+                row = ResultRow(record)
+                self.results_list.addWidget(row)
+                self.result_rows.append(row)
         if not self.result_rows:
             self.results_list.addWidget(self._empty(
                 f"Results of the analyses you run in {current.name} appear here." if current is not None

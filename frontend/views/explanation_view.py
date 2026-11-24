@@ -23,6 +23,7 @@ from PyQt6.QtWidgets import (
     QLabel,
     QProgressBar,
     QPushButton,
+    QStackedWidget,
     QTextBrowser,
     QVBoxLayout,
     QWidget,
@@ -32,14 +33,16 @@ from backend.business.facade import IBusinessFacade
 from backend.dto.explanation_dto import ExplanationDTO, ExplanationRequestDTO, RasterMetadataDTO
 from backend.dto.result_dto import ResultDTO
 from backend.exceptions import GeeAssistError
-from frontend import theme
+from frontend import theme, theming
+from frontend.widgets.earth_loader import EarthLoader
 from frontend.widgets.form_parts import StatusBanner
 from frontend.widgets.raster_legend import format_value
 from frontend.workers.task_worker import run_task
 
 METADATA_WIDTH = 420
 
-STYLESHEET = f"""
+def _stylesheet():
+    return f"""
 #ExplanationPage {{ background: transparent; }}
 QLabel#PageTitle {{ font-family: "{theme.SERIF}"; font-size: 20pt; color: {theme.INK}; }}
 QLabel#PageSubtitle {{ color: {theme.MUTED}; }}
@@ -61,7 +64,7 @@ class ExplanationView(QWidget):
     def __init__(self, facade: IBusinessFacade, parent: QWidget | None = None):
         super().__init__(parent)
         self.setObjectName("ExplanationPage")
-        self.setStyleSheet(STYLESHEET)
+        theming.styled(self, _stylesheet)
         self._facade = facade
         self.result: ResultDTO | None = None
         self.request: ExplanationRequestDTO | None = None
@@ -103,11 +106,19 @@ class ExplanationView(QWidget):
         self.report_button = QPushButton("PDF report", objectName="PrimaryButton")
         self.report_button.setToolTip("Make a PDF of this explanation, with the analysis picture on top, "
                                       "and export it if you like")
+        # While Gemini works, a rotating Earth replaces the answer area.
+        self.answer_loader = EarthLoader(
+            "Explaining the result…", "Gemini is reading the GeoTIFF and its metadata.", size=120
+        )
+        self.answer_stack = QStackedWidget()
+        self.answer_stack.addWidget(self.answer_view)      # 0: the explanation
+        self.answer_stack.addWidget(self.answer_loader)    # 1: the loader
+
         answer_card = QFrame(objectName="ExplanationCard")
         right = QVBoxLayout(answer_card)
         right.setContentsMargins(16, 14, 16, 14)
         right.addWidget(QLabel("Gemini's explanation", objectName="StepTitle"))
-        right.addWidget(self.answer_view, 1)
+        right.addWidget(self.answer_stack, 1)
         buttons = QHBoxLayout()
         buttons.addWidget(self.sent_label, 1)
         for button in (self.again_button, self.copy_button, self.folder_button, self.report_button):
@@ -228,6 +239,7 @@ class ExplanationView(QWidget):
     def _set_busy(self, busy: bool) -> None:
         self.busy = busy
         self.progress.setVisible(busy)
+        self.answer_stack.setCurrentWidget(self.answer_loader if busy else self.answer_view)
         self._update_buttons()
 
     def _update_buttons(self) -> None:

@@ -87,7 +87,7 @@ class FakeApp:
         self.full_screen = on
         self.calls.append(("full_screen", on))
 
-    def restart_with_theme(self, theme):
+    def switch_theme(self, theme):
         self.calls.append(("theme", theme))
 
     def open_path(self, path):

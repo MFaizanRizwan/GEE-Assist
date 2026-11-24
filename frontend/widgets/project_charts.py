@@ -62,7 +62,7 @@ class CategoryBarChart(QWidget):
             painter.drawText(QRectF(PADDING, 0, self.width() - 2 * PADDING, self.height()),
                              Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, "No analyses yet")
             return
-        colours = (theme.LEAF, theme.OCEAN)
+        colours = _bar_colours()
         for index, ((label, count), bar) in enumerate(zip(self.counts, self.bar_rects())):
             painter.setPen(QColor(theme.TEXT))
             name = metrics.elidedText(label, Qt.TextElideMode.ElideRight, LABEL_WIDTH - 10)
@@ -123,9 +123,10 @@ class MetricTrendChart(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         area = QRectF(self.rect()).adjusted(1, 1, -1, -1)
-        painter.setPen(QPen(QColor(theme.BORDER), 1))
-        painter.setBrush(QColor(theme.FIELD_BG))
-        painter.drawRoundedRect(area, 8, 8)
+        if not _fieldbook():  # Layout 3 draws the chart straight on the page: no frame inside the panel
+            painter.setPen(QPen(QColor(theme.BORDER), 1))
+            painter.setBrush(QColor(theme.FIELD_BG))
+            painter.drawRoundedRect(area, 8, 8)
         font = QFont(self.font())
         font.setPointSizeF(8.5)
         painter.setFont(font)
@@ -157,11 +158,34 @@ class MetricTrendChart(QWidget):
         line = QPainterPath(positions[0])
         for point in positions[1:]:
             line.lineTo(point)
-        painter.setPen(QPen(QColor(theme.OCEAN), 2))
+        painter.setPen(QPen(QColor(_line_colour()), 2))
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawPath(line)
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor(theme.LEAF))
+        painter.setBrush(QColor(theme.INK if _fieldbook() else theme.LEAF))
         for point in positions:
             painter.drawEllipse(point, 3.5, 3.5)
         painter.end()
+
+
+def _fieldbook() -> bool:
+    from frontend import fieldbook  # late: fieldbook imports theme
+
+    return fieldbook.active()
+
+
+def _bar_colours() -> tuple[str, str]:
+    """Layout 3 keeps colour for the result maps: bars are the book's yellow and ink."""
+    if _fieldbook():
+        from frontend import fieldbook
+
+        return fieldbook.SPINE, theme.MUTED
+    return theme.LEAF, theme.OCEAN
+
+
+def _line_colour() -> str:
+    if _fieldbook():
+        from frontend import fieldbook
+
+        return fieldbook.SPINE
+    return theme.OCEAN

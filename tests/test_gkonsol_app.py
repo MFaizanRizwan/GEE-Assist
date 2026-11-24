@@ -53,12 +53,10 @@ def test_side_bar_and_full_screen(term):
     assert "on, off or toggle" in term.type("fullscreen sideways")
 
 
-def test_theme_lists_and_switches_after_asking(term):
+def test_theme_lists_and_switches_live(term):
     printed = term.type("theme")
     assert "● light" in printed and "(current)" in printed and "dark-green" in printed
-    term.type("theme dark-grey")
-    assert "restarts to use the Dark – grey theme" in term.shell.runner.asking.prompt
-    term.type("y")
+    assert "Switched to the Dark – grey theme" in term.type("theme dark-grey")  # no question, no restart
     assert ("theme", "dark-grey") in term.app.calls
     assert "already uses" in term.type("theme light")
     assert "There is no theme 'pink'" in term.type("theme pink")

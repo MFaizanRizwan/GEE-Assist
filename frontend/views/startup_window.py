@@ -5,6 +5,7 @@ from __future__ import annotations
 from PyQt6.QtWidgets import QMainWindow, QStackedWidget, QWidget
 
 from frontend import theme
+from frontend import theming
 from frontend.assets import STARTING_VIDEO
 from frontend.views.splash_view import SplashView
 from frontend.widgets.fade import fade_in
@@ -18,7 +19,7 @@ class StartupWindow(QMainWindow):
         self.setWindowTitle("GEE-Assist")
         self.setObjectName("StartupWindow")
         # The theme's surface: the sign-in screen fades in over it. (The intro paints its own white.)
-        self.setStyleSheet(f"#StartupWindow, #StartupStack {{ background: {theme.WHITE}; }}")
+        theming.styled(self, lambda: f"#StartupWindow, #StartupStack {{ background: {theme.WHITE}; }}")
         self.setMinimumSize(1000, 680)
 
         self._stack = QStackedWidget(self)

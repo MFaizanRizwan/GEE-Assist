@@ -47,11 +47,19 @@ LIGHT: dict[str, str] = {
     "SUCCESS_BORDER": "#BFE3D1",
     "INFO_BORDER": "#C9DFF1",
     "ERROR_FIELD_BG": "#FFFBFA",   # a field with an invalid value
-    # primary (gradient) buttons
+    # primary buttons (solid: see accent.py) and their disabled state
     "PRIMARY_TEXT": "#FFFFFF",
     "PRIMARY_DISABLED_TEXT": "#F2F7F6",
     "PRIMARY_DISABLED_FROM": "#8CCBB6",
     "PRIMARY_DISABLED_TO": "#92BCE0",
+    # button accent (primary buttons, checked segments, mode switcher): each theme has its
+    # OWN hue so switching theme visibly recolours the buttons. Light = green → blue.
+    "ACCENT_FROM": "#2E9E78",
+    "ACCENT_TO": "#2F7FC1",
+    "ACCENT_FROM_HOVER": "#237D60",
+    "ACCENT_TO_HOVER": "#24659C",
+    "ACCENT_TEXT": "#FFFFFF",       # text/icon on the accent gradient
+    "ACCENT_SOFT": "#EAF6F0",       # faint accent tint (hover fills, selection)
     "OPEN_BUTTON_TOP": "#4CB98E",  # "open folder" button: gradient into LEAF
     # signed-in pages: background gradient
     "PAGE_GRADIENT_TOP": "#F3FAF6",
@@ -110,6 +118,13 @@ DARK_GREEN: dict[str, str] = {   # deep blue-green
     "PRIMARY_DISABLED_TEXT": "#5E7C79",
     "PRIMARY_DISABLED_FROM": "#2B4F47",
     "PRIMARY_DISABLED_TO": "#2B4659",
+    # Dark blue-green theme: accent is a bright teal → cyan, distinct from the light theme.
+    "ACCENT_FROM": "#2FD1C4",
+    "ACCENT_TO": "#38C6E8",
+    "ACCENT_FROM_HOVER": "#55E0D5",
+    "ACCENT_TO_HOVER": "#63D5F0",
+    "ACCENT_TEXT": "#06201E",       # dark text reads on the bright accent
+    "ACCENT_SOFT": "#17383A",
     "OPEN_BUTTON_TOP": "#86E3C1",
     "PAGE_GRADIENT_TOP": "#0F2426",
     "PAGE_GRADIENT_MIDDLE": "#0F2229",
@@ -162,6 +177,13 @@ DARK_GREY: dict[str, str] = {    # plain black and grey
     "PRIMARY_DISABLED_TEXT": "#6E6E6E",
     "PRIMARY_DISABLED_FROM": "#383838",
     "PRIMARY_DISABLED_TO": "#3D3D3D",
+    # Dark grey theme: accent is a violet → magenta, a clear third hue.
+    "ACCENT_FROM": "#9B7BF0",
+    "ACCENT_TO": "#E267C9",
+    "ACCENT_FROM_HOVER": "#AE92F4",
+    "ACCENT_TO_HOVER": "#EC82D4",
+    "ACCENT_TEXT": "#15101E",        # dark text for contrast on the bright accent
+    "ACCENT_SOFT": "#2A2433",
     "OPEN_BUTTON_TOP": "#95E4C5",
     "PAGE_GRADIENT_TOP": "#151515",
     "PAGE_GRADIENT_MIDDLE": "#161616",
@@ -181,9 +203,23 @@ DARK_GREY: dict[str, str] = {    # plain black and grey
 
 PALETTES = {"light": LIGHT, "dark-green": DARK_GREEN, "dark-grey": DARK_GREY}
 
-# The theme is chosen once, at start-up: the saved choice (``GEE_ASSIST_THEME`` overrides it,
-# e.g. for the tests). Changing it takes effect the next time the app starts.
+# The theme at start-up is the saved choice (``GEE_ASSIST_THEME`` overrides it, e.g. for the
+# tests). Changing it later goes through set_theme() below: it applies at once, with no restart.
 _override = os.environ.get("GEE_ASSIST_THEME")
 THEME: str = _override if _override in PALETTES else appearance.current_theme()
 ACTIVE: dict[str, str] = PALETTES[THEME]
 IS_DARK: bool = THEME != "light"
+
+
+def set_theme(name: str) -> None:
+    """Swap the active palette in place, for a live theme change (no restart).
+
+    Callers then recompute the dependent colour constants via ``accent.refresh``,
+    ``theme.refresh`` and ``form_theme.refresh`` and re-apply the stylesheets.
+    """
+    global THEME, ACTIVE, IS_DARK
+    if name not in PALETTES:
+        raise ValueError(f"Unknown theme: {name!r}")
+    THEME = name
+    ACTIVE = PALETTES[name]
+    IS_DARK = name != "light"

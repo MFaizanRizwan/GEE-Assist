@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from PyQt6 import sip
 from PyQt6.QtCore import QPoint, Qt, QTimer, QUrl, pyqtSignal
-from PyQt6.QtGui import QAction, QCloseEvent, QDesktopServices, QMouseEvent
+from PyQt6.QtGui import QAction, QCloseEvent, QDesktopServices, QIcon, QKeySequence, QMouseEvent, QShortcut
 from PyQt6.QtWidgets import (
     QApplication,
     QFileDialog,
@@ -33,6 +33,7 @@ from PyQt6.QtWidgets import (
     QMainWindow,
     QMenu,
     QMessageBox,
+    QPushButton,
     QScrollArea,
     QSizePolicy,
     QStackedWidget,
@@ -45,7 +46,7 @@ from backend.dto.project_dto import ProjectDTO
 from backend.dto.user_dto import UserDTO
 from backend.dto.version_dto import AppVersionDTO
 from backend.exceptions import GeeAssistError
-from frontend import appearance, layout_mode, theme
+from frontend import appearance, assets, fieldbook, layout_mode, palette, theme, theming
 from frontend.project_paths import current_project, downloads_folder
 from frontend.views.account_view import AccountView, Avatar, SignupDetailsDialog
 from frontend.views.project_dialogs import ProjectActions
@@ -87,10 +88,19 @@ from frontend.widgets.side_icons import (
 )
 from frontend.views.result_picker_dialog import choose_result
 
-PAGE_BACKGROUND = (
-    "qlineargradient(x1:0, y1:0, x2:1, y2:1, "
-    f"stop:0 {theme.PAGE_GRADIENT_TOP}, stop:0.6 {theme.PAGE_GRADIENT_MIDDLE}, stop:1 {theme.PAGE_GRADIENT_BOTTOM})"
-)
+def _pages_background_css() -> str:
+    """The pages' ground: Layout 3 rules it like a field book on an 8px module."""
+    if fieldbook.active():
+        return (f"#HomePages, #DashboardPage {{ background-color: {palette.ACTIVE['PAGE_BG']}; "
+                f"background-image: url({fieldbook.grid_tile()}); background-repeat: repeat-xy; }}")
+    return f"#HomePages, #DashboardPage {{ background: {_page_background()}; }}"
+
+
+def _page_background() -> str:
+    return (
+        "qlineargradient(x1:0, y1:0, x2:1, y2:1, "
+        f"stop:0 {theme.PAGE_GRADIENT_TOP}, stop:0.6 {theme.PAGE_GRADIENT_MIDDLE}, stop:1 {theme.PAGE_GRADIENT_BOTTOM})"
+    )
 
 # Why the feedback modal is shown (its first line).
 AFTER_EXPLANATION = "Your AI explanation is ready. Was it useful?"
@@ -140,14 +150,16 @@ class ProfileButton(QFrame):
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self.setObjectName("ProfileButton")
-        self.setStyleSheet(
-            f"#ProfileButton {{ border-radius: 8px; }} #ProfileButton:hover {{ background: {theme.FOAM}; }}"
-        )
+        theming.styled(self, lambda: (
+            f"#ProfileButton {{ border-radius: 8px; }} #ProfileButton:hover {{ background: "
+            f"{fieldbook.cover_raised() if fieldbook.active() else theme.FOAM}; }}"
+        ))
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setToolTip("Your account")
         self.avatar = Avatar(38)
         self.name = QLabel()
-        self.name.setStyleSheet(f"color: {theme.INK}; font-weight: 600;")
+        theming.styled(self.name, lambda: (
+            f"color: {fieldbook.cover_text() if fieldbook.active() else theme.INK}; font-weight: 600;"))
         self.role = QLabel(objectName="Muted")
         for label in (self.name, self.role):  # clipped, not holding the bar open, while it slides
             label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
@@ -212,9 +224,8 @@ class TerminalApp:
     def set_full_screen(self, on: bool) -> None:
         self._window.set_full_screen(on)
 
-    def restart_with_theme(self, theme_name: str) -> None:
-        appearance.save_theme(theme_name)  # the terminal has asked already
-        restart_app()
+    def switch_theme(self, theme_name: str) -> None:
+        self._window.change_theme(theme_name)  # live, like View → Theme
 
     def open_path(self, path: str) -> bool:
         return QDesktopServices.openUrl(QUrl.fromLocalFile(path))
@@ -244,7 +255,8 @@ class HomeWindow(QMainWindow):
         self.menu_bar = AppMenuBar(self)
         self.setMenuBar(self.menu_bar)
 
-        self.side_bar = SideBar(round_logo(LOGO_SIZE, self.devicePixelRatioF()))
+        # Layout 3 is a power workspace: its index stays open.
+        self.side_bar = SideBar(round_logo(LOGO_SIZE, self.devicePixelRatioF()), expanded=fieldbook.active())
         self.query_input_button = self.side_bar.add_button("Query Input", "Q", icon=WritingIcon())
         self.downloads_button = self.side_bar.add_button("Downloads", "D", icon=DownloadIcon())
         self.analysis_button = self.side_bar.add_button("Analysis", "A", icon=AnalysisIcon())
@@ -270,7 +282,7 @@ class HomeWindow(QMainWindow):
 
         # ---- account menu
         self.account_menu = QMenu(self)
-        self.account_menu.setStyleSheet(theme.MENU_STYLE)
+        theming.styled(self.account_menu, lambda: theme.MENU_STYLE)
         self.manage_account_action = QAction("Manage account", self)
         self.manage_account_action.setToolTip("Edit your details, change your password or profile photo")
         self.signup_details_action = QAction("Sign-up details", self)
@@ -301,7 +313,7 @@ class HomeWindow(QMainWindow):
         self.account = AccountView(facade)
         # The account card uses the page's width (up to its maximum) and scrolls in a short window.
         account_content = QFrame(objectName="HomeContent")
-        account_content.setStyleSheet(f"#HomeContent {{ background: {PAGE_BACKGROUND}; }}")
+        theming.styled(account_content, lambda: f"#HomeContent {{ background: {_page_background()}; }}")
         page_layout = QVBoxLayout(account_content)
         page_layout.setContentsMargins(36, 32, 36, 32)
         row = QHBoxLayout()
@@ -317,7 +329,7 @@ class HomeWindow(QMainWindow):
         account_page.setWidget(account_content)
 
         self.pages = QStackedWidget(objectName="HomePages")
-        self.pages.setStyleSheet(f"#HomePages, #DashboardPage {{ background: {PAGE_BACKGROUND}; }}")
+        theming.styled(self.pages, _pages_background_css)
         self.dashboard.setObjectName("DashboardPage")
         self.pages.addWidget(self.dashboard)
         self.pages.addWidget(self.query_input)
@@ -348,7 +360,8 @@ class HomeWindow(QMainWindow):
         # ---- terminal (gkonsol) under the pages
         store = GkonsolStore()
         self.terminal = GkonsolPanel()
-        self.terminal_area = TerminalArea(self.pages, self.terminal, store)
+        pages_host = self._fieldbook_pages_host() if fieldbook.active() else self.pages
+        self.terminal_area = TerminalArea(pages_host, self.terminal, store)
         form_view = getattr(self.query_input, "form_view", None)
         form = WidgetForm(form_view) if form_view is not None else MemoryForm(facade)
         self.terminal.start(facade, TerminalApp(self), form, self.terminal_area, History(store))
@@ -408,11 +421,88 @@ class HomeWindow(QMainWindow):
         self.set_user(user)
         self._project_shown: str | None = "none yet"
         self.refresh_projects()
+        if fieldbook.active():
+            self._assemble_fieldbook_shell()
         self.show_dashboard()
         # A new copy of the app: ask for the Earth Engine project and Gemini key once the window is up.
         self.later(0, self.check_first_run)
         # Check if a new version of the app is available (runs in background off UI thread)
         self.later(500, self.check_for_updates)
+
+    def _assemble_fieldbook_shell(self) -> None:
+        """Layout 3: the side bar becomes the field book's index. Pages are grouped by division and
+        each shows its real keyboard shortcut in the icon's place; the run log starts open."""
+        bar = self.side_bar
+        self.dashboard_button = bar.add_button("Dashboard", "H")
+        self.dashboard_button.setToolTip("Dashboard: the open project, its results and recent projects (Ctrl+1)")
+        self.reports_button = bar.add_button("Reports", "R")
+        self.reports_button.setToolTip("Reports: the PDF reports of this project (Ctrl+7)")
+        self.dashboard_button.clicked.connect(self.show_dashboard)
+        self.reports_button.clicked.connect(lambda: self.show_reports())
+        self.page_buttons[self.dashboard] = self.dashboard_button
+        self.page_buttons[self.reports] = self.reports_button
+        QShortcut(QKeySequence("Ctrl+Shift+E"), self, activated=self.explain_saved_result)
+        self.explain_button.setToolTip(self.explain_button.toolTip() + " (Ctrl+Shift+E)")
+        # The index runs in the order of the pages: Alt+1 ... Alt+0 (the Ctrl shortcuts keep working).
+        indexed = (self.dashboard_button, self.query_input_button, self.downloads_button, self.catalog_button,
+                   self.analysis_button, self.vector_button, self.dem_button, self.idw_button,
+                   self.explain_button, self.reports_button)
+        for position, button in enumerate(indexed, start=1):
+            key = str(position % 10)
+            button.set_index(key)
+            QShortcut(QKeySequence(f"Alt+{key}"), self, activated=button.click)
+            button.setToolTip(f"{button.toolTip()}  (Alt+{key})")
+        for button in (self.terminal_button, self.manage_users):
+            button.set_index("")  # tools, not pages: aligned with the pages, with no index
+        bar.arrange([
+            ("division", "work", "Work"), self.dashboard_button, self.query_input_button,
+            self.downloads_button, self.catalog_button,
+            ("division", "analyse", "Analyse"), self.analysis_button, self.vector_button,
+            self.dem_button, self.idw_button,
+            ("division", "explain", "Explain"), self.explain_button,
+            ("division", "report", "Report"), self.reports_button,
+            ("division", "tools", "Tools"), self.terminal_button, self.manage_users,
+        ])
+        self.set_terminal_visible(True)  # the run log is part of the power workspace
+
+    def _fieldbook_pages_host(self) -> QWidget:
+        """Layout 3: the pages under a strip of division tabs (Work, Analyse, Explain, Report), the
+        current division filled in its hue. A tab opens its division's first page."""
+        host = QWidget(objectName="FieldPagesHost")
+        strip = QFrame(objectName="DivisionStrip")
+        row = QHBoxLayout(strip)
+        row.setContentsMargins(24, 10, 24, 8)
+        row.setSpacing(6)
+        targets = {"work": self.show_dashboard, "analyse": self.show_analysis,
+                   "explain": self.explain_saved_result, "report": lambda: self.show_reports()}
+        self.division_tabs: dict[str, QPushButton] = {}
+        for key, label in (("work", "Work"), ("analyse", "Analyse"), ("explain", "Explain"), ("report", "Report")):
+            tab = QPushButton(label, objectName="DivisionTab")
+            tab.setCheckable(True)
+            tab.setProperty("division", key)
+            tab.setCursor(Qt.CursorShape.PointingHandCursor)
+            tab.clicked.connect(lambda _=False, go=targets[key]: (go(), self._mark_division()))
+            row.addWidget(tab)
+            self.division_tabs[key] = tab
+        row.addStretch(1)
+        theming.styled(strip, fieldbook.division_strip_css)
+        layout = QVBoxLayout(host)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        layout.addWidget(strip)
+        layout.addWidget(self.pages, 1)
+        self.pages.currentChanged.connect(self._mark_division)
+        self._mark_division()  # the page already shown (no change signal for it)
+        return host
+
+    def _mark_division(self, *_args) -> None:
+        divisions = {self.dashboard: "work", self.query_input: "work", self.downloads: "work",
+                     self.data_catalog: "work", self.analysis: "analyse", self.viewer: "analyse",
+                     self.vector_maps: "analyse", self.dem: "analyse", self.idw: "analyse",
+                     self.analysis_table: "analyse", self.explanation: "explain", self.reports: "report"}
+        current = divisions.get(self.pages.currentWidget())
+        for key, tab in self.division_tabs.items():
+            tab.setChecked(key == current)
 
     def later(self, msec: int, action) -> None:
         """Run ``action`` after ``msec`` ms, unless the window has been deleted by then (e.g. the user
@@ -652,18 +742,20 @@ class HomeWindow(QMainWindow):
         self.menu_bar.full_screen.setChecked(on)
 
     def change_theme(self, name: str) -> None:
-        """Save the theme and restart, as it is applied when the app starts."""
-        answer = QMessageBox.question(
-            self, "Change theme",
-            f"GEE-Assist restarts to use the {appearance.THEMES[name]} theme. A running download "
-            "is paused and can be resumed afterwards.\n\nRestart now?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.Yes,
-        )
-        if answer != QMessageBox.StandardButton.Yes:
-            self.menu_bar.show_current_theme()
-            return
-        appearance.save_theme(name)
-        restart_app()
+        """Switch the theme live — no restart. Every styled widget re-themes itself."""
+        theming.set_theme(name)   # swaps the palette, rebuilds the stylesheets, re-applies app-wide, saves
+        self._refresh_theme_icons()
+        self.menu_bar.show_current_theme()
+
+    def _refresh_theme_icons(self) -> None:
+        """Swap the per-theme app / taskbar / side-bar logo after a live theme change."""
+        icon = QIcon(str(assets.APP_ICONS[palette.THEME]))
+        self.setWindowIcon(icon)
+        app = QApplication.instance()
+        if app is not None:
+            app.setWindowIcon(icon)
+        if hasattr(self.side_bar, "refresh_logo"):
+            self.side_bar.refresh_logo()
 
     def change_layout(self, name: str) -> None:
         """Save the chosen layout and restart, as it is applied while the window is built."""

@@ -369,20 +369,19 @@ def test_help_menu_shows_the_about_box(home, monkeypatch):
     assert shown == ["About GEE-Assist"]
 
 
-@pytest.mark.parametrize("answer, restarted", [("Yes", True), ("No", False)])
-def test_choosing_a_theme_saves_it_and_restarts(home, monkeypatch, answer, restarted):
-    from PyQt6.QtWidgets import QMessageBox
+def test_choosing_a_theme_switches_it_live_without_restarting(home, monkeypatch):
+    from frontend import palette, theme
 
     saved, restarts = [], []
-    monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: getattr(QMessageBox.StandardButton, answer))
     monkeypatch.setattr(home_window.appearance, "save_theme", saved.append)
     monkeypatch.setattr(home_window, "restart_app", lambda: restarts.append(True))
 
     home.menu_bar.theme_actions["dark-green"].trigger()
 
-    assert (saved, bool(restarts)) == ((["dark-green"], True) if restarted else ([], False))
-    if not restarted:  # cancelled: the theme in use stays ticked
-        assert home.menu_bar.theme_actions["light"].isChecked()
+    assert saved == ["dark-green"] and not restarts      # kept for next time, applied now
+    assert palette.THEME == "dark-green" and theme.WHITE == palette.DARK_GREEN["WHITE"]
+    assert theme.ACCENT_SOLID == palette.DARK_GREEN["LEAF"]  # the buttons follow the theme
+    assert home.menu_bar.theme_actions["dark-green"].isChecked()
 
 
 def test_side_bar_offers_query_input_and_downloads_with_animated_icons(home):

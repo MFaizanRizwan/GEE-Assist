@@ -40,6 +40,7 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSizePolicy,
+    QStackedWidget,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -52,13 +53,14 @@ from backend.dto.download_dto import DatasetDTO
 from backend.dto.map_dto import MapLayerDTO
 from backend.dto.result_dto import ResultDTO
 from backend.exceptions import GeeAssistError
-from frontend import layout_mode, palette, theme
+from frontend import accent, fieldbook, layout_mode, palette, theme, theming
 from frontend.project_paths import analysis_folder, current_project, downloads_folder
 from frontend.download_format import format_size
+from frontend.widgets.earth_loader import EarthLoader
 from frontend.widgets.flow_layout import FlowLayout
 from frontend.widgets.form_parts import StatusBanner
 from frontend.widgets.map_area import MapArea
-from frontend.widgets.process_picker import STYLESHEET as PICKER_STYLESHEET
+from frontend.widgets.process_picker import stylesheet as picker_stylesheet
 from frontend.widgets.process_picker import AnalysisTile, ProcessPicker
 from frontend.widgets.raster_canvas import rgba_to_image
 from frontend.widgets.raster_legend import format_value
@@ -93,7 +95,8 @@ PARAMETERS: dict[str, tuple[str, float, float, float, float, str]] = {
     "fcover_ndvi_veg": ("FCover: NDVI of full cover", 0.86, 0.5, 1.0, 0.01, ""),
 }
 
-STYLESHEET = f"""
+def _stylesheet():
+    return f"""
 #AnalysisPage {{ background: transparent; }}
 QLabel#PageTitle {{ font-family: "{theme.SERIF}"; font-size: 20pt; color: {theme.INK}; }}
 QLabel#PageSubtitle {{ color: {theme.MUTED}; }}
@@ -133,7 +136,8 @@ _M = {
     "ink": "#F3F8F5", "text": "#E7EEEA", "muted": "#93A79D", "subtle": "#6E8278",
     "field": "#172420", "accent": "#A6E22E", "accent_soft": "#1B2A1C", "error": "#F2777A",
 }
-MODERN_STYLESHEET = """
+def _modern_stylesheet():
+    return """
 #AnalysisPage {{ background: {bg}; }}
 #AnalysisPage QLabel {{ color: {text}; }}
 #AnalysisPage QLabel#PageTitle {{ color: {ink}; }}
@@ -172,13 +176,15 @@ QFrame#AnalysisPanel, QFrame#ResultCard {{ background: {card}; border: 1px solid
 #AnalysisPage QPushButton#SubtypeChip:checked {{ background: {accent_soft}; border-color: {accent}; }}
 #AnalysisPage QCheckBox {{ color: {text}; }}
 #AnalysisPage QPushButton#PrimaryButton {{
-    color: {bg}; border: none;
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {accent}, stop:1 #8CC81F);
+    color: {on_accent}; border: none; border-radius: {radius}px;
+    background: {accent};
 }}
+#AnalysisPage QPushButton#PrimaryButton:hover {{ background: {accent_dk}; }}
 #AnalysisPage QPushButton#SecondaryButton {{ background: {field}; color: {text}; border: 1px solid {line2}; }}
 #AnalysisPage QPushButton#SecondaryButton:hover {{ background: {accent_soft}; }}
 #AnalysisPage QLabel#SaveState {{ color: {muted}; }}
-""".format(**_M)
+""".format(**dict(_M, accent=accent.SOLID, accent_dk=accent.SOLID_HOVER, on_accent=accent.TEXT,
+                       radius=accent.BUTTON_RADIUS))
 
 
 def _shrinkable(widget: QWidget) -> QWidget:
@@ -219,7 +225,8 @@ class AnalysisView(QWidget):
         self.setObjectName("AnalysisPage")
         self._modern = layout_mode.is_modern()
         self._dark = self._modern or palette.IS_DARK  # overlays/panel follow the app theme in classical
-        self.setStyleSheet(STYLESHEET + PICKER_STYLESHEET + (MODERN_STYLESHEET if self._modern else ""))
+        theming.styled(self, lambda: _stylesheet() + picker_stylesheet()
+                       + (_modern_stylesheet() if self._modern else ""))
         self._facade = facade
         self.datasets: list[DatasetDTO] = []
         self.opened: list[DatasetDTO] = []               # GeoTIFFs opened from disk this session
@@ -333,7 +340,7 @@ class AnalysisView(QWidget):
         panel_layout.addWidget(panel_scroll, 1)
         divider = QFrame()
         divider.setFrameShape(QFrame.Shape.HLine)
-        divider.setStyleSheet(f"color: {theme.BORDER};")
+        theming.styled(divider, lambda: f"color: {theme.BORDER};")
         panel_layout.addWidget(divider)
         panel_layout.addLayout(run_box)
 
@@ -372,7 +379,7 @@ class AnalysisView(QWidget):
         self.viewer_button = QPushButton("Open in viewer", objectName="SecondaryButton")
         self.map_button = QPushButton("Show on map", objectName="SecondaryButton")
         self.folder_button = QPushButton("Open folder", objectName="SecondaryButton")
-        self.explain_button = QPushButton("✦ Explain with AI", objectName="SecondaryButton")
+        self.explain_button = QPushButton("Explain with AI", objectName="SecondaryButton")
         self.explain_button.setToolTip("Save the result in the project and ask Gemini to explain it, from its "
                                        "GeoTIFF and the metadata before and after the analysis")
 
@@ -386,7 +393,12 @@ class AnalysisView(QWidget):
         top.addWidget(self.layer_box)
         result_layout.addLayout(top)
         result_layout.addWidget(self.result_info)
-        result_layout.addWidget(self.map_area, 1)
+        # While an analysis runs, a rotating Earth takes the map's place.
+        self.run_loader = EarthLoader("Running analysis…", "Starting…", size=120)
+        self.run_stack = QStackedWidget()
+        self.run_stack.addWidget(self.map_area)     # 0: the result map
+        self.run_stack.addWidget(self.run_loader)   # 1: the loader
+        result_layout.addWidget(self.run_stack, 1)
         result_layout.addWidget(_section("Numbers"))
         result_layout.addWidget(self.metrics_table)
         # The buttons wrap onto a second line when the card is narrow, instead of being clipped.
@@ -441,7 +453,7 @@ class AnalysisView(QWidget):
             _shrinkable(widget)
         self._progress_timer = QTimer(self)
         self._progress_timer.setInterval(PROGRESS_POLL_MS)
-        self._progress_timer.timeout.connect(lambda: self.progress.setValue(round(self._progress * 100)))
+        self._progress_timer.timeout.connect(self._tick_progress)
 
         self.dataset_list.currentRowChanged.connect(self._on_dataset_row)
         self.refresh_button.clicked.connect(self.refresh_datasets)
@@ -472,7 +484,8 @@ class AnalysisView(QWidget):
 
     def _arrange_results(self) -> None:
         """Fit the page to its size: narrower dataset panel and symbology under the map on small screens."""
-        short = self.height() < SHORT_PAGE
+        # Layout 3's division strip and open run log take part of the window; they do not make the page short.
+        short = self.height() < SHORT_PAGE - (fieldbook.CHROME_HEIGHT if fieldbook.active() else 0)
         margins = (16, 10, 16, 10) if short else (24, 20, 24, 20)
         self._page_layout.setContentsMargins(*margins)
         self.subtitle.setVisible(not short)
@@ -780,6 +793,8 @@ class AnalysisView(QWidget):
         self._progress = 0.0
         self.progress.setValue(0)
         self.progress.show()
+        self.run_loader.set_text("Running analysis…", "Starting…")
+        self.run_stack.setCurrentWidget(self.run_loader)
         self._progress_timer.start()
         self._update_run_button()
         where = "GPU" if request.use_gpu and self.device is not None and self.device.uses_gpu else "CPU"
@@ -790,10 +805,17 @@ class AnalysisView(QWidget):
     def _set_progress(self, fraction: float) -> None:
         self._progress = fraction  # called from the worker thread; the timer shows it
 
+    def _tick_progress(self) -> None:
+        """On the UI thread (timer): mirror the worker's progress on the bar and the loader."""
+        percent = round(self._progress * 100)
+        self.progress.setValue(percent)
+        self.run_loader.set_text("Running analysis…", f"{percent}% complete")
+
     def _finish_run(self) -> None:
         self.running = False
         self._progress_timer.stop()
         self.progress.hide()
+        self.run_stack.setCurrentWidget(self.map_area)
         self._update_run_button()
 
     def _on_run_failed(self, exc: Exception) -> None:

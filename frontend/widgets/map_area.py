@@ -52,8 +52,10 @@ class MapArea(QWidget):
         zoom_layout.setSpacing(6)
         for text, slot in (("+", lambda: self.canvas.zoom_by(1.25)),
                            ("−", lambda: self.canvas.zoom_by(1 / 1.25)),
-                           ("⛶", self.canvas.fit)):
-            button = QPushButton(text, objectName="ZoomButton")
+                           ("", self.canvas.fit)):
+            button = (QPushButton if text else _FitButton)(text, objectName="ZoomButton")
+            if not text:
+                button.setToolTip("Fit the whole map in view")
             button.setFixedSize(34, 34)
             button.setCursor(Qt.CursorShape.PointingHandCursor)
             button.clicked.connect(slot)
@@ -130,3 +132,23 @@ class MapArea(QWidget):
     def show_legend_scale(self, title: str, colours: tuple[str, ...], low: float, high: float) -> None:
         self.legend.show_scale(title, colours, low, (low + high) / 2, high)
         self._reposition_legend()
+
+
+class _FitButton(QPushButton):
+    """The "fit the map" button: four corner brackets, drawn rather than taken from a font glyph."""
+
+    def paintEvent(self, event) -> None:  # noqa: N802 (Qt API)
+        super().paintEvent(event)
+        from PyQt6.QtCore import QPointF, QRectF
+        from PyQt6.QtGui import QPainter, QPalette, QPen
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(QPen(self.palette().color(QPalette.ColorRole.ButtonText), 1.6))
+        box = QRectF(self.rect()).adjusted(11, 11, -11, -11)
+        arm = 4.0
+        for x, y, dx, dy in ((box.left(), box.top(), 1, 1), (box.right(), box.top(), -1, 1),
+                             (box.left(), box.bottom(), 1, -1), (box.right(), box.bottom(), -1, -1)):
+            painter.drawLine(QPointF(x, y), QPointF(x + dx * arm, y))
+            painter.drawLine(QPointF(x, y), QPointF(x, y + dy * arm))
+        painter.end()

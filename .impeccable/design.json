@@ -1,0 +1,1033 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-24T20:13:46.638257+00:00",
+  "title": "Design System: GEE-Assist",
+  "extensions": {
+    "colorMeta": {
+      "field-book-yellow": {
+        "role": "primary",
+        "displayName": "Field-Book Yellow",
+        "canonical": "#E8B923",
+        "tonalRamp": [
+          "#383014",
+          "#6B581C",
+          "#A3831E",
+          "#E3B219",
+          "#E2C054",
+          "#E2CE8E",
+          "#E9E0C1",
+          "#F7F5ED"
+        ]
+      },
+      "yellow-ink-light": {
+        "role": "primary",
+        "displayName": "Pencil-Dark Yellow",
+        "canonical": "#8A6400",
+        "tonalRamp": [
+          "#3C3010",
+          "#745913",
+          "#B3860E",
+          "#FAB601",
+          "#F2C244",
+          "#ECCF84",
+          "#EEE0BC",
+          "#F8F5EC"
+        ]
+      },
+      "cover-dark-green": {
+        "role": "neutral",
+        "displayName": "Graphite Cover (dark blue-green)",
+        "canonical": "#091516",
+        "tonalRamp": [
+          "#1D2E30",
+          "#2F5558",
+          "#3E7E83",
+          "#49AAB2",
+          "#76BABF",
+          "#A2CACE",
+          "#CBDEE0",
+          "#F0F4F5"
+        ]
+      },
+      "cover-dark-grey": {
+        "role": "neutral",
+        "displayName": "Graphite Cover (dark grey)",
+        "canonical": "#0C0C0C",
+        "tonalRamp": [
+          "#262626",
+          "#434343",
+          "#616161",
+          "#7E7E7E",
+          "#9B9B9B",
+          "#B8B8B8",
+          "#D5D5D5",
+          "#F2F2F2"
+        ]
+      },
+      "cover-light": {
+        "role": "neutral",
+        "displayName": "Graphite Cover (light)",
+        "canonical": "#24282B",
+        "tonalRamp": [
+          "#242728",
+          "#3F4448",
+          "#596268",
+          "#737F89",
+          "#939CA3",
+          "#B3B9BD",
+          "#D3D5D7",
+          "#F2F2F3"
+        ]
+      },
+      "cover-raised-dark-green": {
+        "role": "neutral",
+        "displayName": "Cover Raised Dark Green",
+        "canonical": "#1A2526",
+        "tonalRamp": [
+          "#222A2A",
+          "#3A4B4C",
+          "#516D70",
+          "#669195",
+          "#8AA8AB",
+          "#AEC0C2",
+          "#D0D9DA",
+          "#F1F3F3"
+        ]
+      },
+      "cover-raised-dark-grey": {
+        "role": "neutral",
+        "displayName": "Cover Raised Dark Grey",
+        "canonical": "#1D1D1D",
+        "tonalRamp": [
+          "#262626",
+          "#434343",
+          "#616161",
+          "#7E7E7E",
+          "#9B9B9B",
+          "#B8B8B8",
+          "#D5D5D5",
+          "#F2F2F2"
+        ]
+      },
+      "cover-raised-light": {
+        "role": "neutral",
+        "displayName": "Cover Raised Light",
+        "canonical": "#33373A",
+        "tonalRamp": [
+          "#252628",
+          "#404446",
+          "#5B6166",
+          "#767F86",
+          "#959CA0",
+          "#B5B8BB",
+          "#D4D5D7",
+          "#F2F2F3"
+        ]
+      },
+      "cover-text": {
+        "role": "neutral",
+        "displayName": "Cover Text",
+        "canonical": "#D3D7DA",
+        "tonalRamp": [
+          "#242728",
+          "#3F4448",
+          "#596268",
+          "#737F88",
+          "#939CA2",
+          "#B3B9BC",
+          "#D3D5D7",
+          "#F2F2F3"
+        ]
+      },
+      "cover-muted": {
+        "role": "neutral",
+        "displayName": "Cover Muted",
+        "canonical": "#A3AAB0",
+        "tonalRamp": [
+          "#252628",
+          "#404447",
+          "#5A6167",
+          "#747E87",
+          "#949BA1",
+          "#B4B8BC",
+          "#D3D5D7",
+          "#F2F2F3"
+        ]
+      },
+      "division-work": {
+        "role": "secondary",
+        "displayName": "Data Blue",
+        "canonical": "#5DA9E9",
+        "tonalRamp": [
+          "#152837",
+          "#1F4768",
+          "#22669F",
+          "#1F86DC",
+          "#58A1DD",
+          "#90BBE0",
+          "#C2D7E8",
+          "#EEF3F7"
+        ]
+      },
+      "division-work-ink": {
+        "role": "secondary",
+        "displayName": "Division Work Ink",
+        "canonical": "#1F6FB2",
+        "tonalRamp": [
+          "#172836",
+          "#214665",
+          "#27669B",
+          "#2685D5",
+          "#5DA0D8",
+          "#93BBDD",
+          "#C4D7E7",
+          "#EEF3F6"
+        ]
+      },
+      "division-analyse": {
+        "role": "secondary",
+        "displayName": "Analyse Green",
+        "canonical": "#6FCF97",
+        "tonalRamp": [
+          "#1B3124",
+          "#2B5C3F",
+          "#378A5A",
+          "#3FBC73",
+          "#6FC694",
+          "#9ED2B4",
+          "#C9E2D3",
+          "#EFF5F2"
+        ]
+      },
+      "division-analyse-ink": {
+        "role": "secondary",
+        "displayName": "Division Analyse Ink",
+        "canonical": "#23845E",
+        "tonalRamp": [
+          "#193329",
+          "#275F49",
+          "#31906B",
+          "#35C68D",
+          "#68CEA6",
+          "#9AD6BF",
+          "#C7E4D8",
+          "#EFF6F3"
+        ]
+      },
+      "division-explain": {
+        "role": "secondary",
+        "displayName": "Explain Violet",
+        "canonical": "#B39DDB",
+        "tonalRamp": [
+          "#231C31",
+          "#3D2D5A",
+          "#553A87",
+          "#6D44B7",
+          "#8F72C3",
+          "#B1A0D0",
+          "#D2CAE1",
+          "#F1F0F5"
+        ]
+      },
+      "division-explain-ink": {
+        "role": "secondary",
+        "displayName": "Division Explain Ink",
+        "canonical": "#6B4FA8",
+        "tonalRamp": [
+          "#231E2E",
+          "#3D3255",
+          "#56437E",
+          "#6D51AB",
+          "#8F7BBA",
+          "#B1A5CB",
+          "#D2CCDE",
+          "#F1F0F4"
+        ]
+      },
+      "division-report": {
+        "role": "secondary",
+        "displayName": "Report Orange",
+        "canonical": "#F2994A",
+        "tonalRamp": [
+          "#392513",
+          "#6D411A",
+          "#A85C19",
+          "#EA7712",
+          "#E6964F",
+          "#E5B58B",
+          "#EBD4BF",
+          "#F7F2ED"
+        ]
+      },
+      "division-report-ink": {
+        "role": "secondary",
+        "displayName": "Division Report Ink",
+        "canonical": "#A8530F",
+        "tonalRamp": [
+          "#392414",
+          "#6C3F1B",
+          "#A5591C",
+          "#E67216",
+          "#E49352",
+          "#E4B38C",
+          "#EAD3C0",
+          "#F7F2ED"
+        ]
+      },
+      "on-division-dark": {
+        "role": "secondary",
+        "displayName": "On Division Dark",
+        "canonical": "#0F1416",
+        "tonalRamp": [
+          "#22282A",
+          "#3A474D",
+          "#516770",
+          "#668895",
+          "#8AA2AB",
+          "#AEBCC2",
+          "#D0D7DA",
+          "#F1F3F3"
+        ]
+      },
+      "accent-light": {
+        "role": "primary",
+        "displayName": "Accent Light",
+        "canonical": "#237D60",
+        "tonalRamp": [
+          "#1A332B",
+          "#285F4D",
+          "#328F71",
+          "#38C497",
+          "#6ACCAC",
+          "#9BD5C2",
+          "#C7E3DA",
+          "#EFF6F3"
+        ]
+      },
+      "accent-light-hover": {
+        "role": "primary",
+        "displayName": "Accent Light Hover",
+        "canonical": "#1B6650",
+        "tonalRamp": [
+          "#19332C",
+          "#275F4F",
+          "#319074",
+          "#35C69C",
+          "#68CEB0",
+          "#9AD6C4",
+          "#C7E4DB",
+          "#EFF6F4"
+        ]
+      },
+      "accent-dark-green": {
+        "role": "primary",
+        "displayName": "Accent Dark Green",
+        "canonical": "#5ED3A8",
+        "tonalRamp": [
+          "#1A332A",
+          "#285F4B",
+          "#31906D",
+          "#37C591",
+          "#69CDA8",
+          "#9AD6C0",
+          "#C7E3D9",
+          "#EFF6F3"
+        ]
+      },
+      "accent-dark-green-hover": {
+        "role": "primary",
+        "displayName": "Accent Dark Green Hover",
+        "canonical": "#86E3C1",
+        "tonalRamp": [
+          "#18342A",
+          "#25624C",
+          "#2D946E",
+          "#30CB93",
+          "#64D1A9",
+          "#97D9C1",
+          "#C5E5D9",
+          "#EFF6F3"
+        ]
+      },
+      "accent-dark-grey": {
+        "role": "primary",
+        "displayName": "Accent Dark Grey",
+        "canonical": "#6FD6AE",
+        "tonalRamp": [
+          "#1A3329",
+          "#285E49",
+          "#338E6B",
+          "#38C38D",
+          "#6ACBA6",
+          "#9BD5BE",
+          "#C7E3D8",
+          "#EFF6F3"
+        ]
+      },
+      "accent-dark-grey-hover": {
+        "role": "primary",
+        "displayName": "Accent Dark Grey Hover",
+        "canonical": "#95E4C5",
+        "tonalRamp": [
+          "#193329",
+          "#27604A",
+          "#30926B",
+          "#34C88E",
+          "#67CFA6",
+          "#99D7BF",
+          "#C6E4D8",
+          "#EFF6F3"
+        ]
+      },
+      "on-accent-light": {
+        "role": "primary",
+        "displayName": "On Accent Light",
+        "canonical": "#FFFFFF",
+        "tonalRamp": [
+          "#262626",
+          "#434343",
+          "#616161",
+          "#7E7E7E",
+          "#9B9B9B",
+          "#B8B8B8",
+          "#D5D5D5",
+          "#F2F2F2"
+        ]
+      },
+      "on-accent-dark-green": {
+        "role": "primary",
+        "displayName": "On Accent Dark Green",
+        "canonical": "#0B1F21",
+        "tonalRamp": [
+          "#1B2F31",
+          "#2B575C",
+          "#37828A",
+          "#3FB1BC",
+          "#6FBFC6",
+          "#9ECDD2",
+          "#C9DFE2",
+          "#EFF5F5"
+        ]
+      },
+      "on-accent-dark-grey": {
+        "role": "primary",
+        "displayName": "On Accent Dark Grey",
+        "canonical": "#111111",
+        "tonalRamp": [
+          "#262626",
+          "#434343",
+          "#616161",
+          "#7E7E7E",
+          "#9B9B9B",
+          "#B8B8B8",
+          "#D5D5D5",
+          "#F2F2F2"
+        ]
+      },
+      "page-dark-green": {
+        "role": "neutral",
+        "displayName": "Page Dark Green",
+        "canonical": "#0F2224",
+        "tonalRamp": [
+          "#1D2E2F",
+          "#2F5457",
+          "#3F7C82",
+          "#4AA7B1",
+          "#77B8BF",
+          "#A2C9CD",
+          "#CBDDDF",
+          "#F0F4F5"
+        ]
+      },
+      "surface-dark-green": {
+        "role": "neutral",
+        "displayName": "Surface Dark Green",
+        "canonical": "#173235",
+        "tonalRamp": [
+          "#1D2D2F",
+          "#305356",
+          "#407B81",
+          "#4CA5AF",
+          "#78B6BD",
+          "#A3C8CD",
+          "#CBDDDF",
+          "#F0F4F5"
+        ]
+      },
+      "field-dark-green": {
+        "role": "neutral",
+        "displayName": "Field Dark Green",
+        "canonical": "#12292B",
+        "tonalRamp": [
+          "#1D2E2F",
+          "#305457",
+          "#3F7D82",
+          "#4BA9B1",
+          "#77B9BF",
+          "#A3CACD",
+          "#CBDEDF",
+          "#F0F4F5"
+        ]
+      },
+      "ink-dark-green": {
+        "role": "neutral",
+        "displayName": "Ink Dark Green",
+        "canonical": "#EAF7F3",
+        "tonalRamp": [
+          "#1C302A",
+          "#2E594C",
+          "#3C866F",
+          "#46B693",
+          "#74C2AA",
+          "#A1CFC1",
+          "#CAE0D9",
+          "#F0F5F3"
+        ]
+      },
+      "text-dark-green": {
+        "role": "neutral",
+        "displayName": "Text Dark Green",
+        "canonical": "#CFE5E0",
+        "tonalRamp": [
+          "#202D2A",
+          "#35524B",
+          "#48796E",
+          "#59A392",
+          "#81B5A9",
+          "#A8C7C0",
+          "#CEDDD9",
+          "#F1F4F3"
+        ]
+      },
+      "muted-dark-green": {
+        "role": "neutral",
+        "displayName": "Muted Dark Green",
+        "canonical": "#A3C2BC",
+        "tonalRamp": [
+          "#222B29",
+          "#3A4D49",
+          "#50716B",
+          "#64978D",
+          "#89ADA6",
+          "#ADC3BE",
+          "#D0DAD8",
+          "#F1F3F3"
+        ]
+      },
+      "border-dark-green": {
+        "role": "neutral",
+        "displayName": "Border Dark Green",
+        "canonical": "#2B4D4E",
+        "tonalRamp": [
+          "#202C2D",
+          "#355151",
+          "#497778",
+          "#5AA0A2",
+          "#82B3B4",
+          "#A9C6C7",
+          "#CEDCDC",
+          "#F1F4F4"
+        ]
+      },
+      "border-strong-dark-green": {
+        "role": "neutral",
+        "displayName": "Border Strong Dark Green",
+        "canonical": "#3F6866",
+        "tonalRamp": [
+          "#212C2B",
+          "#384F4E",
+          "#4C7573",
+          "#5F9C99",
+          "#85B0AE",
+          "#ABC5C4",
+          "#CFDBDB",
+          "#F1F4F4"
+        ]
+      },
+      "error-dark-green": {
+        "role": "neutral",
+        "displayName": "Error Dark Green",
+        "canonical": "#FF8F80",
+        "tonalRamp": [
+          "#3C1510",
+          "#741E13",
+          "#B3220E",
+          "#FA1F01",
+          "#F25844",
+          "#EC9084",
+          "#EEC2BC",
+          "#F8EEEC"
+        ]
+      },
+      "page-dark-grey": {
+        "role": "neutral",
+        "displayName": "Page Dark Grey",
+        "canonical": "#141414",
+        "tonalRamp": [
+          "#262626",
+          "#434343",
+          "#616161",
+          "#7E7E7E",
+          "#9B9B9B",
+          "#B8B8B8",
+          "#D5D5D5",
+          "#F2F2F2"
+        ]
+      },
+      "surface-dark-grey": {
+        "role": "neutral",
+        "displayName": "Surface Dark Grey",
+        "canonical": "#1F1F1F",
+        "tonalRamp": [
+          "#262626",
+          "#434343",
+          "#616161",
+          "#7E7E7E",
+          "#9B9B9B",
+          "#B8B8B8",
+          "#D5D5D5",
+          "#F2F2F2"
+        ]
+      },
+      "field-dark-grey": {
+        "role": "neutral",
+        "displayName": "Field Dark Grey",
+        "canonical": "#181818",
+        "tonalRamp": [
+          "#262626",
+          "#434343",
+          "#616161",
+          "#7E7E7E",
+          "#9B9B9B",
+          "#B8B8B8",
+          "#D5D5D5",
+          "#F2F2F2"
+        ]
+      },
+      "ink-dark-grey": {
+        "role": "neutral",
+        "displayName": "Ink Dark Grey",
+        "canonical": "#F2F2F2",
+        "tonalRamp": [
+          "#262626",
+          "#434343",
+          "#616161",
+          "#7E7E7E",
+          "#9B9B9B",
+          "#B8B8B8",
+          "#D5D5D5",
+          "#F2F2F2"
+        ]
+      },
+      "text-dark-grey": {
+        "role": "neutral",
+        "displayName": "Text Dark Grey",
+        "canonical": "#D9D9D9",
+        "tonalRamp": [
+          "#262626",
+          "#434343",
+          "#616161",
+          "#7E7E7E",
+          "#9B9B9B",
+          "#B8B8B8",
+          "#D5D5D5",
+          "#F2F2F2"
+        ]
+      },
+      "muted-dark-grey": {
+        "role": "neutral",
+        "displayName": "Muted Dark Grey",
+        "canonical": "#ABABAB",
+        "tonalRamp": [
+          "#262626",
+          "#434343",
+          "#616161",
+          "#7E7E7E",
+          "#9B9B9B",
+          "#B8B8B8",
+          "#D5D5D5",
+          "#F2F2F2"
+        ]
+      },
+      "border-dark-grey": {
+        "role": "neutral",
+        "displayName": "Border Dark Grey",
+        "canonical": "#333333",
+        "tonalRamp": [
+          "#262626",
+          "#434343",
+          "#616161",
+          "#7E7E7E",
+          "#9B9B9B",
+          "#B8B8B8",
+          "#D5D5D5",
+          "#F2F2F2"
+        ]
+      },
+      "border-strong-dark-grey": {
+        "role": "neutral",
+        "displayName": "Border Strong Dark Grey",
+        "canonical": "#4A4A4A",
+        "tonalRamp": [
+          "#262626",
+          "#434343",
+          "#616161",
+          "#7E7E7E",
+          "#9B9B9B",
+          "#B8B8B8",
+          "#D5D5D5",
+          "#F2F2F2"
+        ]
+      },
+      "error-dark-grey": {
+        "role": "neutral",
+        "displayName": "Error Dark Grey",
+        "canonical": "#FF8A80",
+        "tonalRamp": [
+          "#3C1410",
+          "#741B13",
+          "#B31B0E",
+          "#FA1501",
+          "#F25144",
+          "#EC8C84",
+          "#EEC0BC",
+          "#F8EDEC"
+        ]
+      },
+      "page-light": {
+        "role": "neutral",
+        "displayName": "Page Light",
+        "canonical": "#F2F8F6",
+        "tonalRamp": [
+          "#202D28",
+          "#355248",
+          "#487969",
+          "#58A38A",
+          "#81B5A4",
+          "#A8C8BD",
+          "#CEDDD8",
+          "#F0F4F3"
+        ]
+      },
+      "surface-light": {
+        "role": "neutral",
+        "displayName": "Surface Light",
+        "canonical": "#FFFFFF",
+        "tonalRamp": [
+          "#262626",
+          "#434343",
+          "#616161",
+          "#7E7E7E",
+          "#9B9B9B",
+          "#B8B8B8",
+          "#D5D5D5",
+          "#F2F2F2"
+        ]
+      },
+      "field-light": {
+        "role": "neutral",
+        "displayName": "Field Light",
+        "canonical": "#FBFDFC",
+        "tonalRamp": [
+          "#1F2E26",
+          "#335443",
+          "#457C61",
+          "#54A77E",
+          "#7EB89B",
+          "#A7C9B8",
+          "#CDDDD5",
+          "#F0F4F2"
+        ]
+      },
+      "ink-light": {
+        "role": "neutral",
+        "displayName": "Ink Light",
+        "canonical": "#1E3A3A",
+        "tonalRamp": [
+          "#1F2D2D",
+          "#345353",
+          "#467B7B",
+          "#56A5A5",
+          "#7FB7B7",
+          "#A7C9C9",
+          "#CDDDDD",
+          "#F0F4F4"
+        ]
+      },
+      "text-light": {
+        "role": "neutral",
+        "displayName": "Text Light",
+        "canonical": "#34504F",
+        "tonalRamp": [
+          "#222B2B",
+          "#394E4D",
+          "#4F7271",
+          "#639896",
+          "#88ADAC",
+          "#ADC3C2",
+          "#D0DADA",
+          "#F1F3F3"
+        ]
+      },
+      "muted-light": {
+        "role": "neutral",
+        "displayName": "Muted Light",
+        "canonical": "#6B8582",
+        "tonalRamp": [
+          "#242928",
+          "#3E4947",
+          "#586967",
+          "#708B88",
+          "#91A4A2",
+          "#B2BEBC",
+          "#D2D8D7",
+          "#F2F3F3"
+        ]
+      },
+      "border-light": {
+        "role": "neutral",
+        "displayName": "Border Light",
+        "canonical": "#D3E4DF",
+        "tonalRamp": [
+          "#212C28",
+          "#384F48",
+          "#4D7469",
+          "#609C8A",
+          "#86B0A3",
+          "#ABC4BD",
+          "#CFDBD8",
+          "#F1F4F3"
+        ]
+      },
+      "border-strong-light": {
+        "role": "neutral",
+        "displayName": "Border Strong Light",
+        "canonical": "#B9D3CC",
+        "tonalRamp": [
+          "#212B29",
+          "#384E48",
+          "#4E7369",
+          "#619A8B",
+          "#87AFA4",
+          "#ACC4BD",
+          "#CFDBD8",
+          "#F1F4F3"
+        ]
+      },
+      "error-light": {
+        "role": "neutral",
+        "displayName": "Error Light",
+        "canonical": "#C0392B",
+        "tonalRamp": [
+          "#341B18",
+          "#622B25",
+          "#95362C",
+          "#CD3E2F",
+          "#D26E63",
+          "#D99D97",
+          "#E5C8C5",
+          "#F6EFEF"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Sign-in title."
+      },
+      "page-title": {
+        "displayName": "Page Title",
+        "purpose": "Project or page name at the top of each page."
+      },
+      "section-title": {
+        "displayName": "Section Title",
+        "purpose": "Sheet and section headings."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "App default for controls and paragraphs."
+      },
+      "button": {
+        "displayName": "Button",
+        "purpose": "Every push button."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Field labels."
+      },
+      "hint": {
+        "displayName": "Hint",
+        "purpose": "Field hints."
+      },
+      "warning": {
+        "displayName": "Warning",
+        "purpose": "Banners and field errors."
+      },
+      "figure-large": {
+        "displayName": "Figure Large",
+        "purpose": "Glance and stat values."
+      },
+      "figure": {
+        "displayName": "Figure",
+        "purpose": "Paths, sizes, ETAs, table values, timings."
+      },
+      "entry-number": {
+        "displayName": "Entry Number",
+        "purpose": "Yellow zero-padded entry numbers; nav index numbers."
+      },
+      "table-header": {
+        "displayName": "Table Header",
+        "purpose": "Column headers over a yellow rule."
+      }
+    },
+    "shadows": [
+      {
+        "name": "soft-lift",
+        "value": "0 12px 48px rgba(30,90,87,0.13)",
+        "purpose": "Sign-in and account cards only (QGraphicsDropShadowEffect blur 48, y 12, SHADOW at alpha 34). Never on Layout 3 sheets."
+      }
+    ],
+    "motion": [
+      {
+        "name": "nav-slide",
+        "value": "220ms OutCubic",
+        "purpose": "Side bar expand/collapse (hover opens after 150ms, closes after 350ms)."
+      },
+      {
+        "name": "press-nudge",
+        "value": "padding shifts 1px down",
+        "purpose": "Button press feedback; Qt has no transforms or transitions."
+      }
+    ],
+    "breakpoints": []
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Solid theme accent, 10px radius; every layout's primary action (dark blue-green shown).",
+      "html": "<button class=\"ds-btn-primary\">+ Create project</button>",
+      "css": ".ds-btn-primary{background:#5ED3A8;color:#0B1F21;border:none;border-radius:10px;padding:10px 18px;font:600 10.5pt 'Inter','Segoe UI',sans-serif;cursor:pointer}.ds-btn-primary:hover{background:#86E3C1}.ds-btn-primary:focus-visible{outline:1px solid #E8B923;outline-offset:2px}.ds-btn-primary:active{padding-top:11px;padding-bottom:9px}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Surface fill with a strong 1px outline; the paired action.",
+      "html": "<button class=\"ds-btn-secondary\">Open project</button>",
+      "css": ".ds-btn-secondary{background:#173235;color:#EAF7F3;border:1px solid #3F6866;border-radius:10px;padding:10px 18px;font:600 10.5pt 'Inter','Segoe UI',sans-serif;cursor:pointer}.ds-btn-secondary:hover{background:#1E3B3C;border-color:#EAF7F3}.ds-btn-secondary:focus-visible{outline:1px solid #E8B923;outline-offset:2px}.ds-btn-secondary:active{background:#21403F}"
+    },
+    {
+      "name": "Division Strip",
+      "kind": "nav",
+      "refersTo": "division-tab",
+      "description": "Layout 3's division tabs above every page; the current division fills with its hue.",
+      "html": "<div class=\"ds-strip\"><button class=\"ds-tab ds-on\" style=\"--hue:#5DA9E9\">Work</button><button class=\"ds-tab\">Analyse</button><button class=\"ds-tab\">Explain</button><button class=\"ds-tab\">Report</button></div>",
+      "css": ".ds-strip{display:flex;gap:6px;padding:10px 24px 8px;background:#0F2224;border-bottom:1px solid #2B4D4E}.ds-tab{background:transparent;color:#A3C2BC;border:1px solid #2B4D4E;border-radius:10px;padding:5px 14px;font:600 10pt 'Inter','Segoe UI',sans-serif;cursor:pointer}.ds-tab:hover{color:#EAF7F3;border-color:#5E8C88}.ds-tab:focus-visible{outline:1px solid #E8B923}.ds-tab.ds-on{background:var(--hue);border-color:var(--hue);color:#0F1416}"
+    },
+    {
+      "name": "Field Book Index",
+      "kind": "nav",
+      "refersTo": "side-index",
+      "description": "Graphite cover nav with a 6px yellow spine, division headings in their hue, Alt index numbers in yellow mono.",
+      "html": "<nav class=\"ds-index\"><div class=\"ds-div\" style=\"color:#5DA9E9\">Work</div><a class=\"ds-item ds-cur\"><b>1</b>Dashboard</a><a class=\"ds-item\"><b>2</b>Query Input</a><div class=\"ds-div\" style=\"color:#6FCF97\">Analyse</div><a class=\"ds-item\"><b>5</b>Analysis</a></nav>",
+      "css": ".ds-index{width:220px;background:#091516;border-right:6px solid #E8B923;padding:6px;font:500 10pt 'Inter','Segoe UI',sans-serif}.ds-div{font-weight:600;font-size:9pt;padding:12px 14px 2px}.ds-item{display:flex;align-items:center;height:40px;padding:0 14px;border-radius:8px;color:#D3D7DA;border:1px solid transparent;cursor:pointer}.ds-item b{font:700 10pt 'JetBrains Mono',Consolas,monospace;color:#E8B923;width:24px}.ds-item:hover{background:#1A2526}.ds-item:focus-visible{outline:1px solid #E8B923}.ds-cur{background:#1A2526;border-color:#E8B923;color:#FFFFFF;font-weight:600}"
+    },
+    {
+      "name": "Ruled Results Table",
+      "kind": "custom",
+      "refersTo": "field-sheet",
+      "description": "Layout 3's ruled table: yellow header rule, hairline row rules, mono figures, yellow entry numbers.",
+      "html": "<div class=\"ds-sheet\"><table class=\"ds-table\"><tr><th>#</th><th>Analysis</th><th>When</th><th>Result</th><th>Run</th></tr><tr><td class=\"ds-n\">03</td><td>Vegetation · NDVI</td><td class=\"ds-m\">24 Nov 18:05</td><td class=\"ds-m\">0.41</td><td class=\"ds-m\">GPU 3.2 s</td></tr><tr><td class=\"ds-n\">02</td><td>Surface temperature</td><td class=\"ds-m\">23 Nov 11:40</td><td class=\"ds-m\">34.7</td><td class=\"ds-m\">CPU 11.8 s</td></tr></table></div>",
+      "css": ".ds-sheet{background:#173235;border:1px solid #2B4D4E;border-radius:6px;padding:20px 24px}.ds-table{border-collapse:collapse;color:#CFE5E0;font:10pt 'Inter','Segoe UI',sans-serif}.ds-table th{text-align:left;color:#A3C2BC;font-weight:600;font-size:9pt;padding:6px 8px;border-bottom:1px solid #E8B923}.ds-table td{padding:4px 6px;border-bottom:1px solid #2B4D4E}.ds-table tr:hover td{background:#1E3B3C}.ds-m{font:9pt 'JetBrains Mono',Consolas,monospace}.ds-n{font:600 10pt 'JetBrains Mono',Consolas,monospace;color:#E8B923}"
+    },
+    {
+      "name": "Glance Row",
+      "kind": "card",
+      "refersTo": "field-sheet",
+      "description": "Counts in 17pt mono over muted captions, divided by 1px rules.",
+      "html": "<div class=\"ds-glance\"><div><span>0</span>Downloads</div><div><span>3</span>Analyses run</div><div><span>0</span>Saved result maps</div></div>",
+      "css": ".ds-glance{display:flex;background:#173235;border:1px solid #2B4D4E;border-radius:6px;padding:16px 18px}.ds-glance div{flex:1;padding:6px 10px;border-right:1px solid #2B4D4E;color:#A3C2BC;font:8.5pt 'Inter','Segoe UI',sans-serif}.ds-glance span{display:block;font:17pt 'JetBrains Mono',Consolas,monospace;color:#EAF7F3}"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Field well, strong outline, 9px radius; leaf outline on focus, error outline when invalid.",
+      "html": "<input class=\"ds-input\" placeholder=\"Earth Engine project ID\">",
+      "css": ".ds-input{background:#12292B;color:#EAF7F3;border:1px solid #3F6866;border-radius:9px;padding:9px 12px;font:10.5pt 'Inter','Segoe UI',sans-serif}.ds-input:hover{border-color:#5E8C88}.ds-input:focus-visible,.ds-input:focus{outline:none;border:1.5px solid #5ED3A8;background:#173235}"
+    },
+    {
+      "name": "Error Banner",
+      "kind": "custom",
+      "refersTo": null,
+      "description": "Banner in the warning face: error tint, error text, 8px radius.",
+      "html": "<div class=\"ds-banner\">The download failed: Earth Engine quota exceeded.</div>",
+      "css": ".ds-banner{background:#3A2224;color:#FF8F80;border:1px solid #6B3A37;border-radius:8px;padding:9px 12px;font:600 9.5pt 'Space Grotesk',Georgia,sans-serif}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Survey Field Book",
+    "overview": "GEE-Assist is one PyQt6 desktop app with one shared design system (three live themes, one solid theme-reactive button accent, one button radius, three bundled faces) and three layouts built on it. Layout 1 (classical) and Layout 2 (modern, map-first) are structural variants of the shared base. Layout 3 (\"studio\") is a visual world of its own laid over that base: the analyst's field book. Every page is a ruled, indexed spread under a graphite cover with a yellow spine.\n\nThe field book lends exactly four things to the shared base, and only these: palette (graphite cover, field-book yellow, one hue per division), type (every figure in one measurement mono), density (24px page margins, ruled tables, the run log open), and the ruled 8px module drawn on the page ground. It never moves controls or changes what a page does. Result maps are the only full colour on the page; charts are drawn in yellow and muted ink.\n\nLayout 3 is the power workspace and is dark-first: the dark blue-green and dark grey themes lead, and the light theme must hold. Depth is tonal and ruled, never lifted.",
+    "keyCharacteristics": [
+      "Graphite cover nav, darker than the page in every theme, with a 6px field-book-yellow spine on its right edge.",
+      "Index numbers (Alt+1 to Alt+0, in page order) drawn in yellow mono where the nav icons would be.",
+      "Four divisions (Work, Analyse, Explain, Report), each with one fixed hue: on the cover headings and on the checked division tab.",
+      "Page ground ruled on an 8px hairline tile; flat sheets with 1px rules and a 6px corner.",
+      "Yellow 1px rules under table headers, current-project rows and the spread's gutter.",
+      "Every figure (counts, values, timings, paths, entry numbers) in JetBrains Mono.",
+      "One solid button accent per theme, 10px radius, shared by all three layouts."
+    ],
+    "rules": [
+      {
+        "name": "The One Yellow Rule",
+        "body": "Field-book yellow is the only accent the field book adds. It rules, it numbers, it marks progress; it is never a button fill and never a large area.",
+        "section": "colors"
+      },
+      {
+        "name": "The Maps Are The Colour Rule",
+        "body": "In Layout 3 the result maps are the only full-colour surfaces. Charts use yellow and muted ink; division hues appear only on headings and the checked tab.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Accent Rule",
+        "body": "Every primary button in every layout is the active theme's solid accent. Layouts differ in structure and surfaces, never in button hue.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Measurement Face Rule",
+        "body": "In Layout 3 every figure is JetBrains Mono. A number set in Inter is a defect.",
+        "section": "typography"
+      },
+      {
+        "name": "The Ruled Not Lifted Rule",
+        "body": "Field-book sheets never cast shadows. Separation is a 1px border or a yellow rule.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Half-Height Rule",
+        "body": "Qt ignores a border-radius larger than half a widget's height and draws square corners instead. Buttons keep `BUTTON_RADIUS` (10px); never raise it.",
+        "section": "shapes"
+      }
+    ],
+    "dos": [
+      "**Do** build every theme-dependent stylesheet through `theming.styled(widget, builder)`, with a builder that reads current theme values, so it recolours live. Painter-drawn widgets read `theme.*` at paint time; subscribe anything else with `theming.on_theme_changed`.",
+      "**Do** expect a theme change to apply live and a layout change to restart the app; read `fieldbook.active()` once.",
+      "**Do** keep every button at `BUTTON_RADIUS` (10px) and every primary button on the theme's solid accent.",
+      "**Do** set every figure in JetBrains Mono in Layout 3.",
+      "**Do** mark division with the division strip and the side index, and number entries in yellow.",
+      "**Do** use the ink variants of division hues on the light theme, and pencil-dark yellow (yellow-ink-light) where yellow is text on a light page.",
+      "**Do** check every new Layout 3 surface in all three themes, dark first."
+    ],
+    "donts": [
+      "**Don't** raise a button radius above half its height: Qt draws square corners instead.",
+      "**Don't** rely on a QLabel bottom border to mark a page title or section: it does not paint reliably. Use the division strip and the side index, or a QFrame rule.",
+      "**Don't** set a stylesheet with a one-off `setStyleSheet(f\"...\")` that reads theme colours: it freezes on the theme it was built in.",
+      "**Don't** add shadows to Layout 3 sheets or cards.",
+      "**Don't** fill buttons or large areas with field-book yellow, and don't give charts or chrome full colour in Layout 3: result maps carry the colour.",
+      "**Don't** use a division hue outside its own division's heading and tab.",
+      "**Don't** set figures in Inter or the display face in Layout 3."
+    ]
+  }
+}

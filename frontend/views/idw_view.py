@@ -32,7 +32,7 @@ from backend.business.facade import IBusinessFacade
 from backend.dto.interpolation_dto import IDWParamsDTO, IDWResultDTO, SamplePointDTO
 from backend.dto.vector_dto import MULTIPOINT, POINT, VectorLayerDTO
 from backend.exceptions import GeeAssistError
-from frontend import theme
+from frontend import theme, theming
 from frontend.widgets.form_parts import StatusBanner
 from frontend.widgets.raster_canvas import RasterCanvas, rgba_to_image
 from frontend.widgets.raster_legend import RasterLegend, format_value
@@ -41,7 +41,8 @@ from frontend.workers.task_worker import run_task
 PANEL_WIDTH = 320
 HOVER_DELAY_MS = 40
 
-STYLESHEET = f"""
+def _stylesheet():
+    return f"""
 #IdwPage {{ background: transparent; }}
 QLabel#PageTitle {{ font-family: "{theme.SERIF}"; font-size: 20pt; color: {theme.INK}; }}
 QLabel#PageSubtitle {{ color: {theme.MUTED}; }}
@@ -68,7 +69,7 @@ class IdwView(QWidget):
     def __init__(self, facade: IBusinessFacade, parent: QWidget | None = None):
         super().__init__(parent)
         self.setObjectName("IdwPage")
-        self.setStyleSheet(STYLESHEET)
+        theming.styled(self, _stylesheet)
         self._facade = facade
         self._layer: VectorLayerDTO | None = None
         self.result: IDWResultDTO | None = None

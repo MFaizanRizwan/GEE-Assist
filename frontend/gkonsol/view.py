@@ -11,9 +11,10 @@ where the user put it. Only the last ``MAX_LINES`` lines are kept.
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
-from PyQt6.QtGui import QMouseEvent, QTextCursor, QTextOption
+from PyQt6.QtGui import QColor, QMouseEvent, QTextCharFormat, QTextCursor, QTextOption
 from PyQt6.QtWidgets import QFrame, QPlainTextEdit, QWidget
 
+from frontend import theming
 from frontend.gkonsol import colors, text
 from frontend.gkonsol.text import Line
 
@@ -40,6 +41,7 @@ class TerminalView(QPlainTextEdit):
         self.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse
                                      | Qt.TextInteractionFlag.TextSelectableByKeyboard)
         self._formats = colors.char_formats()
+        theming.on_theme_changed(self._retheme)  # new lines and old ones follow a live theme change
         self._empty = True          # no line written yet: the document's one block is unused
         self._live: list[Line] = []  # what the live region shows
         self._columns = DEFAULT_COLUMNS
@@ -56,6 +58,35 @@ class TerminalView(QPlainTextEdit):
             advance = max(1, self.fontMetrics().horizontalAdvance("M"))
             self._columns = max(MIN_COLUMNS, self.viewport().width() // advance - 1)
         return self._columns
+
+    def _retheme(self) -> None:
+        """Recolour every line already printed, style for style, and use the new colours from now on."""
+        old = {style: fmt.foreground().color().name() for style, fmt in self._formats.items()}
+        self._formats = colors.char_formats()
+        recolour = {}
+        for style, colour in old.items():
+            new = self._formats.get(style)
+            if new is not None:
+                recolour.setdefault(colour, new.foreground().color().name())
+        spans = []  # (start, length, new colour): collected first, so recolouring cannot disturb the walk
+        block = self.document().begin()
+        while block.isValid():
+            fragments = block.begin()
+            while not fragments.atEnd():
+                fragment = fragments.fragment()
+                if fragment.isValid():
+                    colour = recolour.get(fragment.charFormat().foreground().color().name())
+                    if colour:
+                        spans.append((fragment.position(), fragment.length(), colour))
+                fragments += 1
+            block = block.next()
+        cursor = QTextCursor(self.document())
+        for start, length, colour in spans:
+            cursor.setPosition(start)
+            cursor.setPosition(start + length, QTextCursor.MoveMode.KeepAnchor)
+            fmt = QTextCharFormat()
+            fmt.setForeground(QColor(colour))
+            cursor.mergeCharFormat(fmt)
 
     def write(self, lines: list[Line]) -> None:
         if not lines:

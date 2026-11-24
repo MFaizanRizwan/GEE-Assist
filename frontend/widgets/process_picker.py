@@ -28,7 +28,7 @@ from PyQt6.QtWidgets import (
 )
 
 from backend.dto.analysis_dto import AnalysisOptionDTO, FormulaDTO, ProcessOptionDTO
-from frontend import theme
+from frontend import theme, theming
 
 ALL = "All"
 CHIP_ROW_WIDTH = 320  # sub-type chips start a new row beyond this (the panel is narrow)
@@ -42,7 +42,8 @@ ANALYSIS_COLOURS: dict[str, str] = {
     "LULC": "#8C6239",
 }
 
-STYLESHEET = f"""
+def stylesheet():
+    return f"""
 QPushButton#AnalysisTile {{
     text-align: left; border: 1px solid {theme.BORDER_STRONG}; border-radius: 10px; padding: 8px 10px;
     background: {theme.WHITE}; color: {theme.INK};
@@ -220,7 +221,7 @@ class ProcessPicker(QWidget):
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
-        self.setStyleSheet(STYLESHEET)
+        theming.styled(self, stylesheet)
         self.option: AnalysisOptionDTO | None = None
         self.cards: dict[str, ProcessCard] = {}
         self.subtype = ALL

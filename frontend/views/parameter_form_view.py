@@ -49,7 +49,7 @@ from backend.dto import FormDTO, PlaceDTO, ValidationDTO
 from backend.config.limits import MAX_QUERY_LENGTH
 from backend.exceptions import GeeAssistError
 from frontend import form_theme as theme
-from frontend import layout_mode, palette
+from frontend import layout_mode, palette, theming
 from frontend.aoi_geometry import (
     bbox_of,
     estimate_download,
@@ -126,6 +126,13 @@ REQUIRED_FIELDS = (
 )
 # Modern layout: the tab each field is on (Area, Data, Time, Output).
 TAB_NAMES = ("Area", "Data", "Time", "Output")
+# Studio layout: the heading and one-line hint shown above each section's fields.
+STUDIO_STEPS = (
+    ("Area of interest", "Pick a place, draw a shape or import a boundary to analyse."),
+    ("Dataset & bands", "Choose the satellite collection, bands and how scenes combine."),
+    ("Time range", "Images acquired between these dates are used."),
+    ("Output", "The projection, and where the GeoTIFF is saved."),
+)
 FIELD_TABS = {"aoi": 0, "dataset": 1, "bands": 1, "scale": 1, "max_cloud_cover": 1, "composite": 1,
               "dates": 2, "crs": 3, "output_dir": 3}
 FIELD_ORDER = ("aoi", "dataset", "bands", "scale", "max_cloud_cover", "composite", "dates", "crs", "output_dir")
@@ -162,7 +169,21 @@ class ParameterFormView(QWidget):
         self.setObjectName("ParameterForm")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self._modern = layout_mode.is_modern()
-        self.setStyleSheet(theme.FORM_STYLESHEET + (theme.MODERN_FORM_STYLESHEET if self._modern else ""))
+        self._studio = layout_mode.is_studio()
+        # Both the modern and studio layouts group the parameters into tabbed/stacked "pages"
+        # (vs. the classical scrolling cards), so the field builders share that branch.
+        self._paneled = self._modern or self._studio
+
+        def _build_stylesheet() -> str:
+            if self._modern:
+                extra = theme.MODERN_FORM_STYLESHEET
+            elif self._studio:
+                extra = theme.STUDIO_FORM_STYLESHEET
+            else:
+                extra = ""
+            return theme.FORM_STYLESHEET + extra
+
+        theming.styled(self, _build_stylesheet)  # re-themes live on a theme change
 
         # ---- action widgets, shared by both layouts
         self.estimate_label = hint_label()  # download size; placed by whichever layout is built
@@ -188,6 +209,8 @@ class ParameterFormView(QWidget):
         # or the modern map-first panel with the parameters grouped under tabs.
         if self._modern:
             self._assemble_modern()
+        elif self._studio:
+            self._assemble_studio()
         else:
             self._assemble_classic()
 
@@ -495,6 +518,138 @@ class ParameterFormView(QWidget):
         root.addWidget(map_panel, 1)
         root.addWidget(panel, 0)
 
+    # ------------------------------------------------------------- assembly (studio)
+    def _studio_nav_button(self, text: str, index: int) -> QPushButton:
+        button = QPushButton(text)
+        button.setObjectName("StudioNav")
+        button.setCheckable(True)
+        button.setCursor(Qt.CursorShape.PointingHandCursor)
+        button.clicked.connect(lambda: self._show_studio_step(index))
+        self._modern_tabs.addButton(button, index)
+        self._modern_tab_buttons.append(button)
+        return button
+
+    def _set_studio_step_text(self, index: int) -> None:
+        title, hint = STUDIO_STEPS[index]
+        self._studio_step_title.setText(title)
+        self._studio_step_hint.setText(hint)
+
+    def _show_studio_step(self, index: int) -> None:
+        self._modern_stack.setCurrentIndex(index)
+        self._set_studio_step_text(index)
+
+    def _assemble_studio(self) -> None:
+        """A left nav rail of sections, the chosen section's card in the centre and a
+        persistent map-preview card on the right, over the theme's light workspace."""
+        # Build the same section pages the modern layout uses (the map is pulled out below).
+        dataset_card = self._build_dataset_group()
+        aoi_card = self._build_aoi_group()
+        time_card = self._build_time_group()
+        output_card = self._build_output_group()
+
+        self._modern_tabs = QButtonGroup(self)
+        self._modern_tabs.setExclusive(True)
+        self._modern_stack = QStackedWidget()
+        self._modern_stack.addWidget(self._modern_page(aoi_card))      # Area
+        self._modern_stack.addWidget(self._modern_page(dataset_card))  # Data
+        self._modern_stack.addWidget(self._modern_page(time_card))     # Time
+        self._modern_stack.addWidget(self._modern_page(output_card))   # Output
+
+        # ---- left navigation rail
+        rail = QFrame()
+        rail.setObjectName("StudioRail")
+        rail.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        rail.setFixedWidth(196)
+        rail_layout = QVBoxLayout(rail)
+        rail_layout.setContentsMargins(14, 18, 14, 18)
+        rail_layout.setSpacing(6)
+        kicker = QLabel("Analysis setup")
+        kicker.setObjectName("StudioRailKicker")
+        rail_layout.addWidget(kicker)
+        rail_layout.addSpacing(6)
+        for index, name in enumerate(TAB_NAMES):
+            rail_layout.addWidget(self._studio_nav_button(name, index))
+        rail_layout.addStretch(1)
+        self._modern_tabs.button(0).setChecked(True)
+
+        # ---- header (title + live dataset subtitle)
+        header = QLabel("Analysis parameters")
+        header.setObjectName("StudioTitle")
+        self.modern_subtitle = QLabel("GEE-Assist · Query input")
+        self.modern_subtitle.setObjectName("StudioSubtitle")
+        self.modern_subtitle.setWordWrap(True)
+
+        # ---- centre column: the current step's heading + hint over the stacked card
+        self._studio_step_title = QLabel()
+        self._studio_step_title.setObjectName("StudioStepTitle")
+        self._studio_step_hint = QLabel()
+        self._studio_step_hint.setObjectName("FieldHint")
+        self._studio_step_hint.setWordWrap(True)
+        self._set_studio_step_text(0)
+        centre = QVBoxLayout()
+        centre.setContentsMargins(0, 0, 0, 0)
+        centre.setSpacing(4)
+        centre.addWidget(self._studio_step_title)
+        centre.addWidget(self._studio_step_hint)
+        centre.addSpacing(6)
+        centre.addWidget(self._modern_stack, 1)
+
+        # ---- right column: a persistent map preview card
+        self.map_widget.setMinimumHeight(0)
+        self.map_widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        map_card = QFrame()
+        map_card.setObjectName("StudioMapCard")
+        map_card.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        map_card_layout = QVBoxLayout(map_card)
+        map_card_layout.setContentsMargins(14, 12, 14, 14)
+        map_card_layout.setSpacing(8)
+        map_caption = QLabel("Map preview · draw or review the area here")
+        map_caption.setObjectName("StudioMapCaption")
+        map_card_layout.addWidget(map_caption)
+        map_card_layout.addWidget(self.map_widget, 1)
+        self._studio_map_caption = map_caption
+
+        columns = QHBoxLayout()
+        columns.setContentsMargins(0, 0, 0, 0)
+        columns.setSpacing(16)
+        columns.addLayout(centre, 4)
+        columns.addWidget(map_card, 5)
+
+        # ---- footer action bar
+        footer = QWidget()
+        footer.setObjectName("StudioFooter")
+        footer.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        footer_layout = QHBoxLayout(footer)
+        footer_layout.setContentsMargins(24, 12, 24, 12)
+        footer_layout.setSpacing(10)
+        messages = QVBoxLayout()
+        messages.setSpacing(4)
+        messages.addWidget(self.status_banner)
+        messages.addWidget(self.required_label)
+        footer_layout.addLayout(messages, 1)
+        footer_layout.addWidget(self.reset_button)
+        footer_layout.addWidget(self.submit_button)
+
+        main = QVBoxLayout()
+        main.setContentsMargins(24, 20, 24, 0)
+        main.setSpacing(2)
+        main.addWidget(header)
+        main.addWidget(self.modern_subtitle)
+        main.addSpacing(14)
+        main.addLayout(columns, 1)
+
+        body = QVBoxLayout()
+        body.setContentsMargins(0, 0, 0, 0)
+        body.setSpacing(0)
+        body.addLayout(main, 1)
+        body.addWidget(footer)
+
+        root = QHBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+        root.addWidget(rail, 0)
+        root.addLayout(body, 1)
+
     # ------------------------------------------------------------------ build
     def _error_label(self, key: str, *targets: QWidget) -> QLabel:
         """Red message under a field; ``targets`` get a red border while it is shown."""
@@ -541,7 +696,7 @@ class ParameterFormView(QWidget):
 
         self.bands_combo = CheckComboBox(placeholder="No bands selected")
 
-        if self._modern:
+        if self._paneled:
             return self._modern_data_page()
 
         body.addWidget(labelled(
@@ -644,8 +799,8 @@ class ParameterFormView(QWidget):
         coords_layout = QVBoxLayout(self.coords_box)
         coords_layout.setContentsMargins(0, 0, 0, 0)
         coords_layout.setSpacing(6)
-        if self._modern:
-            # Two rows of two: four across does not fit the narrow modern panel.
+        if self._paneled:
+            # Two rows of two: four across does not fit the narrow modern / studio panel.
             coords_layout.addLayout(field_row(
                 labelled("West (min lon)", self.min_lon_spin),
                 labelled("East (max lon)", self.max_lon_spin),
@@ -665,8 +820,8 @@ class ParameterFormView(QWidget):
             "Extent of the drawn shape in WGS84 degrees. Typing values replaces the shape with that rectangle."
         ))
 
-        if self._modern:
-            # The map lives in the left panel; this tab lists the AOI's own vertices instead,
+        if self._paneled:
+            # The map lives in its own panel/card; this tab lists the AOI's own vertices instead,
             # filling the space the map used to take.
             return self._modern_area_page(toggle_row)
 
@@ -689,7 +844,7 @@ class ParameterFormView(QWidget):
         self.start_date_edit = date_edit()
         self.end_date_edit = date_edit()
         self.date_hint_label = hint_label()
-        if self._modern:
+        if self._paneled:
             return self._modern_time_page()
         body.addLayout(field_row(
             labelled("Start date", self.start_date_edit),
@@ -727,7 +882,7 @@ class ParameterFormView(QWidget):
         # never misses, even though the modern layout hides the folder field itself.
         output_error = self._error_label("output_dir", self.output_dir_edit)
 
-        if self._modern:
+        if self._paneled:
             return self._modern_output_page(output_error)
 
         body.addWidget(labelled("Projection (CRS)", self.crs_combo, self._error_label("crs", self.crs_combo)))
@@ -1315,16 +1470,18 @@ class ParameterFormView(QWidget):
         if key == "aoi":
             return self.import_button if self.aoi_file_toggle.isChecked() else self.place_edit
         if key == "output_dir":
-            return self.output_dir_edit if not self._modern else self._error_labels.get("output_dir")
+            return self.output_dir_edit if not self._paneled else self._error_labels.get("output_dir")
         targets = self._error_targets.get(key, ())
         return targets[0] if targets else self._error_labels.get(key)
 
     def go_to_field(self, key: str) -> None:
         """Show the field ``key`` (switching tab in the modern layout), scroll to it and focus it."""
-        if self._modern and key in FIELD_TABS:
+        if self._paneled and key in FIELD_TABS:
             index = FIELD_TABS[key]
             self._modern_tabs.button(index).setChecked(True)
             self._modern_stack.setCurrentIndex(index)
+            if self._studio:
+                self._set_studio_step_text(index)
         if key == "output_dir" and not self.output_dir_edit.text().strip():
             self.status_banner.show_error(NO_PROJECT_FOLDER + ".")
         widget = self._field_widget(key)
@@ -1349,6 +1506,10 @@ class ParameterFormView(QWidget):
             width = max(MODERN_PANEL_MIN_WIDTH, min(MODERN_PANEL_WIDTH, int(self.width() * 0.42)))
             self._modern_panel.setFixedWidth(width)
             self.modern_subtitle.setVisible(self.height() >= SHORT_PAGE)
+        elif self._studio:
+            # Drop the map caption and header subtitle on short screens to buy vertical room.
+            self.modern_subtitle.setVisible(self.height() >= SHORT_PAGE)
+            self._studio_map_caption.setVisible(self.height() >= SHORT_PAGE)
         else:
             narrow = self.width() < NARROW_PAGE
             self._time_output_row.setDirection(

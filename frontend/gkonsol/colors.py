@@ -14,7 +14,7 @@ from frontend.gkonsol import text
 
 # Amber for warnings: readable on each theme's terminal background.
 WARNING = {"light": "#9A6700", "dark-green": "#F2C46D", "dark-grey": "#F0C674"}
-FONT_FAMILIES = ("Cascadia Mono", "Cascadia Code", "Consolas", "Courier New")
+FONT_FAMILIES = ("JetBrains Mono", "Cascadia Mono", "Cascadia Code", "Consolas", "Courier New")  # first: bundled
 FONT_POINT_SIZE = 10
 
 
@@ -22,15 +22,40 @@ def _colour(name: str) -> str:
     return palette.ACTIVE[name]
 
 
-BACKGROUND = _colour("FIELD_BG") if palette.IS_DARK else _colour("WHITE")
-HEADER = _colour("WHITE") if palette.IS_DARK else _colour("FOAM")
-BORDER = _colour("BORDER")
-SELECTION = _colour("OCEAN")
+def _muted() -> str:
+    """Muted terminal text. The light theme's MUTED is ~3.9:1 on the white log, under WCAG AA for
+    body text, so there it is drawn 35% of the way toward the theme's ink (~5.7:1)."""
+    if palette.IS_DARK:
+        return _colour("MUTED")
+    muted, ink = QColor(_colour("MUTED")), QColor(_colour("INK"))
+    mix = [round(a + (b - a) * 0.35) for a, b in ((muted.red(), ink.red()), (muted.green(), ink.green()),
+                                                 (muted.blue(), ink.blue()))]
+    return QColor(*mix).name()
 
-# style -> (colour, bold)
-STYLE_COLOURS: dict[str, tuple[str, bool]] = {
+
+BACKGROUND = HEADER = BORDER = SELECTION = ""
+# style -> (colour, bold); filled by refresh()
+STYLE_COLOURS: dict[str, tuple[str, bool]] = {}
+
+
+def refresh() -> None:
+    """Recompute the terminal's colours from the active palette (at import and on a live theme change)."""
+    global BACKGROUND, HEADER, BORDER, SELECTION
+    BACKGROUND = _colour("FIELD_BG") if palette.IS_DARK else _colour("WHITE")
+    HEADER = _colour("WHITE") if palette.IS_DARK else _colour("FOAM")
+    BORDER = _colour("BORDER")
+    SELECTION = _colour("OCEAN")
+    STYLE_COLOURS.clear()
+    STYLE_COLOURS.update(_style_colours())
+
+
+def _style_colours() -> dict[str, tuple[str, bool]]:
+    from frontend import fieldbook  # late: fieldbook imports theme
+
+    prompt = fieldbook.yellow_ink() if fieldbook.active() else _colour("LEAF")  # Layout 3: the book's yellow
+    return {
     text.TEXT: (_colour("TEXT"), False),
-    text.MUTED: (_colour("MUTED"), False),
+    text.MUTED: (_muted(), False),
     text.BOLD: (_colour("INK"), True),
     text.ACCENT: (_colour("LEAF"), False),
     text.INFO: (_colour("OCEAN"), False),
@@ -39,9 +64,12 @@ STYLE_COLOURS: dict[str, tuple[str, bool]] = {
     text.ERROR: (_colour("ERROR"), False),
     text.HEADING: (_colour("INK"), True),
     text.COMMAND: (_colour("INK"), True),
-    text.PROMPT_USER: (_colour("LEAF"), True),
+    text.PROMPT_USER: (prompt, True),
     text.PROMPT_PATH: (_colour("OCEAN"), True),
-}
+    }
+
+
+refresh()
 
 
 def char_formats() -> dict[str, QTextCharFormat]:
