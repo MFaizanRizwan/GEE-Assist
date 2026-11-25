@@ -324,3 +324,20 @@ def test_a_missing_file_cannot_be_saved(app, tmp_path):
     row = CompletedRow(_job("8", "completed", dataset=DatasetDTO("8", "", str(tmp_path / "gone.tif"))))
     assert not row.save_button.isEnabled()
     row.deleteLater()
+
+
+@pytest.mark.parametrize("theme_name", ["dark-green", "navy", "bone"])
+def test_the_modern_layout_builds_and_follows_a_live_theme_change(app, facade, monkeypatch, theme_name):
+    from frontend import layout_mode, palette, theming
+
+    monkeypatch.setattr(layout_mode, "is_modern", lambda *a, **k: True)
+    before = palette.THEME
+    page = DownloadView(facade)
+    try:
+        page._on_connection(True)
+        page._on_connection(False)
+        theming.set_theme(theme_name)
+        assert page.chart is not None
+    finally:
+        theming.set_theme(before)
+        page.deleteLater()

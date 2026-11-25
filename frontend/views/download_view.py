@@ -401,11 +401,8 @@ class DownloadView(QWidget):
 
         self.chart = SpeedChart()
         self.chart.setMinimumHeight(190)
-        self.chart.set_colors(
-            background=MC["card"], border=MC["card"], grid=MC["grid"],
-            speed=MC["accent"], average=MC["second"], radius=0,
-            tooltip="Download speed over the last minute (lime) and the download's average speed (blue)",
-        )
+        self._colour_modern_chart()
+        theming.on_theme_changed(self._colour_modern_chart)  # the chart is painted, not styled
         legend = QHBoxLayout()
         legend.setSpacing(16)
         legend.addWidget(QLabel("━  Download speed", objectName="LegendSpeed"))
@@ -502,16 +499,25 @@ class DownloadView(QWidget):
         self.refresh()
         self.download_started.emit(job)
 
+    def _colour_modern_chart(self) -> None:
+        mc = _mc()
+        self.chart.set_colors(
+            background=mc["card"], border=mc["card"], grid=mc["grid"],
+            speed=mc["accent"], average=mc["second"], radius=0,
+            tooltip="Download speed over the last minute (lime) and the download's average speed (blue)",
+        )
+        self.chart.update()
+
     def _on_connection(self, available: bool) -> None:
         if available:
             self.connection.setText("GEE Connection: Active")
-            self.connection.setStyleSheet(f"color: {MC['success'] if self._modern else theme.SUCCESS};")
+            self.connection.setStyleSheet(f"color: {_mc()['success'] if self._modern else theme.SUCCESS};")
         else:
             self.connection.setText(
                 "GEE Connection: not available (check GEE_PROJECT, `earthengine authenticate` "
                 "and that the Earth Engine API is enabled for the project)"
             )
-            self.connection.setStyleSheet(f"color: {MC['error'] if self._modern else theme.ERROR};")
+            self.connection.setStyleSheet(f"color: {_mc()['error'] if self._modern else theme.ERROR};")
 
     def _start_job(self, job: DownloadJobDTO) -> None:
         action = self._facade.retry_failed_chunks if job.status == JOB_FAILED else self._facade.resume_download
