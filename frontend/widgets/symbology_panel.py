@@ -349,23 +349,24 @@ class SymbologyPanel(QWidget):
             cell.addWidget(label)
             holder = QWidget()
             holder.setLayout(cell)
-            grid.addWidget(holder, index // 2, index % 2)
+            grid.addWidget(holder, index // 3, index % 3)  # three across: more ramps, still compact
         box.addLayout(grid)
 
         box.addWidget(_section("Stretch", self._p))
         self._stretch_buttons: dict[str, QPushButton] = {}
-        stretch_row = QHBoxLayout()
-        stretch_row.setSpacing(0)
+        stretch_row = QGridLayout()  # four across, two rows: eight presets fit the panel
+        stretch_row.setHorizontalSpacing(0)
+        stretch_row.setVerticalSpacing(4)
         group = QButtonGroup(self)
         group.setExclusive(True)
-        for key, label in symbology.STRETCHES:
+        for index, (key, label) in enumerate(symbology.STRETCHES):
             button = QPushButton(label, objectName="SegButton")
             button.setCheckable(True)
             button.setCursor(Qt.CursorShape.PointingHandCursor)
             button.clicked.connect(lambda _=False, k=key: self._on_stretch(k))
             group.addButton(button)
             self._stretch_buttons[key] = button
-            stretch_row.addWidget(button, 1)
+            stretch_row.addWidget(button, index // 4, index % 4)
         box.addLayout(stretch_row)
 
         self.histogram = HistogramSlider(self._dark)
@@ -636,7 +637,8 @@ class SymbologyPanel(QWidget):
     def _on_stretch(self, key: str) -> None:
         self.state.stretch = key
         if key != "custom" and self._layer is not None:
-            self.state.low, self.state.high = symbology.stretch_bounds(key, self._layer.stats or {})
+            self.state.low, self.state.high = symbology.stretch_bounds(key, self._layer.stats or {},
+                                                                      self._layer.values)
             self.histogram.set_bounds(self.state.low, self.state.high)
             self._update_bounds_label()
         self.changed.emit()

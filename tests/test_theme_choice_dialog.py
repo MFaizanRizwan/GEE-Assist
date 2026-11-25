@@ -19,12 +19,16 @@ def app():
     return QApplication.instance() or QApplication([])
 
 
-def test_offers_the_three_themes_with_light_selected(app):
+def test_offers_every_theme_with_light_selected(app):
     dialog = ThemeChoiceDialog()
-    assert [option.text() for option in dialog.options.values()] == ["Light", "Dark – blue-green", "Dark – grey"]
+    assert [option.text() for option in dialog.options.values()] == [
+        "Light", "Dark – blue-green", "Dark – grey", "Indigo, celadon & gold", "Navy, cream & coral",
+        "Skeleton cream, black & green", "Seal blue, navy & crimson"]
     assert dialog.chosen_theme() == "light"
     dialog.options["dark-grey"].setChecked(True)
     assert dialog.chosen_theme() == "dark-grey"
+    dialog.options["navy"].setChecked(True)
+    assert dialog.chosen_theme() == "navy"
     dialog.deleteLater()
 
 

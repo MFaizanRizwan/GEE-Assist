@@ -123,7 +123,16 @@ _MODERN_COLORS = {
 }
 def _mc() -> dict:
     """The modern colours for the active theme; the accent follows the theme like every button."""
-    colors = dict(_MODERN_COLORS.get(palette.THEME, _MODERN_COLORS["dark-green"]))
+    colors = dict(_MODERN_COLORS.get(palette.THEME,
+                                     _MODERN_COLORS["dark-green" if palette.IS_DARK else "light"]))
+    if palette.THEME in palette.THREE_COLOUR_THEMES:  # a three-colour theme: its own surfaces and text
+        p = palette.ACTIVE
+        colors.update(page=p["PAGE_BG"], card=p["WHITE"], field=p["FIELD_BG"], border=p["BORDER"],
+                      border_strong=p["BORDER_STRONG"], border_hover=p["BORDER_HOVER"], ink=p["INK"],
+                      text=p["TEXT"], muted=p["MUTED"], subtle=p["SUBTLE"], accent_soft=p["ACCENT_SOFT"],
+                      second=p["OCEAN"], track=p["PROGRESS_TRACK"], grid=p["CHART_GRID"],
+                      paused=p["PROGRESS_PAUSED"], failed=p["PROGRESS_FAILED"], error=p["ERROR"],
+                      success=p["SUCCESS"])
     colors.update(accent=accent.SOLID, accent_dk=accent.SOLID_HOVER, accent_text=accent.SOLID,
                   on_accent=accent.TEXT)
     return colors

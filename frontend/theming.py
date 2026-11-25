@@ -86,11 +86,13 @@ def set_theme(name: str, *, persist: bool = True) -> None:
     if name not in palette.PALETTES:
         raise ValueError(f"Unknown theme: {name!r}")
     palette.set_theme(name)
+    from frontend import fieldbook  # Layout 3's spine follows the theme (read by the terminal below)
+    from frontend.gkonsol import colors as gkonsol_colors  # the terminal follows the theme too
+
+    fieldbook.refresh()
     accent.refresh()
     theme.refresh()
     form_theme.refresh()
-    from frontend.gkonsol import colors as gkonsol_colors  # the terminal follows the theme too
-
     gkonsol_colors.refresh()
 
     app = QApplication.instance()

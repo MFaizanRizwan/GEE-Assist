@@ -20,6 +20,10 @@ THEMES = {                      # name -> label shown to the user
     "light": "Light",
     "dark-green": "Dark – blue-green",
     "dark-grey": "Dark – grey",
+    "indigo": "Indigo, celadon & gold",
+    "navy": "Navy, cream & coral",
+    "bone": "Skeleton cream, black & green",
+    "seal": "Seal blue, navy & crimson",
 }
 DEFAULT_THEME = "light"
 

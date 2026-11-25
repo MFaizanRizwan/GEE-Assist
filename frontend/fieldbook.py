@@ -18,7 +18,11 @@ from PyQt6.QtGui import QColor, QImage
 
 from frontend import accent, fonts, layout_mode, palette, theme
 
-SPINE = "#E8B923"          # the field book's yellow: the cover's spine and its rules
+FIELD_YELLOW = "#E8B923"   # the field book's yellow, in the three original themes
+# The themes built from three colours keep their third colour for buttons, animation and effects, so
+# there the spine, rules and entry numbers take that accent instead of the book's yellow.
+THREE_COLOUR_THEMES = palette.THREE_COLOUR_THEMES
+SPINE = FIELD_YELLOW       # the spine and its rules; set by refresh() for the active theme
 MONO = fonts.MONO          # one measurement face for every figure: bundled JetBrains Mono
 MONO_STACK = f'"{MONO}", "Consolas"'
 CARD_RADIUS = 6            # pages are cut square-ish; buttons keep the app's 10px
@@ -37,9 +41,20 @@ _DIVISIONS = {
 DIVISION_NAMES = tuple(_DIVISIONS)
 
 
+def _three_colour() -> bool:
+    return palette.THEME in THREE_COLOUR_THEMES
+
+
+def refresh() -> None:
+    """Pick the spine colour for the active theme (at import and on a live theme change)."""
+    global SPINE
+    SPINE = palette.ACTIVE["BUTTON"] if _three_colour() else FIELD_YELLOW
+
+
 def division_on_cover(name: str) -> str:
-    """A division's hue on the graphite cover, which stays dark in every theme."""
-    return _DIVISIONS[name][0]
+    """A division's hue on the cover, which is dark in every theme. The three-colour themes name
+    divisions in their text colour, not in four extra hues."""
+    return cover_muted() if _three_colour() else _DIVISIONS[name][0]
 
 
 @lru_cache(maxsize=1)
@@ -58,25 +73,40 @@ def _mix(a: str, b: str, t: float) -> str:
 
 
 def cover() -> str:
-    """The graphite cover: darker than every page in a dark theme, graphite over a light one."""
-    return _mix(palette.ACTIVE["PAGE_BG"], "#000000", 0.38) if palette.IS_DARK else "#24282B"
+    """The cover: darker than every page in a dark theme, graphite over a light one. A light
+    three-colour theme binds its book in its second colour (its text colour)."""
+    if palette.IS_DARK:
+        return _mix(palette.ACTIVE["PAGE_BG"], "#000000", 0.38)
+    return palette.ACTIVE["INK"] if _three_colour() else "#24282B"
 
 
 def cover_raised() -> str:
-    return _mix(cover(), "#FFFFFF", 0.07)
+    return _mix(cover(), cover_text(), 0.10)
 
 
 def cover_text() -> str:
-    return "#D3D7DA"
+    # On a light three-colour theme the cover is its dark text colour, so its words take the ground.
+    return palette.ACTIVE["PAGE_BG"] if (_three_colour() and not palette.IS_DARK) else "#D3D7DA"
 
 
 def cover_muted() -> str:
-    return "#A3AAB0"
+    return _mix(cover_text(), cover(), 0.30) if _three_colour() else "#A3AAB0"
 
 
 def yellow_ink() -> str:
-    """The spine's yellow where it is text: on a light page it darkens to stay legible."""
+    """The spine's colour where it is text: darkened on a light page so it stays legible. The
+    three-colour themes use their accent's text-safe shade (LEAF)."""
+    if _three_colour():
+        return palette.ACTIVE["LEAF"]
     return "#8A6400" if not palette.IS_DARK else SPINE
+
+
+def index_ink() -> str:
+    """The side index's digits on the cover. A light three-colour theme binds its cover in its dark
+    text colour, where the plain accent would read at ~3:1, so the digits lift toward the cover's text."""
+    if _three_colour() and not palette.IS_DARK:
+        return _mix(SPINE, cover_text(), 0.45)
+    return SPINE
 
 
 def rule() -> str:
@@ -88,6 +118,8 @@ def grid_line() -> str:
 
 
 def division(name: str) -> str:
+    if _three_colour():
+        return palette.ACTIVE["BUTTON"]  # division tabs are buttons: they take the accent
     dark, light = _DIVISIONS[name]
     return dark if palette.IS_DARK else light
 
@@ -165,7 +197,8 @@ QWidget#FieldRightPage {{ background: transparent; border: none; border-left: 1p
 
 def division_strip_css() -> str:
     """The division tabs at the top of every page (Work, Analyse, Explain, Report)."""
-    on_hue = "#0F1416" if palette.IS_DARK else "#FFFFFF"
+    on_hue = (palette.ACTIVE["PRIMARY_TEXT"] if _three_colour()
+              else "#0F1416" if palette.IS_DARK else "#FFFFFF")
     rules = [
         f"QFrame#DivisionStrip {{ background: transparent; border: none; border-bottom: 1px solid {rule()}; }}",
         f"QPushButton#DivisionTab {{ background: transparent; color: {theme.MUTED}; border: 1px solid {rule()}; "
@@ -177,3 +210,6 @@ def division_strip_css() -> str:
         rules.append(f'QPushButton#DivisionTab[division="{name}"]:checked {{ background: {hue}; '
                      f"border-color: {hue}; color: {on_hue}; }}")
     return "\n".join(rules)
+
+
+refresh()

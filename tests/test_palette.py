@@ -9,7 +9,8 @@ import pytest
 
 from frontend import palette
 
-DARK = [palette.DARK_GREEN, palette.DARK_GREY]
+DARK = [palette.DARK_GREEN, palette.DARK_GREY, palette.INDIGO, palette.NAVY]
+LIGHT_GROUNDS = [palette.LIGHT, palette.BONE, palette.SEAL]  # dark text on a light ground
 
 
 def _luminance(hex_value: str) -> float:
@@ -27,11 +28,16 @@ def contrast(a: str, b: str) -> float:
 
 
 def test_every_palette_names_the_same_colours():
-    for colours in DARK:
+    for colours in palette.PALETTES.values():
         assert colours.keys() == palette.LIGHT.keys()
 
 
-@pytest.mark.parametrize("colours", DARK, ids=["dark-green", "dark-grey"])
+def test_dark_and_light_themes_are_told_apart():
+    assert palette.DARK_THEMES == {"dark-green", "dark-grey", "indigo", "navy"}
+    assert set(palette.PALETTES) - palette.DARK_THEMES == {"light", "bone", "seal"}
+
+
+@pytest.mark.parametrize("colours", DARK, ids=["dark-green", "dark-grey", "indigo", "navy"])
 def test_dark_text_and_buttons_are_light_and_readable(colours):
     for surface in ("WHITE", "PAGE_BG", "FIELD_BG"):
         for text in ("INK", "TEXT", "MUTED", "LEAF", "OCEAN", "ERROR", "SUCCESS"):
@@ -41,11 +47,26 @@ def test_dark_text_and_buttons_are_light_and_readable(colours):
         assert contrast(colours["PRIMARY_TEXT"], colours[accent]) >= 4.5, accent
 
 
+@pytest.mark.parametrize("colours", [palette.BONE, palette.SEAL], ids=["bone", "seal"])
+def test_three_colour_light_themes_are_readable(colours):
+    for surface in ("WHITE", "PAGE_BG", "FIELD_BG"):
+        for text in ("INK", "TEXT", "MUTED", "LEAF", "OCEAN", "ERROR", "SUCCESS"):
+            assert contrast(colours[text], colours[surface]) >= 4.5, (text, surface)
+        assert _luminance(colours["INK"]) < _luminance(colours[surface])  # dark text on a light ground
+
+
+@pytest.mark.parametrize("name", list(palette.PALETTES))
+def test_every_theme_has_readable_buttons(name):
+    colours = palette.PALETTES[name]
+    for fill in ("BUTTON", "BUTTON_HOVER"):
+        assert contrast(colours["PRIMARY_TEXT"], colours[fill]) >= 4.5, fill
+
+
 def test_tests_run_in_the_light_theme():
     assert palette.THEME == "light" and palette.ACTIVE is palette.LIGHT and not palette.IS_DARK
 
 
-@pytest.mark.parametrize("name", ["dark-green", "dark-grey"])
+@pytest.mark.parametrize("name", ["dark-green", "dark-grey", "indigo", "navy"])
 def test_the_app_starts_in_the_chosen_theme(name):
     env = dict(os.environ, GEE_ASSIST_THEME=name, QT_QPA_PLATFORM="offscreen")
     code = "from frontend import palette, theme; print(palette.IS_DARK, theme.WHITE == palette.PALETTES[%r]['WHITE'])"

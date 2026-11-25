@@ -60,7 +60,7 @@ def _style_colours() -> dict[str, tuple[str, bool]]:
     text.ACCENT: (_colour("LEAF"), False),
     text.INFO: (_colour("OCEAN"), False),
     text.SUCCESS: (_colour("SUCCESS"), False),
-    text.WARNING: (WARNING.get(palette.THEME, WARNING["light"]), False),
+    text.WARNING: (WARNING.get(palette.THEME, WARNING["dark-green" if palette.IS_DARK else "light"]), False),
     text.ERROR: (_colour("ERROR"), False),
     text.HEADING: (_colour("INK"), True),
     text.COMMAND: (_colour("INK"), True),

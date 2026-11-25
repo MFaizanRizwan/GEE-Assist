@@ -749,7 +749,7 @@ class HomeWindow(QMainWindow):
 
     def _refresh_theme_icons(self) -> None:
         """Swap the per-theme app / taskbar / side-bar logo after a live theme change."""
-        icon = QIcon(str(assets.APP_ICONS[palette.THEME]))
+        icon = QIcon(str(assets.app_icon(palette.THEME)))
         self.setWindowIcon(icon)
         app = QApplication.instance()
         if app is not None:

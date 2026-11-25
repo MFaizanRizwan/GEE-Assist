@@ -438,6 +438,22 @@ M_ACCENT_SOFT = "#1B2A1C"   # active tab / selection tint
 M_DISABLED_BG = "#141E1A"
 M_NEEDED = "#F5B83D"         # amber: required field still empty
 M_ERROR = "#FF8A80"
+_M_NAMES = ("M_BG", "M_MAP_BG", "M_FIELD", "M_BORDER", "M_BORDER_STRONG", "M_BORDER_HOVER", "M_TEXT",
+            "M_INK", "M_MUTED", "M_SUBTLE", "M_ACCENT_SOFT", "M_DISABLED_BG", "M_NEEDED", "M_ERROR")
+_M_DEFAULTS = {name: globals()[name] for name in _M_NAMES}  # the modern console's own dark colours
+
+
+def _apply_modern_colors() -> None:
+    """The modern console keeps its own dark colours, except in a three-colour theme: there it takes
+    its surfaces, text and lines from the theme, so the theme's two main colours fill the screen."""
+    values = dict(_M_DEFAULTS)
+    if palette.THEME in palette.THREE_COLOUR_THEMES:
+        p = palette.ACTIVE
+        values.update(M_BG=p["WHITE"], M_MAP_BG=p["PAGE_BG"], M_FIELD=p["FIELD_BG"], M_BORDER=p["BORDER"],
+                      M_BORDER_STRONG=p["BORDER_STRONG"], M_BORDER_HOVER=p["BORDER_HOVER"], M_TEXT=p["TEXT"],
+                      M_INK=p["INK"], M_MUTED=p["MUTED"], M_SUBTLE=p["SUBTLE"], M_ACCENT_SOFT=p["ACCENT_SOFT"],
+                      M_DISABLED_BG=p["DISABLED_BG"], M_NEEDED=p["LEAF"], M_ERROR=p["ERROR"])
+    globals().update(values)
 
 
 def _modern_form_stylesheet():
@@ -673,6 +689,7 @@ def refresh() -> None:
     global FORM_STYLESHEET, MAIN_WINDOW_STYLESHEET, MODERN_FORM_STYLESHEET
     global MODERN_WINDOW_STYLESHEET, STUDIO_FORM_STYLESHEET, STUDIO_WINDOW_STYLESHEET
     _apply_colors()
+    _apply_modern_colors()
     FORM_STYLESHEET = _form_stylesheet()
     MAIN_WINDOW_STYLESHEET = _main_window_stylesheet()
     MODERN_FORM_STYLESHEET = _modern_form_stylesheet()

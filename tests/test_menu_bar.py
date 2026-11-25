@@ -120,8 +120,10 @@ def test_edit_items_are_greyed_out_when_they_cannot_apply(bar, form):
 
 
 def test_view_menu_has_a_theme_switcher_set_to_light(bar):
-    assert _items(bar.theme_menu) == ["Light", "Dark – blue-green", "Dark – grey"]
-    assert [a.isChecked() for a in bar.theme_menu.actions()] == [True, False, False]  # light by default
+    assert _items(bar.theme_menu) == ["Light", "Dark – blue-green", "Dark – grey", "Indigo, celadon & gold",
+                                      "Navy, cream & coral", "Skeleton cream, black & green",
+                                      "Seal blue, navy & crimson"]
+    assert [a.isChecked() for a in bar.theme_menu.actions()] == [True] + [False] * 6  # light by default
 
 
 def test_choosing_another_theme_asks_for_it(bar):

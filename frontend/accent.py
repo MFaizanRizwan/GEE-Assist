@@ -20,12 +20,10 @@ BUTTON_RADIUS = 10
 
 
 def _resolve() -> tuple[str, str, str]:
+    # Each palette names its own button fill (contrast-checked against PRIMARY_TEXT). The light
+    # theme's is its darker leaf, since white on its LEAF would be only ~3.5:1.
     p = palette.ACTIVE
-    if not palette.IS_DARK:
-        # White on the light theme's LEAF is ~3.5:1, under WCAG AA for button text; its darker
-        # leaf is ~5:1, so the light theme's buttons fill with that (hover goes darker still).
-        return p["LEAF_DARK"], "#1B6650", p["PRIMARY_TEXT"]
-    return p["LEAF"], p["LEAF_DARK"], p["PRIMARY_TEXT"]
+    return p["BUTTON"], p["BUTTON_HOVER"], p["PRIMARY_TEXT"]
 
 
 SOLID = SOLID_HOVER = TEXT = SOLID_PRESSED = SOFT = FROM = TO = FROM_HOVER = TO_HOVER = ""

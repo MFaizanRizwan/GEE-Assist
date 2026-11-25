@@ -142,8 +142,15 @@ MODERN_PANEL_WIDTH = 440
 MODERN_PANEL_MIN_WIDTH = 340
 SHORT_PAGE = 600        # below this height the modern panel header drops its subtitle
 NARROW_PAGE = 900       # below this width the classical Time and Output cards stack
-_NEEDED = "#F5B83D" if layout_mode.is_modern() or palette.IS_DARK else "#B7791F"   # amber: still to fill
-_DONE = theme.M_ACCENT if layout_mode.is_modern() else theme.SUCCESS
+def _needed() -> str:
+    """The "still to fill" colour: amber, or a three-colour theme's accent (it keeps to three colours)."""
+    if palette.THEME in palette.THREE_COLOUR_THEMES:
+        return palette.ACTIVE["LEAF"]
+    return "#F5B83D" if layout_mode.is_modern() or palette.IS_DARK else "#B7791F"
+
+
+def _done() -> str:
+    return theme.M_ACCENT if layout_mode.is_modern() else theme.SUCCESS
 
 
 class ParameterFormView(QWidget):
@@ -184,6 +191,7 @@ class ParameterFormView(QWidget):
             return theme.FORM_STYLESHEET + extra
 
         theming.styled(self, _build_stylesheet)  # re-themes live on a theme change
+        theming.on_theme_changed(self._update_required)  # its "Still needed" line is coloured rich text
 
         # ---- action widgets, shared by both layouts
         self.estimate_label = hint_label()  # download size; placed by whichever layout is built
@@ -1440,13 +1448,13 @@ class ParameterFormView(QWidget):
         labels["output_dir"] = "Create or open a project"
         if missing:
             links = "  ·  ".join(
-                f'<a href="{key}" style="color:{_NEEDED}; text-decoration:underline;">{labels[key]}</a>'
+                f'<a href="{key}" style="color:{_needed()}; text-decoration:underline;">{labels[key]}</a>'
                 for key in missing
             )
-            self.required_label.setText(f'<span style="color:{_NEEDED};">● Still needed:</span>&nbsp; {links}')
+            self.required_label.setText(f'<span style="color:{_needed()};">● Still needed:</span>&nbsp; {links}')
             self.required_label.setToolTip("Click a field to go to it.")
         else:
-            self.required_label.setText(f'<span style="color:{_DONE};">✓ All required fields are filled.</span>')
+            self.required_label.setText(f'<span style="color:{_done()};">✓ All required fields are filled.</span>')
             self.required_label.setToolTip("")
 
         for index, button in enumerate(self._modern_tab_buttons):

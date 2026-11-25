@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PyQt6.QtCore import QBuffer, QEvent, QIODevice, QSize, Qt, QTimer, QUrl, pyqtSignal
+from PyQt6.QtCore import QBuffer, QIODevice, QSize, Qt, QTimer, QUrl, pyqtSignal
 from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtWidgets import (
     QAbstractItemView,
@@ -61,6 +61,7 @@ from frontend.widgets.flow_layout import FlowLayout
 from frontend.widgets.form_parts import StatusBanner
 from frontend.widgets.map_area import MapArea
 from frontend.widgets.process_picker import stylesheet as picker_stylesheet
+from frontend.widgets.run_filmstrip import RunFilmstrip
 from frontend.widgets.process_picker import AnalysisTile, ProcessPicker
 from frontend.widgets.raster_canvas import rgba_to_image
 from frontend.widgets.raster_legend import format_value
@@ -68,18 +69,16 @@ from frontend.widgets.symbology_panel import SymbologyPanel
 from frontend.workers.task_worker import run_task
 
 PANEL_WIDTH = 430
-# Responsive layout: on smaller screens (e.g. 1366x768) the dataset panel narrows, the symbology
-# panel moves under the map once the map card would get narrower than MIN_CARD_WIDTH, and the
-# results scroll instead of being squeezed below their minimum height.
+# Responsive layout: on smaller screens (e.g. 1366x768) the setup drawer narrows; once a result
+# exists the drawer folds away so the map leads, and the rail reopens it.
 PANEL_WIDTH_COMPACT = 360
 WIDE_PAGE = 1450              # page width from which the dataset panel gets its full width
 SHORT_PAGE = 720              # page height below which the header is compacted
-SYM_WIDTH = 322
-SYM_STACKED_HEIGHT = 440
-MIN_CARD_WIDTH = 560
-CARD_MIN_HEIGHT = 470
 RESULT_SPACING = 14
-QWIDGETSIZE_MAX = (1 << 24) - 1
+SIDE_WIDTH = 330             # the column beside the map: numbers, symbology, actions
+RAIL_WIDTH = 64              # the setup rail; its drawer is the steps panel
+FILM_SHOWN = 12              # saved results in the filmstrip
+FILM_PICTURE = 220           # longest side of a filmstrip picture, in pixels
 PROGRESS_POLL_MS = 100
 MAP_IMAGE_SIZE = 1024
 
@@ -104,6 +103,18 @@ QFrame#AnalysisPanel, QFrame#ResultCard {{
     background: {theme.WHITE}; border: 1px solid {theme.BORDER}; border-radius: 12px;
 }}
 QFrame#AnalysisPanel QLabel, QFrame#ResultCard QLabel {{ background: transparent; }}
+QFrame#AnalysisRail {{ background: {theme.WHITE}; border: 1px solid {theme.BORDER}; border-radius: 12px; }}
+QPushButton#RailButton {{
+    color: {theme.INK}; background: {theme.WHITE}; border: 1px solid {theme.BORDER_STRONG};
+    border-radius: {accent.BUTTON_RADIUS}px; padding: 8px 0; font-size: 8.5pt; font-weight: 600;
+}}
+QPushButton#RailButton:hover {{ background: {theme.FOAM}; }}
+QPushButton#RailButton:checked {{ border-color: {theme.ACCENT_SOLID}; background: {theme.ACCENT_SOFT}; }}
+QFrame#AnalysisRail QPushButton#PrimaryButton {{ padding: 8px 0; font-size: 8.5pt; }}
+QFrame#FilmTile {{ background: {theme.FIELD_BG}; border: 1px solid {theme.BORDER}; border-radius: 8px; }}
+QFrame#FilmTile:hover {{ border-color: {theme.ACCENT_SOLID}; }}
+QLabel#FilmPicture {{ color: {theme.MUTED}; background: {theme.DISABLED_BG}; border-radius: 4px; }}
+QLabel#FilmCaption {{ color: {theme.TEXT}; font-family: "{fieldbook.MONO}"; font-size: 9pt; }}
 QLabel#StepTitle {{ color: {theme.INK}; font-weight: 700; font-size: 10.5pt; }}
 QLabel#SectionTitle {{ color: {theme.MUTED}; font-size: 8.5pt; font-weight: 600; letter-spacing: 0.5px; }}
 QLabel#DeviceLine {{ color: {theme.INK}; font-weight: 600; }}
@@ -136,6 +147,16 @@ _M = {
     "ink": "#F3F8F5", "text": "#E7EEEA", "muted": "#93A79D", "subtle": "#6E8278",
     "field": "#172420", "accent": "#A6E22E", "accent_soft": "#1B2A1C", "error": "#F2777A",
 }
+def _modern_colours() -> dict:
+    """The modern page's own dark colours, or, in a three-colour theme, the theme's."""
+    if palette.THEME not in palette.THREE_COLOUR_THEMES:
+        return dict(_M)
+    p = palette.ACTIVE
+    return dict(_M, bg=p["PAGE_BG"], card=p["WHITE"], panel=p["WHITE"], line=p["BORDER"],
+                line2=p["BORDER_STRONG"], ink=p["INK"], text=p["TEXT"], muted=p["MUTED"],
+                subtle=p["SUBTLE"], field=p["FIELD_BG"], accent_soft=p["ACCENT_SOFT"], error=p["ERROR"])
+
+
 def _modern_stylesheet():
     return """
 #AnalysisPage {{ background: {bg}; }}
@@ -183,7 +204,16 @@ QFrame#AnalysisPanel, QFrame#ResultCard {{ background: {card}; border: 1px solid
 #AnalysisPage QPushButton#SecondaryButton {{ background: {field}; color: {text}; border: 1px solid {line2}; }}
 #AnalysisPage QPushButton#SecondaryButton:hover {{ background: {accent_soft}; }}
 #AnalysisPage QLabel#SaveState {{ color: {muted}; }}
-""".format(**dict(_M, accent=accent.SOLID, accent_dk=accent.SOLID_HOVER, on_accent=accent.TEXT,
+QFrame#AnalysisRail {{ background: {card}; border: 1px solid {line}; }}
+#AnalysisPage QPushButton#RailButton {{ background: {field}; color: {text}; border: 1px solid {line2}; }}
+#AnalysisPage QPushButton#RailButton:hover {{ background: {accent_soft}; }}
+#AnalysisPage QPushButton#RailButton:checked {{ border-color: {accent}; background: {accent_soft}; }}
+#AnalysisPage QFrame#AnalysisRail QPushButton#PrimaryButton {{ padding: 8px 0; font-size: 8.5pt; }}
+#AnalysisPage QFrame#FilmTile {{ background: {field}; border: 1px solid {line}; }}
+#AnalysisPage QFrame#FilmTile:hover {{ border-color: {accent}; }}
+#AnalysisPage QLabel#FilmPicture {{ background: {card}; color: {muted}; }}
+#AnalysisPage QLabel#FilmCaption {{ color: {text}; }}
+""".format(**dict(_modern_colours(), accent=accent.SOLID, accent_dk=accent.SOLID_HOVER, on_accent=accent.TEXT,
                        radius=accent.BUTTON_RADIUS))
 
 
@@ -298,7 +328,9 @@ class AnalysisView(QWidget):
         column = QVBoxLayout(panel_content)
         column.setContentsMargins(18, 16, 18, 16)
         column.setSpacing(8)
-        column.addWidget(_step(1, "Dataset"))
+        self._step_widgets = {"data": _step(1, "Dataset"), "type": _step(2, "Analysis"),
+                              "steps": _step(3, "Processes")}
+        column.addWidget(self._step_widgets["data"])
         column.addWidget(self.dataset_list)
         row = QHBoxLayout()
         row.addWidget(self.refresh_button)
@@ -306,11 +338,11 @@ class AnalysisView(QWidget):
         column.addLayout(row)
         column.addWidget(self.dataset_note)
         column.addSpacing(6)
-        column.addWidget(_step(2, "Analysis"))
+        column.addWidget(self._step_widgets["type"])
         column.addLayout(self.tiles_area)
         column.addWidget(self.category_note)
         column.addSpacing(6)
-        column.addWidget(_step(3, "Processes"))
+        column.addWidget(self._step_widgets["steps"])
         column.addWidget(self.picker)
         column.addSpacing(4)
         column.addWidget(self.params_title)
@@ -324,6 +356,7 @@ class AnalysisView(QWidget):
         panel_scroll.setFrameShape(QFrame.Shape.NoFrame)
         panel_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         panel_scroll.setWidget(panel_content)
+        self._panel_scroll = panel_scroll
         run_box = QVBoxLayout()
         run_box.setContentsMargins(18, 8, 18, 14)
         run_box.setSpacing(6)
@@ -383,6 +416,7 @@ class AnalysisView(QWidget):
         self.explain_button.setToolTip("Save the result in the project and ask Gemini to explain it, from its "
                                        "GeoTIFF and the metadata before and after the analysis")
 
+        # ---- the result leads: the map, with the project's saved runs in a filmstrip under it
         card = QFrame(objectName="ResultCard")
         result_layout = QVBoxLayout(card)
         result_layout.setContentsMargins(16, 14, 16, 14)
@@ -399,42 +433,63 @@ class AnalysisView(QWidget):
         self.run_stack.addWidget(self.map_area)     # 0: the result map
         self.run_stack.addWidget(self.run_loader)   # 1: the loader
         result_layout.addWidget(self.run_stack, 1)
-        result_layout.addWidget(_section("Numbers"))
-        result_layout.addWidget(self.metrics_table)
-        # The buttons wrap onto a second line when the card is narrow, instead of being clipped.
-        result_layout.addWidget(self.save_state)
+        self.filmstrip = RunFilmstrip()
+        self.filmstrip.open_requested.connect(self.open_in_viewer_requested)
+        self._film_for = ""                                  # the project the filmstrip shows
+        self._film_pictures: dict[str, object] = {}          # drawn pictures, by GeoTIFF: drawn once
+        result_layout.addWidget(_section("Saved runs"))
+        result_layout.addWidget(self.filmstrip)
+
+        # ---- beside the map: its numbers, its symbology, and what to do with the result
+        side = QFrame(objectName="ResultCard")
+        side.setFixedWidth(SIDE_WIDTH)
+        side_layout = QVBoxLayout(side)
+        side_layout.setContentsMargins(14, 12, 14, 14)
+        side_layout.setSpacing(8)
+        side_layout.addWidget(_section("Numbers"))
+        side_layout.addWidget(self.metrics_table)
+        side_layout.addWidget(self.sym_panel, 1)
+        side_layout.addWidget(self.save_state)
+        # The buttons wrap onto a second line when the column is narrow, instead of being clipped.
         buttons = FlowLayout(spacing=6)
         for button in (self.save_button, self.explain_button, self.viewer_button, self.map_button,
                        self.folder_button):
             buttons.addWidget(button)
-        result_layout.addLayout(buttons)
+        side_layout.addLayout(buttons)
 
+        # ---- setup: a slim rail; its drawer is the steps panel (open until there is a result)
         self._panel = panel
         self._result_card = card
-        self._sym_frame = QFrame(objectName="ResultCard")
-        sym_frame_layout = QVBoxLayout(self._sym_frame)
-        sym_frame_layout.setContentsMargins(0, 0, 0, 0)
-        sym_frame_layout.addWidget(self.sym_panel)
-
-        # The results (map card + symbology) scroll as a whole when the window is too small for
-        # them, so nothing is squeezed; the dataset panel and its Run button stay in view.
-        results = QWidget(objectName="ResultsArea")
-        self._results_grid = QGridLayout(results)
-        self._results_grid.setContentsMargins(0, 0, 0, 0)
-        self._results_grid.setSpacing(RESULT_SPACING)
-        self._results_scroll = QScrollArea()
-        self._results_scroll.setWidgetResizable(True)
-        self._results_scroll.setFrameShape(QFrame.Shape.NoFrame)
-        self._results_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self._results_scroll.setWidget(results)
-        self._results_scroll.viewport().setAutoFillBackground(False)
-        results.setAutoFillBackground(False)
-        self._stacked: bool | None = None   # symbology under the map (narrow) or beside it (wide)
+        self._side = side
+        rail = QFrame(objectName="AnalysisRail")
+        rail.setFixedWidth(RAIL_WIDTH)
+        rail_layout = QVBoxLayout(rail)
+        rail_layout.setContentsMargins(6, 10, 6, 10)
+        rail_layout.setSpacing(8)
+        self.rail_buttons: dict[str, QPushButton] = {}
+        for key, text, tip in (("data", "Data", "Choose the dataset (step 1)"),
+                               ("type", "Type", "Choose the kind of analysis (step 2)"),
+                               ("steps", "Steps", "Choose the processes and their parameters (step 3)")):
+            button = QPushButton(text, objectName="RailButton")
+            button.setCheckable(True)
+            button.setToolTip(tip)
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+            button.clicked.connect(lambda _=False, k=key: self.open_setup_at(k))
+            rail_layout.addWidget(button)
+            self.rail_buttons[key] = button
+        self.rail_run = QPushButton("Run", objectName="PrimaryButton")
+        self.rail_run.setToolTip("Run the analysis (the same as Run analysis in the setup)")
+        self.rail_run.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.rail_run.clicked.connect(self.run)
+        rail_layout.addWidget(self.rail_run)
+        rail_layout.addStretch(1)
 
         body = QHBoxLayout()
         body.setSpacing(RESULT_SPACING)
+        body.addWidget(rail)
         body.addWidget(panel)
-        body.addWidget(self._results_scroll, 1)
+        body.addWidget(card, 1)
+        body.addWidget(side)
         self._page_layout = layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 20, 24, 20)
         layout.setSpacing(10)
@@ -442,7 +497,7 @@ class AnalysisView(QWidget):
         layout.addWidget(self.subtitle)
         layout.addWidget(self.banner)
         layout.addLayout(body, 1)
-        self._results_scroll.viewport().installEventFilter(self)
+        self.set_setup_open(True)  # nothing to show yet: the steps lead until the first result
         self._arrange_results()
 
         for button in (self.refresh_button, self.browse_button, self.run_button, self.viewer_button,
@@ -477,47 +532,77 @@ class AnalysisView(QWidget):
         super().resizeEvent(event)
         self._arrange_results()
 
-    def eventFilter(self, watched, event) -> bool:  # noqa: N802 (Qt API)
-        if watched is self._results_scroll.viewport() and event.type() == QEvent.Type.Resize:
-            self._fit_card_height()
-        return super().eventFilter(watched, event)
-
     def _arrange_results(self) -> None:
-        """Fit the page to its size: narrower dataset panel and symbology under the map on small screens."""
+        """Fit the page to its size: compact header and margins on short pages, a narrower drawer
+        on narrow ones."""
         # Layout 3's division strip and open run log take part of the window; they do not make the page short.
         short = self.height() < SHORT_PAGE - (fieldbook.CHROME_HEIGHT if fieldbook.active() else 0)
         margins = (16, 10, 16, 10) if short else (24, 20, 24, 20)
         self._page_layout.setContentsMargins(*margins)
         self.subtitle.setVisible(not short)
+        self._panel.setFixedWidth(PANEL_WIDTH if self.width() >= WIDE_PAGE else PANEL_WIDTH_COMPACT)
 
-        panel_width = PANEL_WIDTH if self.width() >= WIDE_PAGE else PANEL_WIDTH_COMPACT
-        self._panel.setFixedWidth(panel_width)
-        results_width = self.width() - margins[0] - margins[2] - panel_width - RESULT_SPACING
-        stacked = results_width - SYM_WIDTH - RESULT_SPACING < MIN_CARD_WIDTH
-        if stacked != self._stacked:
-            self._stacked = stacked
-            grid = self._results_grid
-            grid.removeWidget(self._result_card)
-            grid.removeWidget(self._sym_frame)
-            grid.addWidget(self._result_card, 0, 0)
-            if stacked:
-                grid.addWidget(self._sym_frame, 1, 0)
-                grid.setColumnStretch(1, 0)
-                self._sym_frame.setMinimumWidth(0)
-                self._sym_frame.setMaximumWidth(QWIDGETSIZE_MAX)
-                self._sym_frame.setFixedHeight(SYM_STACKED_HEIGHT)
-            else:
-                grid.addWidget(self._sym_frame, 0, 1)
-                self._sym_frame.setFixedWidth(SYM_WIDTH)
-                self._sym_frame.setMinimumHeight(0)
-                self._sym_frame.setMaximumHeight(QWIDGETSIZE_MAX)
-            grid.setColumnStretch(0, 1)
-        self._fit_card_height()
+    # ------------------------------------------------------------- setup drawer
+    def set_setup_open(self, open_: bool) -> None:
+        """Show or fold the steps drawer. It folds when a result arrives, so the result leads."""
+        self._panel.setVisible(open_)
+        if not open_:
+            for button in self.rail_buttons.values():
+                button.setChecked(False)
 
-    def _fit_card_height(self) -> None:
-        """The map card fills the visible height (and never gets shorter than it can be drawn)."""
-        visible = self._results_scroll.viewport().height()
-        self._result_card.setMinimumHeight(max(CARD_MIN_HEIGHT, visible) if self._stacked else CARD_MIN_HEIGHT)
+    def setup_is_open(self) -> bool:
+        return not self._panel.isHidden()
+
+    def open_setup_at(self, key: str) -> None:
+        """A rail button: open the drawer at its step, or fold the drawer if that step is already shown."""
+        if self.setup_is_open() and self.rail_buttons[key].isChecked() is False:
+            self.set_setup_open(False)
+            return
+        self.set_setup_open(True)
+        for name, button in self.rail_buttons.items():
+            button.setChecked(name == key)
+        widget = self._step_widgets[key]
+        QTimer.singleShot(0, lambda: self._panel_scroll.ensureWidgetVisible(widget, 0, 12))
+
+    # ------------------------------------------------------------- filmstrip of saved runs
+    def _load_filmstrip(self) -> None:
+        """List the open project's saved results in the background, then draw their pictures."""
+        project = current_project(self._facade)
+        if project is None:
+            self._film_for = ""
+            self.filmstrip.set_runs([])
+            return
+        self._film_for = project.id
+        run_task(self, self._facade.list_saved_results,
+                 on_success=lambda results, wanted=project.id: self._on_film_results(wanted, results),
+                 on_error=lambda _exc: self.filmstrip.set_runs([]))
+
+    def _on_film_results(self, project_id: str, results) -> None:
+        if project_id != self._film_for:
+            return  # another project was opened meanwhile
+        shown = list(results)[:FILM_SHOWN]
+        runs = []
+        for result in shown:
+            figure = next(iter(result.metrics.items()), None)
+            caption = ", ".join(result.processes) or result.category
+            if figure is not None:
+                caption += f" {format_value(figure[1])}"
+            runs.append((result.output_path, caption,
+                         f"{result.category}: {', '.join(result.processes)}\n{Path(result.output_path).name}"))
+        self.filmstrip.set_runs(runs)
+        for result in shown:
+            path = result.output_path
+            if path in self._film_pictures:
+                self.filmstrip.set_picture(path, self._film_pictures[path])
+                continue
+            run_task(self, self._facade.get_map_layers, result, FILM_PICTURE,
+                     on_success=lambda layers, path=path: self._on_film_picture(path, layers),
+                     on_error=lambda _exc, path=path: self._on_film_picture(path, []))
+
+    def _on_film_picture(self, path: str, layers) -> None:
+        image = rgba_to_image(layers[0].data) if layers else None
+        self._film_pictures[path] = image
+        self.filmstrip.set_picture(path, image)
 
     # ------------------------------------------------------------- loading
     def showEvent(self, event) -> None:  # noqa: N802 (Qt API)
@@ -544,6 +629,7 @@ class AnalysisView(QWidget):
             downloads = []
         known = {dataset.path for dataset in downloads}
         self.set_datasets(downloads + [d for d in self.opened if d.path not in known])
+        self._load_filmstrip()
 
     def set_datasets(self, datasets: list[DatasetDTO]) -> None:
         previous = self.dataset.path if self.dataset else None
@@ -771,6 +857,8 @@ class AnalysisView(QWidget):
                  and current_project(self._facade) is not None)
         self.run_button.setEnabled(ready)
         self.run_button.setText("Running…" if self.running else "Run analysis")
+        if hasattr(self, "rail_run"):  # the rail's Run mirrors the setup's Run analysis
+            self.rail_run.setEnabled(ready)
 
     def build_request(self) -> AnalysisRequestDTO:
         params = {name: box.value() for name, box in self.param_boxes.items()}
@@ -824,6 +912,7 @@ class AnalysisView(QWidget):
 
     def _on_result(self, result: ResultDTO) -> None:
         self._finish_run()
+        self.set_setup_open(False)  # the result leads; the rail reopens the steps
         if self.result is not None and not self.result.saved:
             self._facade.discard_analysis_result(self.result)  # replaced before it was saved
         self.result = result
@@ -935,6 +1024,7 @@ class AnalysisView(QWidget):
         self.folder_button.setEnabled(True)
         self._show_save_state()
         self.banner.show_success(f"Saved to {result.output_path}")
+        self._load_filmstrip()  # the new saved result joins the filmstrip
 
     def _on_save_failed(self, exc: Exception) -> None:
         self.save_button.setEnabled(True)

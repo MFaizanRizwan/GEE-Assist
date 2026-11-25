@@ -10,10 +10,14 @@ import pytest
 from frontend import appearance, assets
 
 
-def test_every_theme_has_its_own_project_icon():
-    assert assets.APP_ICONS.keys() == appearance.THEMES.keys()
+def test_every_theme_has_a_project_icon():
+    # The original three themes have their own icon; the three-colour themes borrow the light or
+    # dark one that suits their ground.
+    assert assets.APP_ICONS.keys() <= appearance.THEMES.keys()
     assert len(set(assets.APP_ICONS.values())) == len(assets.APP_ICONS)
-    assert all(path.is_file() for path in assets.APP_ICONS.values())
+    assert all(assets.app_icon(name).is_file() for name in appearance.THEMES)
+    assert assets.app_icon("indigo") == assets.APP_ICONS["dark-green"]
+    assert assets.app_icon("bone") == assets.APP_ICONS["light"]
 
 
 def test_tests_use_the_light_icon():

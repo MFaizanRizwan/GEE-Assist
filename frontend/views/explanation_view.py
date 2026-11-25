@@ -33,13 +33,16 @@ from backend.business.facade import IBusinessFacade
 from backend.dto.explanation_dto import ExplanationDTO, ExplanationRequestDTO, RasterMetadataDTO
 from backend.dto.result_dto import ResultDTO
 from backend.exceptions import GeeAssistError
-from frontend import theme, theming
+from frontend import layout_mode, palette, theme, theming
 from frontend.widgets.earth_loader import EarthLoader
+from frontend.widgets.map_area import MapArea
+from frontend.widgets.raster_canvas import rgba_to_image
 from frontend.widgets.form_parts import StatusBanner
 from frontend.widgets.raster_legend import format_value
 from frontend.workers.task_worker import run_task
 
-METADATA_WIDTH = 420
+MAP_SIZE = 1024             # longest side of the result map drawn beside the words
+METADATA_HEIGHT = 220      # the folded-open 'what was sent' panel
 
 def _stylesheet():
     return f"""
@@ -50,6 +53,11 @@ QFrame#ExplanationCard {{ background: {theme.WHITE}; border: 1px solid {theme.BO
 QFrame#ExplanationCard QLabel {{ background: transparent; }}
 QLabel#StepTitle {{ color: {theme.INK}; font-weight: 700; font-size: 10.5pt; }}
 QTextBrowser {{ background: transparent; border: none; color: {theme.TEXT}; }}
+QTextBrowser#MetadataView {{ background: {theme.FIELD_BG}; border: 1px solid {theme.BORDER}; border-radius: 8px; }}
+QPushButton#FoldButton {{
+    background: transparent; border: none; color: {theme.OCEAN}; font-weight: 600; padding: 4px 0; text-align: left;
+}}
+QPushButton#FoldButton:hover {{ color: {theme.OCEAN_DARK}; text-decoration: underline; }}
 """
 
 WAITING_TEXT = "Gemini's explanation appears here."
@@ -84,20 +92,30 @@ class ExplanationView(QWidget):
         self.progress.setMaximumHeight(6)
         self.progress.hide()
 
-        # ---- left: what was analysed, the metadata before and after
-        self.metadata_view = QTextBrowser()
-        self.metadata_view.setOpenLinks(False)
-        metadata_card = QFrame(objectName="ExplanationCard")
-        metadata_card.setFixedWidth(METADATA_WIDTH)
-        left = QVBoxLayout(metadata_card)
+        # ---- left: the analysed result's map, so every claim can be checked against the picture
+        self.map_area = MapArea(dark=layout_mode.is_modern() or palette.IS_DARK)
+        self.map_area.setMinimumHeight(260)
+        self.map_note = QLabel("The result's map appears here.", objectName="Muted")
+        self.map_note.setWordWrap(True)
+        map_card = QFrame(objectName="ExplanationCard")
+        left = QVBoxLayout(map_card)
         left.setContentsMargins(16, 14, 16, 14)
-        left.addWidget(QLabel("What was sent to Gemini", objectName="StepTitle"))
-        left.addWidget(self.metadata_view, 1)
+        left.setSpacing(8)
+        left.addWidget(QLabel("The result", objectName="StepTitle"))
+        left.addWidget(self.map_area, 1)
+        left.addWidget(self.map_note)
 
-        # ---- right: Gemini's explanation
+        # ---- right: Gemini's explanation, with what was sent to Gemini folded beneath it
         self.answer_view = QTextBrowser()
         self.answer_view.setOpenExternalLinks(True)
         self.answer_view.setPlaceholderText(WAITING_TEXT)
+        self.metadata_view = QTextBrowser(objectName="MetadataView")
+        self.metadata_view.setOpenLinks(False)
+        self.metadata_view.setFixedHeight(METADATA_HEIGHT)
+        self.metadata_view.hide()  # folded: the words and the map lead
+        self.fold_button = QPushButton("Show what was sent to Gemini", objectName="FoldButton")
+        self.fold_button.setCheckable(True)
+        self.fold_button.toggled.connect(self._fold_metadata)
         self.sent_label = QLabel(objectName="Muted")
         self.sent_label.setWordWrap(True)
         self.again_button = QPushButton("Explain again", objectName="SecondaryButton")
@@ -116,11 +134,15 @@ class ExplanationView(QWidget):
 
         answer_card = QFrame(objectName="ExplanationCard")
         right = QVBoxLayout(answer_card)
-        right.setContentsMargins(16, 14, 16, 14)
+        right.setContentsMargins(20, 14, 20, 14)
+        right.setSpacing(8)
         right.addWidget(QLabel("Gemini's explanation", objectName="StepTitle"))
         right.addWidget(self.answer_stack, 1)
+        right.addWidget(self.fold_button, 0, Qt.AlignmentFlag.AlignLeft)
+        right.addWidget(self.metadata_view)
+        right.addWidget(self.sent_label)
         buttons = QHBoxLayout()
-        buttons.addWidget(self.sent_label, 1)
+        buttons.addStretch(1)
         for button in (self.again_button, self.copy_button, self.folder_button, self.report_button):
             buttons.addWidget(button)
         right.addLayout(buttons)
@@ -131,9 +153,9 @@ class ExplanationView(QWidget):
         titles.addWidget(self.subtitle)
         header.addLayout(titles, 1)
         header.addWidget(self.back_button, 0, Qt.AlignmentFlag.AlignTop)
-        body = QHBoxLayout()
+        body = QHBoxLayout()  # the map beside the words, each taking half
         body.setSpacing(14)
-        body.addWidget(metadata_card)
+        body.addWidget(map_card, 1)
         body.addWidget(answer_card, 1)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 20, 24, 20)
@@ -162,11 +184,40 @@ class ExplanationView(QWidget):
         self.metadata_view.clear()
         self.answer_view.clear()
         self.sent_label.clear()
+        self._show_map(result)
         self._set_busy(True)
         self.banner.show_info("Saving the result in the project and reading its metadata…")
         run_task(self, self._facade.prepare_explanation, result,
                  on_success=lambda request, run=self._run: self._on_prepared(run, request),
                  on_error=lambda exc, run=self._run: self._on_failed(run, exc))
+
+    def _show_map(self, result: ResultDTO) -> None:
+        """Draw the result's first layer beside the words, in the background."""
+        self.map_area.clear()
+        self.map_note.setText("Drawing the result's map…")
+        run_task(self, self._facade.get_map_layers, result, MAP_SIZE,
+                 on_success=lambda layers, run=self._run: self._on_map(run, layers),
+                 on_error=lambda _exc, run=self._run: self._on_map(run, []))
+
+    def _on_map(self, run: int, layers) -> None:
+        if run != self._run:
+            return  # an earlier explanation's map
+        try:
+            layer = list(layers)[0]
+            self.map_area.set_image(rgba_to_image(layer.data), layer.bounds, layer.width)
+            legend = layer.legend
+            if legend.kind == "scale":
+                self.map_area.show_legend_scale(layer.name, tuple(legend.colours), legend.low, legend.high)
+            elif legend.kind == "classes":
+                self.map_area.show_legend_classes(legend.title or layer.name,
+                                                  list(zip(legend.labels, legend.colours)))
+            self.map_note.setText(f"{layer.name}: the picture Gemini was given, with its legend and scale.")
+        except (IndexError, TypeError, ValueError, AttributeError):
+            self.map_note.setText("The result's map could not be drawn; the explanation is unaffected.")
+
+    def _fold_metadata(self, shown: bool) -> None:
+        self.metadata_view.setVisible(shown)
+        self.fold_button.setText("Hide what was sent to Gemini" if shown else "Show what was sent to Gemini")
 
     def explain_again(self) -> None:
         """Ask Gemini again for the same result (e.g. after an error, or for another wording)."""

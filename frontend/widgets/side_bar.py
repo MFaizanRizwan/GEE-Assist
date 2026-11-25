@@ -194,7 +194,7 @@ class SideButton(QPushButton):
             font.setStyleHint(QFont.StyleHint.Monospace)
             font.setBold(True)
             painter.setFont(font)
-            painter.setPen(QColor(fieldbook.SPINE))
+            painter.setPen(QColor(fieldbook.index_ink()))
             left = 0 if self._compact else ICON_LEFT
             width = self.width() if self._compact else ICON_SIZE
             painter.drawText(QRectF(left, 0, width, self.height()),
