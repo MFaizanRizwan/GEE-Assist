@@ -96,27 +96,36 @@ class LegendOverlay(QFrame):
         self._title = QLabel()
         self._title.setStyleSheet(f"color: {self._muted}; font-size: 8pt; font-weight: 700; letter-spacing: 0.6px;")
         self._layout.addWidget(self._title)
-        self._body = QVBoxLayout()
-        self._body.setSpacing(5)
-        self._layout.addLayout(self._body)
+        self._content: QWidget | None = None   # the bar + range, or the class list
         self.hide()
 
-    def _clear(self) -> None:
-        while self._body.count():
-            item = self._body.takeAt(0)
-            if item.widget() is not None:
-                item.widget().deleteLater()
-            elif item.layout() is not None:
-                inner = item.layout()
-                while inner.count():
-                    sub = inner.takeAt(0)
-                    if sub.widget() is not None:
-                        sub.widget().deleteLater()
+    def _new_content(self) -> QWidget:
+        """Replace the legend's body with a fresh, empty container.
+
+        The old body is hidden at once (``deleteLater`` alone leaves it painted and sized in
+        until the event loop runs). The new one is filled by the caller and shown in
+        ``_finish`` before measuring: Qt only shows a widget added to an already-visible
+        parent later, so measuring it straight away shrank the legend to a clipped stub
+        whenever the symbology changed."""
+        if self._content is not None:
+            self._content.hide()
+            self._layout.removeWidget(self._content)
+            self._content.deleteLater()
+        self._content = QWidget(self)
+        self._content.setStyleSheet("background: transparent;")
+        return self._content
+
+    def _finish(self, visible: bool) -> None:
+        self._layout.addWidget(self._content)
+        self._content.show()
+        self._layout.activate()
+        self.setVisible(visible)
+        self.adjustSize()
 
     def show_classes(self, title: str, rows: list[tuple[str, str]]) -> None:
         self._title.setText(title.upper())
-        self._clear()
-        grid = QGridLayout()
+        grid = QGridLayout(self._new_content())
+        grid.setContentsMargins(0, 0, 0, 0)
         grid.setHorizontalSpacing(8)
         grid.setVerticalSpacing(4)
         for row, (label, colour) in enumerate(rows):
@@ -128,15 +137,15 @@ class LegendOverlay(QFrame):
             grid.addWidget(swatch, row, 0)
             grid.addWidget(name, row, 1)
         grid.setColumnStretch(1, 1)
-        self._body.addLayout(grid)
-        self.setVisible(bool(rows))
-        self.adjustSize()
+        self._finish(bool(rows))
 
     def show_scale(self, title: str, colours: tuple[str, ...], low: float, mid: float, high: float) -> None:
         self._title.setText(title.upper())
-        self._clear()
+        body = QVBoxLayout(self._new_content())
+        body.setContentsMargins(0, 0, 0, 0)
+        body.setSpacing(5)
         bar = _OverlayColourBar(colours, self._dark)
-        self._body.addWidget(bar)
+        body.addWidget(bar)
         ends = QHBoxLayout()
         for value, align in ((low, Qt.AlignmentFlag.AlignLeft), (mid, Qt.AlignmentFlag.AlignHCenter),
                              (high, Qt.AlignmentFlag.AlignRight)):
@@ -144,9 +153,8 @@ class LegendOverlay(QFrame):
             label.setStyleSheet(f"color: {self._ink}; font-size: 8pt;")
             label.setAlignment(align | Qt.AlignmentFlag.AlignVCenter)
             ends.addWidget(label, 1)
-        self._body.addLayout(ends)
-        self.setVisible(True)
-        self.adjustSize()
+        body.addLayout(ends)
+        self._finish(True)
 
 
 class _OverlayColourBar(QWidget):

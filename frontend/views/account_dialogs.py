@@ -46,7 +46,7 @@ class AccountDialog(QDialog):
         )
 
         heading = QLabel(title)
-        heading.setStyleSheet(f"font-family: '{theme.SERIF}'; font-size: 16pt; color: {theme.INK};")
+        heading.setStyleSheet(f"font-family: '{theme.SERIF}'; font-size: 16.2pt; color: {theme.INK};")
         self.subtitle = QLabel(subtitle, objectName="Muted")
         self.subtitle.setWordWrap(True)
         self.banner = Banner()

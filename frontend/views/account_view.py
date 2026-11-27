@@ -182,7 +182,7 @@ class AccountView(QFrame):
         self.photo = PhotoButton(184)
         self.greeting = QLabel(alignment=Qt.AlignmentFlag.AlignCenter)
         self.greeting.setWordWrap(True)
-        theming.styled(self.greeting, lambda: f"font-family: '{theme.SERIF}'; font-size: 17pt; color: {theme.INK};")
+        theming.styled(self.greeting, lambda: f"font-family: '{theme.SERIF}'; font-size: 16.2pt; color: {theme.INK};")
         photo_hint = QLabel("Click the photo to change it", objectName="FieldHint",
                             alignment=Qt.AlignmentFlag.AlignCenter)
         self.photo_menu = QMenu(self)
@@ -207,7 +207,7 @@ class AccountView(QFrame):
         # ---- password (only for accounts that sign in with one)
         self.password_section = QWidget()
         heading = QLabel("Change password")
-        theming.styled(heading, lambda: f"font-family: '{theme.SERIF}'; font-size: 14pt; color: {theme.INK};")
+        theming.styled(heading, lambda: f"font-family: '{theme.SERIF}'; font-size: 12.7pt; color: {theme.INK};")
         intro = QLabel("Type your current password, then the new one twice. It is changed when you save.",
                        objectName="Muted")
         intro.setWordWrap(True)
@@ -437,7 +437,7 @@ class SignupDetailsDialog(QDialog):
         self.setStyleSheet(f"QDialog {{ background: {theme.WHITE}; }}")
 
         title = QLabel("Sign-up details")
-        title.setStyleSheet(f"font-family: '{theme.SERIF}'; font-size: 16pt; color: {theme.INK};")
+        title.setStyleSheet(f"font-family: '{theme.SERIF}'; font-size: 16.2pt; color: {theme.INK};")
         self.values: dict[str, QLabel] = {}
         grid = QGridLayout()
         grid.setHorizontalSpacing(24)

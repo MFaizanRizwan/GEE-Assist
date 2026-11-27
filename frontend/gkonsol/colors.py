@@ -14,7 +14,7 @@ from frontend.gkonsol import text
 
 # Amber for warnings: readable on each theme's terminal background.
 WARNING = {"light": "#9A6700", "dark-green": "#F2C46D", "dark-grey": "#F0C674"}
-FONT_FAMILIES = ("JetBrains Mono", "Cascadia Mono", "Cascadia Code", "Consolas", "Courier New")  # first: bundled
+FONT_FAMILIES = ("IBM Plex Mono", "JetBrains Mono", "Cascadia Mono", "Cascadia Code", "Consolas", "Courier New")  # first: bundled
 FONT_POINT_SIZE = 10
 
 

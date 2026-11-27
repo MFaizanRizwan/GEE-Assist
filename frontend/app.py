@@ -94,7 +94,7 @@ def run() -> int:
     app = QApplication(sys.argv)
     app.setApplicationName("GEE-Assist")
     app.setWindowIcon(QIcon(str(APP_ICON)))
-    load_fonts()  # register the bundled Inter / Space Grotesk families before anything renders
+    load_fonts()  # register the bundled Sora / Work Sans / IBM Plex Mono families before anything renders
     apply_palette(app)  # the chosen theme, whatever colour scheme Windows uses
     apply_theme(app)
     install_wheel_guard(app)  # wheel only edits a field the user has selected

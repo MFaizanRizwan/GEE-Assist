@@ -27,7 +27,7 @@ def brand_row() -> QHBoxLayout:
     icon = QLabel()
     icon.setPixmap(round_logo(46, 2.0))
     name = QLabel("GEE-Assist")
-    theming.styled(name, lambda: f"font-family: '{theme.SERIF}'; font-size: 17pt; color: {theme.INK}; background: transparent;")
+    theming.styled(name, lambda: f"font-family: '{theme.SERIF}'; font-size: 16.2pt; color: {theme.INK}; background: transparent;")
     row = QHBoxLayout()
     row.setSpacing(12)
     row.addWidget(icon)
@@ -45,12 +45,12 @@ class HeroPanel(QFrame):
         headline.setAlignment(Qt.AlignmentFlag.AlignCenter)
         headline.setWordWrap(True)
         headline.setStyleSheet(
-            f"font-family: '{theme.SERIF}'; font-size: 24pt; color: {theme.INK}; background: transparent;"
+            f"font-family: '{theme.SERIF}'; font-size: 26.2pt; color: {theme.INK}; background: transparent;"
         )
         tagline = QLabel("Your conversational gateway to Google Earth Engine.")
         tagline.setAlignment(Qt.AlignmentFlag.AlignCenter)
         tagline.setWordWrap(True)
-        theming.styled(tagline, lambda: f"font-size: 11.5pt; color: {theme.MUTED}; background: transparent;")
+        theming.styled(tagline, lambda: f"font-size: 10pt; color: {theme.MUTED}; background: transparent;")
 
         features = QVBoxLayout()
         features.setSpacing(10)
@@ -90,7 +90,7 @@ class HeroPanel(QFrame):
             f"stop:0 {theme.LEAF}, stop:1 {theme.OCEAN});"
         )
         label = QLabel(text)
-        theming.styled(label, lambda: f"color: {theme.TEXT}; font-size: 10.5pt; background: transparent;")
+        theming.styled(label, lambda: f"color: {theme.TEXT}; font-size: 10pt; background: transparent;")
         row = QHBoxLayout()
         row.setSpacing(12)
         row.addWidget(dot, 0, Qt.AlignmentFlag.AlignVCenter)

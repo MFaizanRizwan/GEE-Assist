@@ -36,7 +36,7 @@ Earth Engine's catalogue and compute, driven from a desktop app with a natural-l
 - Three themes: light, dark blue-green, dark grey. Every layout must work in all three; Layout 3 prioritises the dark themes.
 - Layout 3 is the **power workspace**: dense, fast, many things visible at once, keyboard and terminal friendly.
 - Layout 3 may rename, merge and regroup navigation and recompose every page, but every existing feature and workflow must keep working.
-- Fonts bundled: Space Grotesk (display), Inter (body).
+- Fonts bundled (as on GEE-Assist-Web): Sora (display), Work Sans (body), IBM Plex Mono (figures); golden-ratio type scale.
 
 ## Brand Commitments
 

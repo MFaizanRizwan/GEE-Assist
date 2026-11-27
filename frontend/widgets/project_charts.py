@@ -12,7 +12,7 @@ from PyQt6.QtCore import QPointF, QRectF, Qt
 from PyQt6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPainterPath, QPen
 from PyQt6.QtWidgets import QSizePolicy, QWidget
 
-from frontend import theme
+from frontend import fonts, theme
 
 BAR_HEIGHT = 16
 BAR_GAP = 10
@@ -54,7 +54,7 @@ class CategoryBarChart(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         font = QFont(self.font())
-        font.setPointSizeF(9)
+        font.setPointSizeF(fonts.SM)
         painter.setFont(font)
         metrics = QFontMetrics(font)
         if not self.counts:
@@ -128,7 +128,7 @@ class MetricTrendChart(QWidget):
             painter.setBrush(QColor(theme.FIELD_BG))
             painter.drawRoundedRect(area, 8, 8)
         font = QFont(self.font())
-        font.setPointSizeF(8.5)
+        font.setPointSizeF(fonts.XS)
         painter.setFont(font)
         plot = self.plot_rect()
         left_aligned = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter

@@ -20,6 +20,8 @@ from PyQt6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
     QLabel,
+    QListWidget,
+    QListWidgetItem,
     QPushButton,
     QScrollArea,
     QSlider,
@@ -259,6 +261,7 @@ class _State:
 class SymbologyPanel(QWidget):
     changed = pyqtSignal()                 # the layer should be recoloured from current_rgba()
     opacity_changed = pyqtSignal(float)
+    saved_open_requested = pyqtSignal(str)  # a saved result GeoTIFF (Saved tab) to open in the viewer
 
     def __init__(self, dark: bool = False, parent: QWidget | None = None):
         super().__init__(parent)
@@ -342,7 +345,7 @@ class SymbologyPanel(QWidget):
             ramp_group.addButton(swatch)
             self._ramp_buttons[name] = swatch
             label = QLabel(name)
-            label.setStyleSheet(f"color: {self._p.subtle}; font-size: 7.5pt;")
+            label.setStyleSheet(f"color: {self._p.subtle}; font-size: 8pt;")
             cell = QVBoxLayout()
             cell.setSpacing(2)
             cell.addWidget(swatch)
@@ -373,12 +376,12 @@ class SymbologyPanel(QWidget):
         self.histogram.range_changed.connect(self._on_custom_range)
         box.addWidget(self.histogram)
         self._bounds_label = QLabel()
-        self._bounds_label.setStyleSheet(f"color: {self._p.muted}; font-size: 8.5pt;")
+        self._bounds_label.setStyleSheet(f"color: {self._p.muted}; font-size: 8pt;")
         box.addWidget(self._bounds_label)
 
         box.addWidget(_section("Classification", self._p))
         self._classif_note = QLabel("Continuous")
-        self._classif_note.setStyleSheet(f"color: {self._p.subtle}; font-size: 8.5pt;")
+        self._classif_note.setStyleSheet(f"color: {self._p.subtle}; font-size: 8pt;")
         box.addWidget(self._classif_note)
 
         self.gamma_slider, gamma_box, self.gamma_value = self._slider_row("Gamma", 10, 300, 100)
@@ -457,16 +460,44 @@ class SymbologyPanel(QWidget):
         return self._scroll(page)
 
     def _build_saved_tab(self) -> QWidget:
+        """Every analysis saved in the open project, newest first; click one to open it."""
         page = QWidget()
         box = QVBoxLayout(page)
-        box.setContentsMargins(14, 12, 14, 14)
+        box.setContentsMargins(14, 6, 14, 14)
         box.setSpacing(8)
-        self._saved_label = QLabel("No result saved yet.")
-        self._saved_label.setWordWrap(True)
-        self._saved_label.setStyleSheet(f"color: {self._p.muted}; font-size: 9.5pt;")
-        box.addWidget(self._saved_label)
-        box.addStretch(1)
+        self._saved_count = _section("Saved in this project", self._p)
+        box.addWidget(self._saved_count)
+        self._saved_empty = QLabel("No analysis saved in this project yet. Save a result to keep it here.")
+        self._saved_empty.setWordWrap(True)
+        self._saved_empty.setStyleSheet(f"color: {self._p.muted}; font-size: 9pt;")
+        box.addWidget(self._saved_empty)
+        self.saved_list = QListWidget(objectName="SavedList")
+        self.saved_list.setWordWrap(True)
+        self.saved_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.saved_list.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.saved_list.itemActivated.connect(self._open_saved)
+        self.saved_list.itemClicked.connect(self._open_saved)
+        box.addWidget(self.saved_list, 1)
+        self.set_saved_results([])
         return page
+
+    def set_saved_results(self, rows: list[tuple[str, str, str]]) -> None:
+        """``rows``: (GeoTIFF path, title, detail) of every saved analysis, newest first."""
+        self.saved_list.clear()
+        for path, title, detail in rows:
+            item = QListWidgetItem(f"{title}\n{detail}" if detail else title)
+            item.setData(Qt.ItemDataRole.UserRole, path)
+            item.setToolTip(f"{path}\nClick to open it in the viewer")
+            self.saved_list.addItem(item)
+        count = len(rows)
+        self._saved_count.setText(f"SAVED IN THIS PROJECT · {count}" if count else "SAVED IN THIS PROJECT")
+        self._saved_empty.setVisible(not rows)
+        self.saved_list.setVisible(bool(rows))
+
+    def _open_saved(self, item: QListWidgetItem) -> None:
+        path = item.data(Qt.ItemDataRole.UserRole)
+        if path:
+            self.saved_open_requested.emit(path)
 
     def _slider_row(self, title: str, lo: int, hi: int, value: int, percent: bool = False):
         box = QVBoxLayout()
@@ -539,7 +570,7 @@ class SymbologyPanel(QWidget):
         swatch.setFixedSize(14, 14)
         swatch.setStyleSheet(f"background: {colour}; border-radius: 3px;")
         name = QLabel(label)
-        name.setStyleSheet(f"color: {self._p.ink}; font-weight: 600; font-size: 9.5pt;")
+        name.setStyleSheet(f"color: {self._p.ink}; font-weight: 600; font-size: 9pt;")
         pct = QLabel(f"{fraction * 100:.1f}%")
         pct.setStyleSheet(f"color: {self._p.muted}; font-size: 9pt;")
         eye = QPushButton("\U0001F441", objectName="EyeButton")
@@ -609,15 +640,12 @@ class SymbologyPanel(QWidget):
         layout.setContentsMargins(12, 9, 12, 9)
         layout.setSpacing(2)
         key = QLabel(name.upper())
-        key.setStyleSheet(f"color: {self._p.muted}; font-size: 7.5pt; font-weight: 700; letter-spacing: 0.5px;")
+        key.setStyleSheet(f"color: {self._p.muted}; font-size: 8pt; font-weight: 700; letter-spacing: 0.5px;")
         val = QLabel(value)
-        val.setStyleSheet(f"color: {self._p.ink}; font-size: 14pt; font-weight: 700;")
+        val.setStyleSheet(f"color: {self._p.ink}; font-size: 12.7pt; font-weight: 700;")
         layout.addWidget(key)
         layout.addWidget(val)
         return tile
-
-    def set_saved_text(self, text: str) -> None:
-        self._saved_label.setText(text)
 
     # ------------------------------------------------------------- events
     def _on_ramp(self, name: str) -> None:
@@ -709,7 +737,13 @@ class SymbologyPanel(QWidget):
         return rows
 
     def scale_legend(self) -> tuple[tuple[str, ...], float, float]:
-        colours = symbology.ramp_preview_colours(self.state.ramp, self.state.invert)
+        """The legend's colours from low to high, sampled the way colorize() maps values (ramp,
+        invert and gamma), with the stretch's low and high."""
+        table = symbology.ramp_table(self.state.ramp, self.state.invert)
+        gamma = max(self.state.gamma or 1.0, 1e-6)
+        steps = 9
+        colours = tuple("#%02X%02X%02X" % tuple(table[round((i / (steps - 1)) ** (1.0 / gamma) * 255)])
+                        for i in range(steps))
         return colours, self.state.low, self.state.high
 
     # ------------------------------------------------------------- style
@@ -720,31 +754,40 @@ class SymbologyPanel(QWidget):
         #SymbologyPanel QLabel {{ background: transparent; color: {p.ink}; }}
         QPushButton#SymTab {{
             background: transparent; color: {p.muted}; border: none;
-            border-bottom: 2px solid transparent; padding: 7px 4px; font-weight: 700; font-size: 9.5pt;
+            border-bottom: 2px solid transparent; padding: 7px 4px; font-weight: 700; font-size: 9pt;
         }}
         QPushButton#SymTab:hover {{ color: {p.ink}; }}
         QPushButton#SymTab:checked {{ color: {p.ink}; border-bottom: 2px solid {p.accent}; }}
         QPushButton#SegButton {{
             background: {p.field}; color: {p.muted}; border: 1px solid {p.line};
-            padding: 6px 8px; font-weight: 600; font-size: 8.5pt;
+            padding: 6px 8px; font-weight: 600; font-size: 8pt;
         }}
         QPushButton#SegButton:checked {{ background: {p.card}; color: {p.ink}; border-color: {p.accent}; }}
         QPushButton#ToggleChip {{
             background: {p.field}; color: {p.muted}; border: 1px solid {p.line};
-            border-radius: 7px; padding: 3px 12px; font-size: 8.5pt; font-weight: 600;
+            border-radius: 7px; padding: 3px 12px; font-size: 8pt; font-weight: 600;
         }}
         QPushButton#ToggleChip:checked {{ background: {p.accent}; color: {p.bg}; border-color: {p.accent}; }}
         QFrame#ClassRow, QFrame#StatTile {{
             background: {p.card}; border: 1px solid {p.line}; border-radius: 9px;
         }}
         QFrame#ClassRow QLabel, QFrame#StatTile QLabel {{ background: transparent; }}
-        QPushButton#EyeButton {{ background: transparent; border: none; color: {p.muted}; font-size: 11pt; }}
+        QPushButton#EyeButton {{ background: transparent; border: none; color: {p.muted}; font-size: 10pt; }}
         QPushButton#EyeButton:checked {{ color: {p.accent}; }}
         QPushButton#ResetButton {{
             background: {p.field}; color: {p.ink}; border: 1px solid {p.line};
             border-radius: 9px; padding: 9px 12px; font-weight: 600;
         }}
         QPushButton#ResetButton:hover {{ border-color: {p.accent}; }}
+        QListWidget#SavedList {{
+            background: transparent; border: none; color: {p.ink}; font-size: 9pt; outline: 0;
+        }}
+        QListWidget#SavedList::item {{
+            background: {p.card}; border: 1px solid {p.line}; border-radius: 9px;
+            padding: 8px 10px; margin-bottom: 6px;
+        }}
+        QListWidget#SavedList::item:hover {{ border-color: {p.accent}; }}
+        QListWidget#SavedList::item:selected {{ border-color: {p.accent}; color: {p.ink}; }}
         QScrollArea {{ background: transparent; border: none; }}
         QSlider#SymSlider::groove:horizontal {{ height: 4px; background: {p.line}; border-radius: 2px; }}
         QSlider#SymSlider::sub-page:horizontal {{ background: {p.accent}; border-radius: 2px; }}

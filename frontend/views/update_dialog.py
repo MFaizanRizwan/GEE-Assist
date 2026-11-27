@@ -36,7 +36,7 @@ class UpdateDialog(QDialog):
 
         # Header
         header = QLabel("A new version of GEE-Assist is available!")
-        header.setStyleSheet(f"font-family: '{theme.SERIF}'; font-size: 16pt; font-weight: 600; color: {theme.INK};")
+        header.setStyleSheet(f"font-family: '{theme.SERIF}'; font-size: 16.2pt; font-weight: 600; color: {theme.INK};")
         header.setWordWrap(True)
         layout.addWidget(header)
 
@@ -57,7 +57,7 @@ class UpdateDialog(QDialog):
         # Release notes
         if info.release_notes:
             notes_header = QLabel("Release Notes:")
-            notes_header.setStyleSheet(f"font-weight: 600; color: {theme.INK}; font-size: 11pt;")
+            notes_header.setStyleSheet(f"font-weight: 600; color: {theme.INK}; font-size: 10pt;")
             layout.addWidget(notes_header)
 
             notes_scroll = QScrollArea()

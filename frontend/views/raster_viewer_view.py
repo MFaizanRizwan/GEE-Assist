@@ -46,13 +46,13 @@ HOVER_DELAY_MS = 40   # wait for the pointer to rest a moment before reading val
 def _stylesheet():
     return f"""
 #ViewerPage {{ background: transparent; }}
-QLabel#PageTitle {{ font-family: "{theme.SERIF}"; font-size: 20pt; color: {theme.INK}; }}
+QLabel#PageTitle {{ font-family: "{theme.SERIF}"; font-size: 20.6pt; color: {theme.INK}; }}
 QLabel#PageSubtitle {{ color: {theme.MUTED}; }}
 QFrame#ViewerCanvasCard, QFrame#ViewerPanel {{
     background: {theme.WHITE}; border: 1px solid {theme.BORDER}; border-radius: 12px;
 }}
 QFrame#ViewerPanel QLabel {{ background: transparent; }}
-QLabel#SectionTitle {{ color: {theme.MUTED}; font-size: 8.5pt; font-weight: 600; letter-spacing: 0.5px; }}
+QLabel#SectionTitle {{ color: {theme.MUTED}; font-size: 8pt; font-weight: 600; letter-spacing: 0.5px; }}
 QLabel#Value {{ color: {theme.INK}; }}
 QComboBox {{
     background: {theme.FIELD_BG}; border: 1px solid {theme.BORDER_STRONG}; border-radius: 8px;

@@ -29,7 +29,7 @@ CHOICES: dict[str, tuple[str, str, str]] = {
 def _stylesheet():
     return f"""
 QDialog {{ background: {theme.WHITE}; }}
-QLabel#FeedbackTitle {{ font-family: "{theme.SERIF}"; font-size: 16pt; color: {theme.INK}; }}
+QLabel#FeedbackTitle {{ font-family: "{theme.SERIF}"; font-size: 16.2pt; color: {theme.INK}; }}
 QPushButton#FeedbackChoice {{
     background: {theme.FIELD_BG}; border: 1px solid {theme.BORDER}; border-radius: 10px;
     padding: 12px 14px; text-align: left; color: {theme.INK};

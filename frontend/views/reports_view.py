@@ -36,11 +36,11 @@ from frontend.workers.task_worker import run_task
 def _stylesheet():
     return f"""
 #ReportsPage {{ background: transparent; }}
-QLabel#PageTitle {{ font-family: "{theme.SERIF}"; font-size: 20pt; color: {theme.INK}; }}
+QLabel#PageTitle {{ font-family: "{theme.SERIF}"; font-size: 20.6pt; color: {theme.INK}; }}
 QLabel#PageSubtitle {{ color: {theme.MUTED}; }}
 QFrame#ReportsCard {{ background: {theme.WHITE}; border: 1px solid {theme.BORDER}; border-radius: 12px; }}
 QFrame#ReportsCard QLabel {{ background: transparent; }}
-QLabel#StepTitle {{ color: {theme.INK}; font-weight: 700; font-size: 10.5pt; }}
+QLabel#StepTitle {{ color: {theme.INK}; font-weight: 700; font-size: 10pt; }}
 QListWidget {{
     background: {theme.FIELD_BG}; border: 1px solid {theme.BORDER}; border-radius: 8px; padding: 4px;
     color: {theme.TEXT};

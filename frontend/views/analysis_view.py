@@ -18,6 +18,7 @@ closes. Analyses run in the background with a progress bar.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from PyQt6.QtCore import QBuffer, QIODevice, QSize, Qt, QTimer, QUrl, pyqtSignal
@@ -70,14 +71,13 @@ from frontend.workers.task_worker import run_task
 
 PANEL_WIDTH = 430
 # Responsive layout: on smaller screens (e.g. 1366x768) the setup drawer narrows; once a result
-# exists the drawer folds away so the map leads, and the rail reopens it.
+# exists the drawer folds away so the map leads, and the Setup button reopens it.
 PANEL_WIDTH_COMPACT = 360
 WIDE_PAGE = 1450              # page width from which the dataset panel gets its full width
 SHORT_PAGE = 720              # page height below which the header is compacted
 RESULT_SPACING = 14
 SIDE_WIDTH = 330             # the column beside the map: numbers, symbology, actions
-RAIL_WIDTH = 64              # the setup rail; its drawer is the steps panel
-FILM_SHOWN = 12              # saved results in the filmstrip
+FILM_SHOWN = 12              # saved results of the chosen dataset in the filmstrip
 FILM_PICTURE = 220           # longest side of a filmstrip picture, in pixels
 PROGRESS_POLL_MS = 100
 MAP_IMAGE_SIZE = 1024
@@ -97,26 +97,18 @@ PARAMETERS: dict[str, tuple[str, float, float, float, float, str]] = {
 def _stylesheet():
     return f"""
 #AnalysisPage {{ background: transparent; }}
-QLabel#PageTitle {{ font-family: "{theme.SERIF}"; font-size: 20pt; color: {theme.INK}; }}
+QLabel#PageTitle {{ font-family: "{theme.SERIF}"; font-size: 20.6pt; color: {theme.INK}; }}
 QLabel#PageSubtitle {{ color: {theme.MUTED}; }}
 QFrame#AnalysisPanel, QFrame#ResultCard {{
     background: {theme.WHITE}; border: 1px solid {theme.BORDER}; border-radius: 12px;
 }}
 QFrame#AnalysisPanel QLabel, QFrame#ResultCard QLabel {{ background: transparent; }}
-QFrame#AnalysisRail {{ background: {theme.WHITE}; border: 1px solid {theme.BORDER}; border-radius: 12px; }}
-QPushButton#RailButton {{
-    color: {theme.INK}; background: {theme.WHITE}; border: 1px solid {theme.BORDER_STRONG};
-    border-radius: {accent.BUTTON_RADIUS}px; padding: 8px 0; font-size: 8.5pt; font-weight: 600;
-}}
-QPushButton#RailButton:hover {{ background: {theme.FOAM}; }}
-QPushButton#RailButton:checked {{ border-color: {theme.ACCENT_SOLID}; background: {theme.ACCENT_SOFT}; }}
-QFrame#AnalysisRail QPushButton#PrimaryButton {{ padding: 8px 0; font-size: 8.5pt; }}
 QFrame#FilmTile {{ background: {theme.FIELD_BG}; border: 1px solid {theme.BORDER}; border-radius: 8px; }}
 QFrame#FilmTile:hover {{ border-color: {theme.ACCENT_SOLID}; }}
 QLabel#FilmPicture {{ color: {theme.MUTED}; background: {theme.DISABLED_BG}; border-radius: 4px; }}
 QLabel#FilmCaption {{ color: {theme.TEXT}; font-family: "{fieldbook.MONO}"; font-size: 9pt; }}
-QLabel#StepTitle {{ color: {theme.INK}; font-weight: 700; font-size: 10.5pt; }}
-QLabel#SectionTitle {{ color: {theme.MUTED}; font-size: 8.5pt; font-weight: 600; letter-spacing: 0.5px; }}
+QLabel#StepTitle {{ color: {theme.INK}; font-weight: 700; font-size: 10pt; }}
+QLabel#SectionTitle {{ color: {theme.MUTED}; font-size: 8pt; font-weight: 600; letter-spacing: 0.5px; }}
 QLabel#DeviceLine {{ color: {theme.INK}; font-weight: 600; }}
 QListWidget {{
     background: {theme.FIELD_BG}; border: 1px solid {theme.BORDER}; border-radius: 8px; padding: 4px;
@@ -204,11 +196,6 @@ QFrame#AnalysisPanel, QFrame#ResultCard {{ background: {card}; border: 1px solid
 #AnalysisPage QPushButton#SecondaryButton {{ background: {field}; color: {text}; border: 1px solid {line2}; }}
 #AnalysisPage QPushButton#SecondaryButton:hover {{ background: {accent_soft}; }}
 #AnalysisPage QLabel#SaveState {{ color: {muted}; }}
-QFrame#AnalysisRail {{ background: {card}; border: 1px solid {line}; }}
-#AnalysisPage QPushButton#RailButton {{ background: {field}; color: {text}; border: 1px solid {line2}; }}
-#AnalysisPage QPushButton#RailButton:hover {{ background: {accent_soft}; }}
-#AnalysisPage QPushButton#RailButton:checked {{ border-color: {accent}; background: {accent_soft}; }}
-#AnalysisPage QFrame#AnalysisRail QPushButton#PrimaryButton {{ padding: 8px 0; font-size: 8.5pt; }}
 #AnalysisPage QFrame#FilmTile {{ background: {field}; border: 1px solid {line}; }}
 #AnalysisPage QFrame#FilmTile:hover {{ border-color: {accent}; }}
 #AnalysisPage QLabel#FilmPicture {{ background: {card}; color: {muted}; }}
@@ -235,6 +222,19 @@ def dataset_title(dataset: DatasetDTO) -> str:
     """e.g. "Sentinel-2 · 2024-06-01 to 2024-06-30"."""
     dates = " to ".join(d for d in (dataset.start_date, dataset.end_date) if d)
     return "  ·  ".join(part for part in (dataset.satellite or "Unknown sensor", dates) if part)
+
+
+def same_file(a: str, b: str) -> bool:
+    """Whether two paths name the same file (case and slashes do not matter on Windows)."""
+    if not a or not b:
+        return False
+    return os.path.normcase(os.path.abspath(a)) == os.path.normcase(os.path.abspath(b))
+
+
+def _first_figure(result: ResultDTO) -> str:
+    """The result's first number, formatted (e.g. "0.420"), or "" if it has none."""
+    figure = next(iter(result.metrics.items()), None)
+    return format_value(figure[1]) if figure is not None else ""
 
 
 def device_text(device: ComputeDeviceDTO) -> str:
@@ -394,6 +394,7 @@ class AnalysisView(QWidget):
         self.sym_panel = SymbologyPanel(dark=self._dark)
         self.sym_panel.changed.connect(self._recolor)
         self.sym_panel.opacity_changed.connect(self.map_area.set_opacity)
+        self.sym_panel.saved_open_requested.connect(self.open_in_viewer_requested)
 
         self.metrics_table = QTableWidget(0, 2)
         self.metrics_table.setHorizontalHeaderLabels(("Result", "Value"))
@@ -421,7 +422,13 @@ class AnalysisView(QWidget):
         result_layout = QVBoxLayout(card)
         result_layout.setContentsMargins(16, 14, 16, 14)
         result_layout.setSpacing(8)
+        # Folds the steps panel away so the map leads, or brings it back to change and re-run.
+        self.setup_button = QPushButton("Hide setup", objectName="SecondaryButton")
+        self.setup_button.setCheckable(True)
+        self.setup_button.setToolTip("Show or hide the dataset, analysis and process steps")
+        self.setup_button.clicked.connect(lambda: self.set_setup_open(not self.setup_is_open()))
         top = QHBoxLayout()
+        top.addWidget(self.setup_button)
         top.addWidget(self.result_title, 1)
         top.addWidget(QLabel("Layer", objectName="Muted"))
         top.addWidget(self.layer_box)
@@ -437,7 +444,8 @@ class AnalysisView(QWidget):
         self.filmstrip.open_requested.connect(self.open_in_viewer_requested)
         self._film_for = ""                                  # the project the filmstrip shows
         self._film_pictures: dict[str, object] = {}          # drawn pictures, by GeoTIFF: drawn once
-        result_layout.addWidget(_section("Saved runs"))
+        self._saved: list[ResultDTO] = []                    # every saved result of the project, newest first
+        result_layout.addWidget(_section("Saved runs of this dataset"))
         result_layout.addWidget(self.filmstrip)
 
         # ---- beside the map: its numbers, its symbology, and what to do with the result
@@ -457,36 +465,13 @@ class AnalysisView(QWidget):
             buttons.addWidget(button)
         side_layout.addLayout(buttons)
 
-        # ---- setup: a slim rail; its drawer is the steps panel (open until there is a result)
+        # ---- setup: the steps panel, open until there is a result; the Setup button folds it
         self._panel = panel
         self._result_card = card
         self._side = side
-        rail = QFrame(objectName="AnalysisRail")
-        rail.setFixedWidth(RAIL_WIDTH)
-        rail_layout = QVBoxLayout(rail)
-        rail_layout.setContentsMargins(6, 10, 6, 10)
-        rail_layout.setSpacing(8)
-        self.rail_buttons: dict[str, QPushButton] = {}
-        for key, text, tip in (("data", "Data", "Choose the dataset (step 1)"),
-                               ("type", "Type", "Choose the kind of analysis (step 2)"),
-                               ("steps", "Steps", "Choose the processes and their parameters (step 3)")):
-            button = QPushButton(text, objectName="RailButton")
-            button.setCheckable(True)
-            button.setToolTip(tip)
-            button.setCursor(Qt.CursorShape.PointingHandCursor)
-            button.clicked.connect(lambda _=False, k=key: self.open_setup_at(k))
-            rail_layout.addWidget(button)
-            self.rail_buttons[key] = button
-        self.rail_run = QPushButton("Run", objectName="PrimaryButton")
-        self.rail_run.setToolTip("Run the analysis (the same as Run analysis in the setup)")
-        self.rail_run.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.rail_run.clicked.connect(self.run)
-        rail_layout.addWidget(self.rail_run)
-        rail_layout.addStretch(1)
 
         body = QHBoxLayout()
         body.setSpacing(RESULT_SPACING)
-        body.addWidget(rail)
         body.addWidget(panel)
         body.addWidget(card, 1)
         body.addWidget(side)
@@ -501,10 +486,11 @@ class AnalysisView(QWidget):
         self._arrange_results()
 
         for button in (self.refresh_button, self.browse_button, self.run_button, self.viewer_button,
-                       self.map_button, self.folder_button, self.save_button, self.explain_button):
+                       self.map_button, self.folder_button, self.save_button, self.explain_button,
+                       self.setup_button):
             button.setCursor(Qt.CursorShape.PointingHandCursor)
         for widget in (self.refresh_button, self.browse_button, self.dataset_note, self.category_note,
-                       self.compare_note):
+                       self.compare_note, self.result_title, self.result_info):
             _shrinkable(widget)
         self._progress_timer = QTimer(self)
         self._progress_timer.setInterval(PROGRESS_POLL_MS)
@@ -546,23 +532,11 @@ class AnalysisView(QWidget):
     def set_setup_open(self, open_: bool) -> None:
         """Show or fold the steps drawer. It folds when a result arrives, so the result leads."""
         self._panel.setVisible(open_)
-        if not open_:
-            for button in self.rail_buttons.values():
-                button.setChecked(False)
+        self.setup_button.setChecked(open_)
+        self.setup_button.setText("Hide setup" if open_ else "Show setup")
 
     def setup_is_open(self) -> bool:
         return not self._panel.isHidden()
-
-    def open_setup_at(self, key: str) -> None:
-        """A rail button: open the drawer at its step, or fold the drawer if that step is already shown."""
-        if self.setup_is_open() and self.rail_buttons[key].isChecked() is False:
-            self.set_setup_open(False)
-            return
-        self.set_setup_open(True)
-        for name, button in self.rail_buttons.items():
-            button.setChecked(name == key)
-        widget = self._step_widgets[key]
-        QTimer.singleShot(0, lambda: self._panel_scroll.ensureWidgetVisible(widget, 0, 12))
 
     # ------------------------------------------------------------- filmstrip of saved runs
     def _load_filmstrip(self) -> None:
@@ -570,23 +544,44 @@ class AnalysisView(QWidget):
         project = current_project(self._facade)
         if project is None:
             self._film_for = ""
-            self.filmstrip.set_runs([])
+            self._saved = []
+            self._show_saved()
             return
         self._film_for = project.id
         run_task(self, self._facade.list_saved_results,
                  on_success=lambda results, wanted=project.id: self._on_film_results(wanted, results),
-                 on_error=lambda _exc: self.filmstrip.set_runs([]))
+                 on_error=lambda _exc, wanted=project.id: self._on_film_results(wanted, []))
 
     def _on_film_results(self, project_id: str, results) -> None:
         if project_id != self._film_for:
             return  # another project was opened meanwhile
-        shown = list(results)[:FILM_SHOWN]
+        self._saved = list(results)
+        self._show_saved()
+
+    def _show_saved(self) -> None:
+        """Every saved analysis of the project in the Saved tab; in the filmstrip, only those
+        made from the dataset chosen in step 1."""
+        self.sym_panel.set_saved_results([
+            (result.output_path, f"{result.category}: {', '.join(result.processes)}".strip(": "),
+             "\n".join(part for part in (
+                 (result.dataset.name or result.dataset.satellite) if result.dataset else "",
+                 "  ·  ".join(p for p in (result.created_at[:16].replace("T", " "), _first_figure(result)) if p))
+                 if part))
+            for result in self._saved])
+        if self.dataset is None:
+            shown = []
+            self.filmstrip.set_empty_text("Choose a dataset to see the results saved from it.")
+        else:
+            shown = [r for r in self._saved if r.dataset is not None
+                     and same_file(r.dataset.path, self.dataset.path)][:FILM_SHOWN]
+            self.filmstrip.set_empty_text(f"No saved results from {dataset_title(self.dataset)} yet. "
+                                          "Saved results of this dataset appear here, newest first.")
         runs = []
         for result in shown:
-            figure = next(iter(result.metrics.items()), None)
             caption = ", ".join(result.processes) or result.category
-            if figure is not None:
-                caption += f" {format_value(figure[1])}"
+            figure = _first_figure(result)
+            if figure:
+                caption += f" {figure}"
             runs.append((result.output_path, caption,
                          f"{result.category}: {', '.join(result.processes)}\n{Path(result.output_path).name}"))
         self.filmstrip.set_runs(runs)
@@ -663,7 +658,7 @@ class AnalysisView(QWidget):
 
     def open_file(self, path: str) -> None:
         """Add any GeoTIFF on the computer to the list and choose it (read in the background)."""
-        self.banner.show_info("Reading the file…")
+        self.banner.clear()
         run_task(self, self._facade.describe_dataset, path, on_success=self._on_file_described,
                  on_error=self._show_error)
 
@@ -681,6 +676,7 @@ class AnalysisView(QWidget):
     def choose_dataset(self, dataset: DatasetDTO | None) -> None:
         self.dataset = dataset
         self.options = []
+        self._show_saved()  # the filmstrip follows the chosen dataset
         self._fill_categories()
         self._fill_compare()
         if dataset is None:
@@ -857,8 +853,6 @@ class AnalysisView(QWidget):
                  and current_project(self._facade) is not None)
         self.run_button.setEnabled(ready)
         self.run_button.setText("Running…" if self.running else "Run analysis")
-        if hasattr(self, "rail_run"):  # the rail's Run mirrors the setup's Run analysis
-            self.rail_run.setEnabled(ready)
 
     def build_request(self) -> AnalysisRequestDTO:
         params = {name: box.value() for name, box in self.param_boxes.items()}
@@ -881,12 +875,13 @@ class AnalysisView(QWidget):
         self._progress = 0.0
         self.progress.setValue(0)
         self.progress.show()
-        self.run_loader.set_text("Running analysis…", "Starting…")
+        where = "GPU" if request.use_gpu and self.device is not None and self.device.uses_gpu else "CPU"
+        self._run_label = f"Running analysis on the {where}…"
+        self.banner.clear()  # the turning Earth says it is running; no banner over the page
+        self.run_loader.set_text(self._run_label, "Starting…")
         self.run_stack.setCurrentWidget(self.run_loader)
         self._progress_timer.start()
         self._update_run_button()
-        where = "GPU" if request.use_gpu and self.device is not None and self.device.uses_gpu else "CPU"
-        self.banner.show_info(f"Running {', '.join(request.processes)} on the {where}…")
         run_task(self, self._facade.run_analysis, self.dataset, request, self._set_progress,
                  on_success=self._on_result, on_error=self._on_run_failed)
 
@@ -897,7 +892,7 @@ class AnalysisView(QWidget):
         """On the UI thread (timer): mirror the worker's progress on the bar and the loader."""
         percent = round(self._progress * 100)
         self.progress.setValue(percent)
-        self.run_loader.set_text("Running analysis…", f"{percent}% complete")
+        self.run_loader.set_text(getattr(self, "_run_label", "Running analysis…"), f"{percent}% complete")
 
     def _finish_run(self) -> None:
         self.running = False
@@ -912,15 +907,21 @@ class AnalysisView(QWidget):
 
     def _on_result(self, result: ResultDTO) -> None:
         self._finish_run()
-        self.set_setup_open(False)  # the result leads; the rail reopens the steps
+        self.set_setup_open(False)  # the result leads; "Show setup" brings the steps back
         if self.result is not None and not self.result.saved:
             self._facade.discard_analysis_result(self.result)  # replaced before it was saved
         self.result = result
         self.analysis_finished.emit(result)
         self._show_save_state()
-        self.result_title.setText(f"{result.category}: {', '.join(result.processes)}")
-        parts = [f"{result.device}", f"{result.seconds:.2f} s", Path(result.output_path).name]
+        title = f"{result.category}: {', '.join(result.processes)}"
+        self.result_title.setText(title)
+        self.result_title.setToolTip(title)  # long runs (30 processes) are clipped; the tooltip has it all
+        # A long file name has no spaces to wrap at: let it break after "_" (zero-width space),
+        # or it holds the page wider than the window and pushes the NUMBERS column off screen.
+        name = Path(result.output_path).name.replace("_", "_​")
+        parts = [f"{result.device}", f"{result.seconds:.2f} s", name]
         self.result_info.setText("  ·  ".join(parts) + ("\n" + " ".join(result.notes) if result.notes else ""))
+        self.result_info.setToolTip(result.output_path)
         self._fill_metrics(result.metrics)
         self.banner.show_success(f"Done in {result.seconds:.1f} s on the {result.device}. Drawing the layers…")
         run_task(self, self._facade.get_map_layers, result, on_success=self._on_layers, on_error=self._show_error)

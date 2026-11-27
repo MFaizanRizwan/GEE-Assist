@@ -98,6 +98,10 @@ class RunFilmstrip(QWidget):
         self.empty.setVisible(not runs)
         self._scroll.setVisible(bool(runs))
 
+    def set_empty_text(self, text: str) -> None:
+        """What the strip says when it has no runs to show."""
+        self.empty.setText(text)
+
     def set_picture(self, path: str, image: QImage | None) -> None:
         tile = self.tiles.get(path)
         if tile is not None:

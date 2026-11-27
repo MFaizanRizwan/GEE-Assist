@@ -48,14 +48,14 @@ NONE = "–"   # shown when no download is running
 def _stylesheet():
     return f"""
 #DownloadPage {{ background: transparent; }}
-QLabel#PageTitle {{ font-family: "{theme.SERIF}"; font-size: 20pt; color: {theme.INK}; }}
+QLabel#PageTitle {{ font-family: "{theme.SERIF}"; font-size: 20.6pt; color: {theme.INK}; }}
 QLabel#PageSubtitle {{ color: {theme.MUTED}; }}
 QFrame#StatsCard, QFrame#DownloadSection {{
     background: {theme.WHITE}; border: 1px solid {theme.BORDER}; border-radius: 12px;
 }}
 QFrame#StatsCard QLabel, QFrame#DownloadSection QLabel {{ background: transparent; }}
-QLabel#StatName {{ color: {theme.MUTED}; font-size: 8.5pt; font-weight: 600; letter-spacing: 0.5px; }}
-QLabel#StatValue {{ color: {theme.INK}; font-size: 15pt; }}
+QLabel#StatName {{ color: {theme.MUTED}; font-size: 8pt; font-weight: 600; letter-spacing: 0.5px; }}
+QLabel#StatValue {{ color: {theme.INK}; font-size: 16.2pt; }}
 QLabel#ChunkSetting {{ color: {theme.MUTED}; font-size: 9pt; }}
 QFrame#SectionHeader {{
     border: none; border-bottom: 1px solid {form_theme.HEADER_LINE};
@@ -66,8 +66,8 @@ QFrame#SectionHeader {{
 QLabel#SectionHeaderText {{ color: {theme.INK}; font-weight: 600; letter-spacing: 0.6px; }}
 QToolButton#SectionToggle {{ border: none; background: transparent; padding: 2px; }}
 QFrame#JobRow {{ border: none; border-top: 1px solid {theme.BORDER}; background: transparent; }}
-QLabel#SatelliteIcon {{ font-family: "Segoe UI Emoji"; font-size: 20pt; }}
-QLabel#JobTitle {{ color: {theme.INK}; font-size: 11pt; }}
+QLabel#SatelliteIcon {{ font-family: "Segoe UI Emoji"; font-size: 20.6pt; }}
+QLabel#JobTitle {{ color: {theme.INK}; font-size: 10pt; }}
 QLabel#JobStatus {{ color: {theme.INK}; font-weight: 600; letter-spacing: 0.4px; }}
 QLabel#JobEta, QLabel#JobSize, QLabel#JobWhen {{ color: {theme.TEXT}; }}
 QLabel#JobError {{ color: {theme.ERROR}; font-size: 9pt; }}
@@ -79,13 +79,13 @@ QProgressBar#JobProgress::chunk {{
 QProgressBar#JobProgress[state="paused"]::chunk {{ background: {theme.PROGRESS_PAUSED}; }}
 QProgressBar#JobProgress[state="failed"]::chunk {{ background: {theme.PROGRESS_FAILED}; }}
 QPushButton#OpenButton {{
-    color: {theme.ACCENT_TEXT}; font-size: 11pt; border: none; border-radius: 6px; padding: 0;
+    color: {theme.ACCENT_TEXT}; font-size: 10pt; border: none; border-radius: 6px; padding: 0;
     background: {theme.ACCENT_SOLID};
 }}
 QPushButton#OpenButton:hover {{ background: {theme.ACCENT_SOLID_HOVER}; }}
 QPushButton#ViewButton {{
     color: {theme.INK}; background: {theme.WHITE}; border: 1px solid {theme.BORDER_STRONG};
-    border-radius: 6px; padding: 0 14px; font-size: 9.5pt;
+    border-radius: 6px; padding: 0 14px; font-size: 9pt;
 }}
 QPushButton#ViewButton:hover {{ background: {theme.FOAM}; border-color: {theme.BORDER_HOVER}; }}
 QPushButton#ViewButton:disabled {{ color: {theme.SUBTLE}; border-color: {theme.BORDER}; }}
@@ -148,15 +148,15 @@ def _modern_stylesheet():
 
 /* ---- header ---- */
 QLabel#PageEyebrow {{ color: {MC['muted']}; font-family: "{MONO}"; font-size: 8pt; letter-spacing: 1.5px; }}
-QLabel#PageTitle {{ color: {MC['ink']}; font-family: "{theme.SANS}"; font-size: 18pt; font-weight: 700; }}
-QLabel#PageSubtitle {{ color: {MC['muted']}; font-size: 9.5pt; }}
+QLabel#PageTitle {{ color: {MC['ink']}; font-family: "{theme.SANS}"; font-size: 20.6pt; font-weight: 700; }}
+QLabel#PageSubtitle {{ color: {MC['muted']}; font-size: 9pt; }}
 
 /* ---- cards ---- */
 QFrame#StatsCard, QFrame#DownloadSection {{
     background: {MC['card']}; border: 1px solid {MC['border']}; border-radius: 10px;
 }}
 QFrame#StatsCard QLabel, QFrame#DownloadSection QLabel {{ background: transparent; }}
-QLabel#CardTitle {{ color: {MC['ink']}; font-weight: 700; font-size: 10.5pt; }}
+QLabel#CardTitle {{ color: {MC['ink']}; font-weight: 700; font-size: 10pt; }}
 QLabel#LiveDot {{ color: {MC['accent']}; font-size: 10pt; }}
 
 /* ---- left column: Source dataset and Transfer settings ---- */
@@ -164,9 +164,9 @@ QFrame#SideCard {{ background: {MC['card']}; border: 1px solid {MC['border']}; b
 QFrame#SideCard QLabel {{ background: transparent; }}
 QFrame#SourceHero {{ background: {MC['field']}; border: 1px solid {MC['border']}; border-radius: 8px; }}
 QLabel#SourceSub {{ color: {MC['muted']}; font-family: "{MONO}"; font-size: 8pt; }}
-QLabel#SourceValue {{ color: {MC['ink']}; font-family: "{MONO}"; font-size: 9.5pt; }}
+QLabel#SourceValue {{ color: {MC['ink']}; font-family: "{MONO}"; font-size: 9pt; }}
 QLabel#SourceTotal {{ color: {MC['ink']}; font-family: "{MONO}"; font-size: 10pt; font-weight: 700; }}
-QLabel#Coordinates {{ color: {MC['text']}; font-family: "{MONO}"; font-size: 8.5pt; background: transparent; }}
+QLabel#Coordinates {{ color: {MC['text']}; font-family: "{MONO}"; font-size: 8pt; background: transparent; }}
 QScrollArea#CoordinateList {{ background: {MC['field']}; border: 1px solid {MC['border']}; border-radius: 8px; }}
 QScrollArea#CoordinateList > QWidget > QWidget {{ background: {MC['field']}; }}
 QScrollArea#CoordinateList QLabel#Coordinates {{ padding: 8px 10px; }}
@@ -177,13 +177,13 @@ QFrame#StatTiles {{ background: transparent; border: none; border-top: 1px solid
     border-bottom: 1px solid {MC['border']}; border-radius: 0; }}
 QFrame#StatTile {{ background: transparent; border: none; border-right: 1px solid {MC['border']}; border-radius: 0; }}
 QFrame#StatTile[last="true"] {{ border-right: none; }}
-QLabel#StatName {{ color: {MC['muted']}; font-family: "{MONO}"; font-size: 7.5pt; letter-spacing: 1px; }}
-QLabel#StatValue {{ color: {MC['ink']}; font-family: "{MONO}"; font-size: 14pt; }}
+QLabel#StatName {{ color: {MC['muted']}; font-family: "{MONO}"; font-size: 8pt; letter-spacing: 1px; }}
+QLabel#StatValue {{ color: {MC['ink']}; font-family: "{MONO}"; font-size: 12.7pt; }}
 
 /* ---- chart legend and chunk setting ---- */
 QLabel#LegendSpeed {{ color: {MC['accent_text']}; font-size: 9pt; }}
 QLabel#LegendAverage {{ color: {MC['second']}; font-size: 9pt; }}
-QLabel#ChartCaption {{ color: {MC['subtle']}; font-family: "{MONO}"; font-size: 7.5pt; letter-spacing: 1px; }}
+QLabel#ChartCaption {{ color: {MC['subtle']}; font-family: "{MONO}"; font-size: 8pt; letter-spacing: 1px; }}
 QLabel#ChunkSetting {{ color: {MC['text']}; font-family: "{MONO}"; font-size: 9pt; }}
 
 /* ---- buttons ---- */
@@ -215,9 +215,9 @@ QWidget#SectionBody {{ background: transparent; }}
 #DownloadPage QLabel#Muted {{ color: {MC['muted']}; }}
 QFrame#JobRow {{ border: none; border-top: 1px solid {MC['border']}; border-radius: 0; background: transparent; }}
 QFrame#JobRow:hover {{ background: {MC['field']}; }}
-QLabel#SatelliteIcon {{ font-family: "Segoe UI Emoji"; font-size: 16pt; }}
+QLabel#SatelliteIcon {{ font-family: "Segoe UI Emoji"; font-size: 16.2pt; }}
 QLabel#JobTitle {{ color: {MC['ink']}; font-size: 10pt; font-weight: 700; }}
-QLabel#JobStatus {{ color: {MC['accent_text']}; font-family: "{MONO}"; font-size: 8.5pt; letter-spacing: 0.6px; }}
+QLabel#JobStatus {{ color: {MC['accent_text']}; font-family: "{MONO}"; font-size: 8pt; letter-spacing: 0.6px; }}
 QLabel#JobStatus[state="paused"], QLabel#JobStatus[state="queued"] {{ color: {MC['muted']}; }}
 QLabel#JobStatus[state="failed"] {{ color: {MC['error']}; }}
 QLabel#JobEta, QLabel#JobSize, QLabel#JobWhen {{ color: {MC['text']}; font-family: "{MONO}"; font-size: 9pt; }}
@@ -229,7 +229,7 @@ QProgressBar#JobProgress[state="failed"]::chunk {{ background: {MC['failed']}; }
 
 /* ---- footer ---- */
 QFrame#DownloadFooter {{ background: {MC['page']}; border-top: 1px solid {MC['border']}; }}
-QLabel#FooterText {{ color: {MC['muted']}; font-size: 8.5pt; }}
+QLabel#FooterText {{ color: {MC['muted']}; font-size: 8pt; }}
 
 /* ---- scrollbars ---- */
 #DownloadPage QScrollBar:vertical {{ background: transparent; width: 10px; margin: 2px; }}

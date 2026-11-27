@@ -27,7 +27,7 @@ from frontend import theming
 def _stylesheet():
     return f"""
 QDialog {{ background: {theme.WHITE}; }}
-QLabel#PickerTitle {{ font-family: "{theme.SERIF}"; font-size: 16pt; color: {theme.INK}; }}
+QLabel#PickerTitle {{ font-family: "{theme.SERIF}"; font-size: 16.2pt; color: {theme.INK}; }}
 QListWidget {{
     background: {theme.FIELD_BG}; border: 1px solid {theme.BORDER}; border-radius: 8px; padding: 4px;
     color: {theme.TEXT};

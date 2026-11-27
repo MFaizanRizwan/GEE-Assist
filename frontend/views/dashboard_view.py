@@ -36,7 +36,7 @@ from PyQt6.QtWidgets import (
 from backend.dto.project_dto import AnalysisRecordDTO, ProjectDTO
 from backend.dto.user_dto import UserDTO
 from backend.business.facade import IBusinessFacade
-from frontend import accent, fieldbook, theme, theming
+from frontend import accent, fieldbook, fonts, theme, theming
 from frontend.widgets.project_charts import CategoryBarChart, MetricTrendChart
 from frontend.widgets.raster_canvas import rgba_to_image
 from frontend.widgets.result_gallery import ResultGallery
@@ -57,14 +57,14 @@ QFrame#DashboardPanel {{
     border: 1px solid {theme.BORDER};
     border-radius: 16px;
 }}
-QLabel#SectionTitle {{ color: {theme.INK}; font-weight: 600; font-size: 10.5pt; }}
+QLabel#SectionTitle {{ color: {theme.INK}; font-weight: 600; font-size: 10pt; }}
 QLabel#Overline {{ color: {theme.MUTED}; font-size: 8pt; font-weight: 600; letter-spacing: 1px; }}
-QLabel#ProjectName {{ font-family: "{theme.SERIF}"; font-size: 18pt; color: {theme.INK}; }}
+QLabel#ProjectName {{ font-family: "{theme.SERIF}"; font-size: 20.6pt; color: {theme.INK}; }}
 QLabel#ItemTitle {{ color: {theme.INK}; font-weight: 600; }}
 QLabel#ItemText {{ color: {theme.TEXT}; font-size: 9pt; }}
 QFrame#GlanceTile {{ background: {theme.FOAM}; border: 1px solid {theme.BORDER}; border-radius: 10px; }}
-QLabel#GlanceValue {{ font-family: "{theme.SERIF}"; font-size: 20pt; color: {theme.INK}; }}
-QLabel#ItemPath, QLabel#ItemMeta {{ color: {theme.MUTED}; font-size: 8.5pt; }}
+QLabel#GlanceValue {{ font-family: "{theme.SERIF}"; font-size: 20.6pt; color: {theme.INK}; }}
+QLabel#ItemPath, QLabel#ItemMeta {{ color: {theme.MUTED}; font-size: 8pt; }}
 QFrame#RecentProject {{
     background: {theme.FOAM}; border: 1px solid {theme.BORDER}; border-radius: 8px;
 }}
@@ -620,7 +620,7 @@ class DashboardView(QWidget):
         figure and where it ran. Figures are right-aligned in the book's measurement face."""
         table = self.results_table
         table.setRowCount(len(records))
-        mono = QFont(fieldbook.MONO, 9)
+        mono = QFont(fieldbook.MONO, fonts.SM)
         left = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
         right = Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
         for row, record in enumerate(records):

@@ -54,8 +54,8 @@ def _apply_colors() -> None:
 
 _apply_colors()
 
-SERIF = fonts.DISPLAY   # headings (Space Grotesk)
-SANS = fonts.BODY       # body / controls (Inter)
+SERIF = fonts.DISPLAY   # headings (Sora)
+SANS = fonts.BODY       # body / controls (Work Sans)
 WARNING = fonts.WARNING # banners / field errors
 
 _ICONS = Path(__file__).resolve().parent / "resources" / "icons"
@@ -122,7 +122,7 @@ def _form_stylesheet():
 QToolTip {{ background: {WHITE}; color: {INK}; border: 1px solid {BORDER}; padding: 4px 6px; }}
 
 /* ---- page heading (same look as the sign-in card title) ---- */
-#ParameterForm QLabel#PageTitle {{ font-family: "{SERIF}"; font-size: 20pt; color: {INK}; }}
+#ParameterForm QLabel#PageTitle {{ font-family: "{SERIF}"; font-size: 20.6pt; color: {INK}; }}
 #ParameterForm QLabel#PageSubtitle {{ color: {MUTED}; font-size: 10pt; }}
 
 /* ---- section cards: white card, serif title + muted subtitle, thin divider ---- */
@@ -134,20 +134,20 @@ QFrame#SectionCard {{
 QFrame#SectionCard QWidget {{ background: transparent; }}
 #ParameterForm QLabel#SectionTitle {{
     font-family: "{SERIF}";
-    font-size: 13.5pt;
+    font-size: 12.7pt;
     color: {INK};
 }}
 #ParameterForm QLabel#SectionSubtitle {{ color: {MUTED}; font-size: 9pt; }}
 #ParameterForm QFrame#Divider {{ background: {BORDER}; border: none; }}
 
 /* ---- field labels / hints / errors (sign-in FormField style) ---- */
-#ParameterForm QLabel#FieldLabel {{ color: {INK}; font-weight: 600; font-size: 9.5pt; }}
-#ParameterForm QLabel#FieldHint {{ color: {SUBTLE}; font-size: 8.5pt; }}
-#ParameterForm QLabel#FieldError {{ color: {ERROR}; font-family: "{WARNING}"; font-size: 8.5pt; }}
+#ParameterForm QLabel#FieldLabel {{ color: {INK}; font-weight: 600; font-size: 9pt; }}
+#ParameterForm QLabel#FieldHint {{ color: {SUBTLE}; font-size: 8pt; }}
+#ParameterForm QLabel#FieldError {{ color: {ERROR}; font-family: "{WARNING}"; font-size: 8pt; }}
 
 /* ---- status banners in the action bar ---- */
 QLabel#ErrorBanner, QLabel#SuccessBanner, QLabel#InfoBanner {{
-    border-radius: 8px; padding: 7px 12px; font-size: 9.5pt;
+    border-radius: 8px; padding: 7px 12px; font-size: 9pt;
     font-family: "{WARNING}"; font-weight: 600;
 }}
 QLabel#ErrorBanner {{ background: {ERROR_BG}; color: {ERROR}; border: 1px solid {ERROR_BORDER}; }}
@@ -308,14 +308,14 @@ QPushButton:hover {{ background: {FOAM}; border-color: {BORDER_HOVER}; }}
 QPushButton:pressed {{ background: {MINT}; }}
 QPushButton:disabled {{ color: {SUBTLE}; border-color: {BORDER}; }}
 QPushButton#PrimaryButton {{
-    color: {ACCENT_TEXT}; border: none; padding: 9px 22px; border-radius: {accent.BUTTON_RADIUS}px; font-size: 10.5pt;
+    color: {ACCENT_TEXT}; border: none; padding: 9px 22px; border-radius: {accent.BUTTON_RADIUS}px; font-size: 10pt;
     background: {ACCENT_SOLID};
 }}
 QPushButton#PrimaryButton:hover {{ background: {ACCENT_SOLID_HOVER}; }}
 QPushButton#PrimaryButton:pressed {{ background: {ACCENT_SOLID_HOVER}; padding-top: 10px; padding-bottom: 8px; }}
 QPushButton#SecondaryButton {{
     color: {INK}; background: {WHITE}; border: 1px solid {BORDER_STRONG};
-    border-radius: {accent.BUTTON_RADIUS}px; padding: 8px 18px; font-size: 10.5pt;
+    border-radius: {accent.BUTTON_RADIUS}px; padding: 8px 18px; font-size: 10pt;
 }}
 QPushButton#SecondaryButton:hover {{ background: {FOAM}; border-color: {INK}; }}
 QPushButton#SecondaryButton:pressed {{ background: {MINT}; }}
@@ -324,7 +324,7 @@ QPushButton#SecondaryButton:pressed {{ background: {MINT}; }}
 #FormActionBar {{ background: {WHITE}; border-top: 1px solid {BORDER}; }}
 
 /* ---- query assistant (side panel) ---- */
-#QueryAssistant QLabel#FieldHint {{ color: {SUBTLE}; font-size: 8.5pt; }}
+#QueryAssistant QLabel#FieldHint {{ color: {SUBTLE}; font-size: 8pt; }}
 QPushButton#AssistantButton {{
     border: none; border-radius: 29px; padding: 0;
     background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {ACCENT_FROM}, stop:1 {ACCENT_TO});
@@ -337,10 +337,10 @@ QPushButton#AssistantButton:checked {{
 }}
 QFrame#AssistantPanel {{ background: {WHITE}; border: 1px solid {BORDER}; border-radius: 12px; }}
 QFrame#AssistantPanel QLabel {{ background: transparent; }}
-QLabel#AssistantTitle {{ font-family: "{SERIF}"; font-size: 13.5pt; color: {INK}; }}
+QLabel#AssistantTitle {{ font-family: "{SERIF}"; font-size: 12.7pt; color: {INK}; }}
 QPushButton#AssistantClose {{
     border: none; background: transparent; color: {MUTED};
-    font-size: 11pt; font-weight: 600; padding: 2px 6px; border-radius: 6px;
+    font-size: 10pt; font-weight: 600; padding: 2px 6px; border-radius: 6px;
 }}
 QPushButton#AssistantClose:hover {{ color: {INK}; background: {FOAM}; }}
 QPushButton#AssistantLink {{
@@ -466,14 +466,14 @@ def _modern_form_stylesheet():
 #ModernPanel QWidget {{ color: {M_TEXT}; }}
 
 /* ---- panel header ---- */
-QLabel#ModernPanelTitle {{ font-family: "{SERIF}"; font-size: 17pt; color: {M_INK}; }}
+QLabel#ModernPanelTitle {{ font-family: "{SERIF}"; font-size: 16.2pt; color: {M_INK}; }}
 QLabel#ModernPanelSubtitle {{ color: {M_MUTED}; font-size: 9pt; }}
 
 /* ---- tab strip (Area · Data · Time · Output) ---- */
 QPushButton#ModernTab {{
     color: {M_MUTED}; background: transparent; border: none;
     border-bottom: 2px solid transparent; border-radius: 0;
-    padding: 9px 10px; font-weight: 600; font-size: 9.5pt;
+    padding: 9px 10px; font-weight: 600; font-size: 9pt;
 }}
 QPushButton#ModernTab:hover {{ color: {M_TEXT}; background: {M_ACCENT_SOFT}; }}
 QPushButton#ModernTab:checked {{ color: {M_ACCENT}; border-bottom: 2px solid {M_ACCENT}; }}
@@ -488,11 +488,11 @@ QPushButton#ModernTab[state="error"]:checked {{ border-bottom: 2px solid {M_ERRO
 /* ---- cards blend into the dark panel ---- */
 #ModernPanel QFrame#SectionCard {{ background: transparent; border: none; border-radius: 0; }}
 #ModernPanel QFrame#SectionCard QWidget {{ background: transparent; }}
-#ModernPanel QLabel#SectionTitle {{ font-family: "{SERIF}"; font-size: 13pt; color: {M_INK}; }}
-#ModernPanel QLabel#SectionSubtitle {{ color: {M_MUTED}; font-size: 8.5pt; }}
+#ModernPanel QLabel#SectionTitle {{ font-family: "{SERIF}"; font-size: 12.7pt; color: {M_INK}; }}
+#ModernPanel QLabel#SectionSubtitle {{ color: {M_MUTED}; font-size: 8pt; }}
 #ModernPanel QFrame#Divider {{ background: {M_BORDER}; }}
-#ModernPanel QLabel#FieldLabel {{ color: {M_INK}; font-weight: 600; font-size: 9.5pt; }}
-#ModernPanel QLabel#FieldHint {{ color: {M_SUBTLE}; font-size: 8.5pt; }}
+#ModernPanel QLabel#FieldLabel {{ color: {M_INK}; font-weight: 600; font-size: 9pt; }}
+#ModernPanel QLabel#FieldHint {{ color: {M_SUBTLE}; font-size: 8pt; }}
 #ModernPanel QLabel {{ color: {M_TEXT}; }}
 
 /* ---- inputs ---- */
@@ -539,7 +539,7 @@ QPushButton#ModernTab[state="error"]:checked {{ border-bottom: 2px solid {M_ERRO
 /* ---- footer with the Run analysis button ---- */
 #ModernFooter {{ background: {M_BG}; border-top: 1px solid {M_BORDER}; }}
 #ModernFooter QPushButton#PrimaryButton {{
-    color: {ACCENT_TEXT}; border: none; border-radius: {accent.BUTTON_RADIUS}px; padding: 10px 22px; font-size: 10.5pt; font-weight: 700;
+    color: {ACCENT_TEXT}; border: none; border-radius: {accent.BUTTON_RADIUS}px; padding: 10px 22px; font-size: 10pt; font-weight: 700;
     background: {M_ACCENT};
 }}
 #ModernFooter QPushButton#PrimaryButton:hover {{ background: {M_ACCENT_DK}; }}
@@ -615,9 +615,9 @@ def _fb():
 def _studio_form_stylesheet():
     return f"""
 /* ---- header ---- */
-#ParameterForm QLabel#StudioTitle {{ font-family: "{SERIF}"; font-size: 21pt; color: {INK}; }}
+#ParameterForm QLabel#StudioTitle {{ font-family: "{SERIF}"; font-size: 20.6pt; color: {INK}; }}
 #ParameterForm QLabel#StudioSubtitle {{ color: {MUTED}; font-size: 10pt; }}
-#ParameterForm QLabel#StudioStepTitle {{ font-family: "{SERIF}"; font-size: 15pt; color: {INK}; }}
+#ParameterForm QLabel#StudioStepTitle {{ font-family: "{SERIF}"; font-size: 16.2pt; color: {INK}; }}
 
 /* ---- the form's index: field-book tabs (Area, Data, Time, Output) ---- */
 #StudioRail {{ background: transparent; border-right: 1px solid {BORDER}; }}
@@ -625,7 +625,7 @@ def _studio_form_stylesheet():
 QPushButton#StudioNav {{
     text-align: left; color: {TEXT}; background: transparent;
     border: 1px solid transparent; border-radius: {accent.BUTTON_RADIUS}px;
-    padding: 10px 14px; font-weight: 600; font-size: 10.5pt;
+    padding: 10px 14px; font-weight: 600; font-size: 10pt;
 }}
 QPushButton#StudioNav:hover {{ background: {FOAM}; color: {INK}; }}
 QPushButton#StudioNav:checked {{ color: {INK}; background: {WHITE}; border: 1px solid {_fb().SPINE}; }}
@@ -642,7 +642,7 @@ QPushButton#StudioNav[state="error"] {{ color: {ERROR}; }}
 /* ---- signature accent: primary / segmented / assistant buttons go indigo→violet ---- */
 #ParameterForm QPushButton#PrimaryButton, #StudioFooter QPushButton#PrimaryButton {{
     color: {S_ACCENT_TEXT}; border: none; padding: 10px 24px; border-radius: 10px;
-    font-size: 10.5pt; font-weight: 700;
+    font-size: 10pt; font-weight: 700;
     background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {S_ACCENT_FROM}, stop:1 {S_ACCENT_TO});
 }}
 #ParameterForm QPushButton#PrimaryButton:hover, #StudioFooter QPushButton#PrimaryButton:hover {{

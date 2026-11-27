@@ -30,7 +30,7 @@ class ThemeChoiceDialog(QDialog):
         self.setStyleSheet(f"QDialog {{ background: {theme.WHITE}; }}")
 
         title = QLabel("Choose a theme")
-        title.setStyleSheet(f"font-family: '{theme.SERIF}'; font-size: 16pt; color: {theme.INK};")
+        title.setStyleSheet(f"font-family: '{theme.SERIF}'; font-size: 16.2pt; color: {theme.INK};")
         hint = QLabel("You can change it later in View → Theme.", objectName="Muted")
 
         self.options: dict[str, QRadioButton] = {}

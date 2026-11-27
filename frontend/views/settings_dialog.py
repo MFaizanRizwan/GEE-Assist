@@ -135,7 +135,7 @@ class SettingsDialog(QDialog):
         )
 
         heading = QLabel("Set up GEE-Assist" if first_run else "Settings")
-        heading.setStyleSheet(f"font-family: '{theme.SERIF}'; font-size: 16pt; color: {theme.INK};")
+        heading.setStyleSheet(f"font-family: '{theme.SERIF}'; font-size: 16.2pt; color: {theme.INK};")
         intro = QLabel(
             "GEE-Assist uses your own Google Earth Engine project to download datasets and your own Gemini "
             "API key to understand requests written in plain language. Enter both to start; you can change "

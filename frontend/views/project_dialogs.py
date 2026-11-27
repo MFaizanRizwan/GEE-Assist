@@ -46,7 +46,7 @@ class ProjectDialog(QDialog):
         self.setStyleSheet(f"QDialog {{ background: {theme.WHITE}; }}")
 
         heading = QLabel(title)
-        heading.setStyleSheet(f"font-family: '{theme.SERIF}'; font-size: 16pt; color: {theme.INK};")
+        heading.setStyleSheet(f"font-family: '{theme.SERIF}'; font-size: 16.2pt; color: {theme.INK};")
         intro = QLabel(subtitle, objectName="Muted")
         intro.setWordWrap(True)
         self.banner = Banner()

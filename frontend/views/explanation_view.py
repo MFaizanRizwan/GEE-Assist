@@ -21,7 +21,6 @@ from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
-    QProgressBar,
     QPushButton,
     QStackedWidget,
     QTextBrowser,
@@ -47,11 +46,11 @@ METADATA_HEIGHT = 220      # the folded-open 'what was sent' panel
 def _stylesheet():
     return f"""
 #ExplanationPage {{ background: transparent; }}
-QLabel#PageTitle {{ font-family: "{theme.SERIF}"; font-size: 20pt; color: {theme.INK}; }}
+QLabel#PageTitle {{ font-family: "{theme.SERIF}"; font-size: 20.6pt; color: {theme.INK}; }}
 QLabel#PageSubtitle {{ color: {theme.MUTED}; }}
 QFrame#ExplanationCard {{ background: {theme.WHITE}; border: 1px solid {theme.BORDER}; border-radius: 12px; }}
 QFrame#ExplanationCard QLabel {{ background: transparent; }}
-QLabel#StepTitle {{ color: {theme.INK}; font-weight: 700; font-size: 10.5pt; }}
+QLabel#StepTitle {{ color: {theme.INK}; font-weight: 700; font-size: 10pt; }}
 QTextBrowser {{ background: transparent; border: none; color: {theme.TEXT}; }}
 QTextBrowser#MetadataView {{ background: {theme.FIELD_BG}; border: 1px solid {theme.BORDER}; border-radius: 8px; }}
 QPushButton#FoldButton {{
@@ -86,11 +85,6 @@ class ExplanationView(QWidget):
         self.subtitle.setWordWrap(True)
         self.back_button = QPushButton("← Back to analysis", objectName="SecondaryButton")
         self.banner = StatusBanner()
-        self.progress = QProgressBar(objectName="BusyBar")
-        self.progress.setRange(0, 0)  # busy, no percentage
-        self.progress.setTextVisible(False)
-        self.progress.setMaximumHeight(6)
-        self.progress.hide()
 
         # ---- left: the analysed result's map, so every claim can be checked against the picture
         self.map_area = MapArea(dark=layout_mode.is_modern() or palette.IS_DARK)
@@ -162,7 +156,6 @@ class ExplanationView(QWidget):
         layout.setSpacing(10)
         layout.addLayout(header)
         layout.addWidget(self.banner)
-        layout.addWidget(self.progress)
         layout.addLayout(body, 1)
 
         for button in (self.back_button, self.again_button, self.copy_button, self.folder_button,
@@ -186,7 +179,7 @@ class ExplanationView(QWidget):
         self.sent_label.clear()
         self._show_map(result)
         self._set_busy(True)
-        self.banner.show_info("Saving the result in the project and reading its metadata…")
+        self.banner.clear()
         run_task(self, self._facade.prepare_explanation, result,
                  on_success=lambda request, run=self._run: self._on_prepared(run, request),
                  on_error=lambda exc, run=self._run: self._on_failed(run, exc))
@@ -242,9 +235,7 @@ class ExplanationView(QWidget):
 
     def _send(self, request: ExplanationRequestDTO) -> None:
         self._set_busy(True)
-        previews = len(request.previews)
-        self.banner.show_info(f"Sending {Path(request.tif_path).name}, {previews} layer preview"
-                              f"{'s' if previews != 1 else ''} and the metadata to Gemini…")
+        self.banner.clear()
         run_task(self, self._facade.explain_analysis_result, request,
                  on_success=lambda explanation, run=self._run: self._on_explained(run, explanation),
                  on_error=lambda exc, run=self._run: self._on_failed(run, exc))
@@ -259,7 +250,7 @@ class ExplanationView(QWidget):
         if explanation.saved_path:
             self.banner.show_success(f"Explanation saved to {explanation.saved_path}")
         else:
-            self.banner.show_info("The explanation could not be saved in the project; copy it to keep it.")
+            self.banner.show_error("The explanation could not be saved in the project; copy it to keep it.")
         self.explanation_ready.emit(explanation)
 
     def _on_failed(self, run: int, exc: Exception) -> None:
@@ -289,7 +280,6 @@ class ExplanationView(QWidget):
 
     def _set_busy(self, busy: bool) -> None:
         self.busy = busy
-        self.progress.setVisible(busy)
         self.answer_stack.setCurrentWidget(self.answer_loader if busy else self.answer_view)
         self._update_buttons()
 
@@ -347,5 +337,5 @@ def _section(title: str, rows: list[tuple[str, str]]) -> str:
         f"<tr><td style='color:{theme.MUTED}; padding:2px 10px 2px 0; white-space:nowrap'>{html.escape(label)}</td>"
         f"<td style='color:{theme.INK}; padding:2px 0'>{html.escape(str(value))}</td></tr>"
         for label, value in rows if value != "")
-    return (f"<p style='margin:10px 0 4px 0; color:{theme.MUTED}; font-size:8.5pt; font-weight:600'>"
+    return (f"<p style='margin:10px 0 4px 0; color:{theme.MUTED}; font-size:8pt; font-weight:600'>"
             f"{html.escape(title.upper())}</p><table cellspacing='0'>{cells}</table>")

@@ -39,11 +39,11 @@ from frontend.workers.task_worker import run_task
 def _stylesheet():
     return f"""
 #CatalogPage {{ background: transparent; }}
-QLabel#PageTitle {{ font-family: "{theme.SERIF}"; font-size: 20pt; color: {theme.INK}; }}
+QLabel#PageTitle {{ font-family: "{theme.SERIF}"; font-size: 20.6pt; color: {theme.INK}; }}
 QLabel#PageSubtitle {{ color: {theme.MUTED}; }}
 QFrame#CatalogCard {{ background: {theme.WHITE}; border: 1px solid {theme.BORDER}; border-radius: 12px; }}
-QLabel#SectionTitle {{ color: {theme.MUTED}; font-size: 8.5pt; font-weight: 600; letter-spacing: 0.5px; }}
-QLabel#Attribution {{ color: {theme.MUTED}; font-size: 8.5pt; }}
+QLabel#SectionTitle {{ color: {theme.MUTED}; font-size: 8pt; font-weight: 600; letter-spacing: 0.5px; }}
+QLabel#Attribution {{ color: {theme.MUTED}; font-size: 8pt; }}
 QComboBox, QLineEdit, QSpinBox {{
     background: {theme.FIELD_BG}; border: 1px solid {theme.BORDER_STRONG}; border-radius: 8px;
     padding: 6px 10px; color: {theme.INK};

@@ -472,3 +472,59 @@ def test_a_failed_analysis_is_not_announced(page):
     view.run()
     _wait(lambda: not view.running)
     assert finished == [] and "band is missing" in view.banner.text()
+
+
+# ------------------------------------------------------------------ saved results, setup, legend
+def _saved(index, dataset):
+    return ResultDTO(f"s{index}", "Vegetation", ["NDVI"], {"NDVI mean": 0.1 * index},
+                     f"C:/work/MyProject/analysis/r{index}.tif", created_at=f"2026-11-2{index}T10:00:00",
+                     dataset=dataset, saved=True)
+
+
+def test_the_filmstrip_shows_the_chosen_datasets_results_and_the_saved_tab_all(page):
+    view, facade = page
+    facade.list_saved_results.return_value = [_saved(1, AFTER), _saved(2, BEFORE), _saved(3, AFTER), _saved(4, None)]
+    view._load_filmstrip()
+    _wait(lambda: view.sym_panel.saved_list.count() == 4)
+    view.choose_dataset(AFTER)
+    assert list(view.filmstrip.tiles) == ["C:/work/MyProject/analysis/r1.tif", "C:/work/MyProject/analysis/r3.tif"]
+    view.choose_dataset(DatasetDTO("2", "x", "c:/DATA/before.tif"))  # the same file, spelled differently
+    assert list(view.filmstrip.tiles) == ["C:/work/MyProject/analysis/r2.tif"]
+    view.choose_dataset(None)
+    assert view.filmstrip.tiles == {} and "Choose a dataset" in view.filmstrip.empty.text()
+    opened = []
+    view.open_in_viewer_requested.connect(opened.append)
+    view.sym_panel._open_saved(view.sym_panel.saved_list.item(1))
+    assert opened == ["C:/work/MyProject/analysis/r2.tif"]
+
+
+def test_the_setup_button_folds_and_reopens_the_steps(page):
+    view, _ = page
+    view.run()
+    _wait(lambda: view.layers)
+    assert not view.setup_is_open() and view.setup_button.text() == "Show setup"
+    view.setup_button.click()
+    assert view.setup_is_open() and view.setup_button.text() == "Hide setup"
+    view.setup_button.click()
+    assert not view.setup_is_open()
+
+
+def test_the_legend_keeps_its_bar_and_range_when_the_symbology_changes():
+    from frontend.widgets.map_overlays import LegendOverlay
+
+    from PyQt6.QtWidgets import QLabel, QWidget
+
+    host = QWidget()
+    host.resize(600, 400)
+    legend = LegendOverlay(parent=host)
+    host.show()
+    legend.show_scale("NDVI", ("#000000", "#FFFFFF"), -0.1, 0.35, 0.8)
+    first = legend.size()
+    # Redrawn while visible (another ramp, then another stretch), it used to shrink to a clipped
+    # stub; now it keeps the full colour bar (168px wide) and the row of numbers under it.
+    for low, high in ((-1.0, 1.0), (0.0, 0.5)):
+        legend.show_scale("NDVI", ("#FF0000", "#0000FF"), low, (low + high) / 2, high)
+        assert legend.width() >= 168 and legend.height() >= first.height() - 2
+    labels = [w.text() for w in legend.findChildren(QLabel) if w.isVisibleTo(legend)]
+    assert {"0", "0.250", "0.500"} <= set(labels)
+    host.deleteLater()

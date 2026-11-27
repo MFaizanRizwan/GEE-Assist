@@ -23,7 +23,7 @@ FIELD_YELLOW = "#E8B923"   # the field book's yellow, in the three original them
 # there the spine, rules and entry numbers take that accent instead of the book's yellow.
 THREE_COLOUR_THEMES = palette.THREE_COLOUR_THEMES
 SPINE = FIELD_YELLOW       # the spine and its rules; set by refresh() for the active theme
-MONO = fonts.MONO          # one measurement face for every figure: bundled JetBrains Mono
+MONO = fonts.MONO          # one measurement face for every figure: bundled IBM Plex Mono
 MONO_STACK = f'"{MONO}", "Consolas"'
 CARD_RADIUS = 6            # pages are cut square-ish; buttons keep the app's 10px
 CHROME_HEIGHT = 160        # the division strip and the open run log, above and below every page
@@ -148,10 +148,10 @@ def overlay() -> str:
     ink, rule_, muted, white = theme.INK, rule(), theme.MUTED, theme.WHITE
     return f"""
 /* ---- field book (Layout 3) ---- */
-QLabel#PageTitle {{ font-family: "{theme.SERIF}"; font-size: 20pt; font-weight: 600; color: {ink}; }}
+QLabel#PageTitle {{ font-family: "{theme.SERIF}"; font-size: 20.6pt; font-weight: 600; color: {ink}; }}
 QLabel#PageSubtitle {{ color: {muted}; font-size: 10pt; }}
 QLabel#SectionTitle, QLabel#StepTitle, QLabel#CardTitle {{
-    font-family: "{theme.SERIF}"; font-size: 12.5pt; font-weight: 600; color: {ink};
+    font-family: "{theme.SERIF}"; font-size: 12.7pt; font-weight: 600; color: {ink};
     padding-bottom: 4px; border-bottom: 1px solid {SPINE};
 }}
 QLabel#Overline, QLabel#PageEyebrow {{ max-height: 0px; font-size: 1px; color: transparent; margin: 0; padding: 0; }}
@@ -161,7 +161,7 @@ QFrame#CatalogCard, QFrame#ViewerPanel {{
     background: {white}; border: 1px solid {rule_}; border-radius: {CARD_RADIUS}px;
 }}
 QLabel#GlanceValue, QLabel#StatValue {{
-    font-family: {MONO_STACK}; font-size: 17pt; color: {ink};
+    font-family: {MONO_STACK}; font-size: 16.2pt; color: {ink};
 }}
 QLabel#ItemPath, QLabel#JobEta, QLabel#JobSize, QLabel#StatValue, QLabel#ChunkSetting {{
     font-family: {MONO_STACK}; font-size: 9pt;

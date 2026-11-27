@@ -31,7 +31,7 @@ from PyQt6.QtWidgets import (
 
 from backend.business.facade import IBusinessFacade
 from backend.dto.analysis_dto import FormulaDTO
-from frontend import theme, theming
+from frontend import fonts, theme, theming
 from frontend.widgets.process_picker import ANALYSIS_COLOURS
 
 ALL = "All"
@@ -53,18 +53,18 @@ ROLE_LABELS = {"coastal": "Coastal", "blue": "Blue", "green": "Green", "red": "R
 def _stylesheet():
     return f"""
 #AnalysisTablePage {{ background: transparent; }}
-QLabel#PageTitle {{ font-family: "{theme.SERIF}"; font-size: 20pt; color: {theme.INK}; }}
+QLabel#PageTitle {{ font-family: "{theme.SERIF}"; font-size: 20.6pt; color: {theme.INK}; }}
 QLabel#PageSubtitle {{ color: {theme.MUTED}; }}
 QFrame#TableCard, QFrame#DetailPanel {{
     background: {theme.WHITE}; border: 1px solid {theme.BORDER}; border-radius: 12px;
 }}
 QFrame#DetailPanel QLabel {{ background: transparent; }}
-QLabel#SectionTitle {{ color: {theme.MUTED}; font-size: 8.5pt; font-weight: 600; letter-spacing: 0.5px; }}
-QLabel#DetailKey {{ font-family: "{theme.SERIF}"; font-size: 18pt; color: {theme.INK}; }}
+QLabel#SectionTitle {{ color: {theme.MUTED}; font-size: 8pt; font-weight: 600; letter-spacing: 0.5px; }}
+QLabel#DetailKey {{ font-family: "{theme.SERIF}"; font-size: 20.6pt; color: {theme.INK}; }}
 QLabel#DetailName {{ color: {theme.INK}; font-weight: 600; }}
 QLabel#FormulaBox {{
     background: {theme.FIELD_BG}; border: 1px solid {theme.BORDER}; border-radius: 8px; padding: 8px 10px;
-    color: {theme.INK}; font-family: "{FORMULA_FONT}", "{theme.SERIF}"; font-size: 11pt;
+    color: {theme.INK}; font-family: "{FORMULA_FONT}", "{theme.SERIF}"; font-size: 10pt;
 }}
 QLabel#Value {{ color: {theme.TEXT}; }}
 QLabel#NoteBox {{
@@ -182,7 +182,7 @@ class FormulaDetail(QFrame):
         colour = colour_of(formula)
         self.badge.setText(f"{self._labels.get(formula.analysis, formula.analysis)} › {formula.category}")
         self.badge.setStyleSheet(f"background: {colour}; color: white; border-radius: 9px; padding: 2px 9px; "
-                                 "font-size: 8.5pt; font-weight: 600;")
+                                 "font-size: 8pt; font-weight: 600;")
         self.badge.show()
         self.formula.setText(formula.formula)
         self.bands.setText(band_text(formula) + ("" if formula.periods < 2 else
@@ -355,7 +355,7 @@ class AnalysisTableView(QWidget):
         self.table.insertRow(row)
         label = getattr(self, "labels", {}).get(formula.analysis, formula.analysis)
         item = QTableWidgetItem(f"{label.upper()}  ›  {formula.category.upper()}")
-        font = QFont(theme.SANS, 9)
+        font = QFont(theme.SANS, fonts.SM)
         font.setBold(True)
         item.setFont(font)
         item.setForeground(QColor(colour_of(formula)))
@@ -374,12 +374,12 @@ class AnalysisTableView(QWidget):
             item = QTableWidgetItem(text)
             item.setToolTip(text if column != 0 else f"{formula.name}\n{formula.formula}")
             if column == 0:
-                font = QFont(theme.SANS, 10)
+                font = QFont(theme.SANS, fonts.MD)
                 font.setBold(True)
                 item.setFont(font)
                 item.setForeground(QColor(colour_of(formula)))
             elif column == 2:
-                item.setFont(QFont(FORMULA_FONT, 10))
+                item.setFont(QFont(FORMULA_FONT, fonts.MD))
             elif column == 6:
                 item.setForeground(QColor(theme.SUCCESS if formula.computable else theme.MUTED))
             item.setTextAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)

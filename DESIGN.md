@@ -59,47 +59,47 @@ colors:
   error-light: "#C0392B"
 typography:
   display:
-    fontFamily: "Space Grotesk, Georgia"
-    fontSize: "23pt"
+    fontFamily: "Sora, Segoe UI Semibold"
+    fontSize: "26.2pt"
   page-title:
-    fontFamily: "Space Grotesk, Georgia"
-    fontSize: "20pt"
+    fontFamily: "Sora, Segoe UI Semibold"
+    fontSize: "20.6pt"
     fontWeight: 600
   section-title:
-    fontFamily: "Space Grotesk, Georgia"
-    fontSize: "12.5pt"
+    fontFamily: "Sora, Segoe UI Semibold"
+    fontSize: "12.7pt"
     fontWeight: 600
   body:
-    fontFamily: "Inter, Segoe UI"
+    fontFamily: "Work Sans, Segoe UI"
     fontSize: "10pt"
     fontWeight: 400
   button:
-    fontFamily: "Inter, Segoe UI"
-    fontSize: "10.5pt"
+    fontFamily: "Work Sans, Segoe UI"
+    fontSize: "10pt"
     fontWeight: 600
   label:
-    fontFamily: "Inter, Segoe UI"
-    fontSize: "9.5pt"
+    fontFamily: "Work Sans, Segoe UI"
+    fontSize: "9pt"
     fontWeight: 600
   hint:
-    fontFamily: "Inter, Segoe UI"
-    fontSize: "8.5pt"
+    fontFamily: "Work Sans, Segoe UI"
+    fontSize: "8pt"
   warning:
-    fontFamily: "Space Grotesk, Georgia"
-    fontSize: "9.5pt"
+    fontFamily: "Sora, Segoe UI Semibold"
+    fontSize: "9pt"
     fontWeight: 600
   figure-large:
-    fontFamily: "JetBrains Mono, Consolas"
-    fontSize: "17pt"
+    fontFamily: "IBM Plex Mono, Consolas"
+    fontSize: "16.2pt"
   figure:
-    fontFamily: "JetBrains Mono, Consolas"
+    fontFamily: "IBM Plex Mono, Consolas"
     fontSize: "9pt"
   entry-number:
-    fontFamily: "JetBrains Mono, Consolas"
+    fontFamily: "IBM Plex Mono, Consolas"
     fontSize: "10pt"
     fontWeight: 600
   table-header:
-    fontFamily: "Inter, Segoe UI"
+    fontFamily: "Work Sans, Segoe UI"
     fontSize: "9pt"
     fontWeight: 600
 rounded:
@@ -181,7 +181,7 @@ Layout 3 is the power workspace and is dark-first: the dark blue-green and dark 
 - Four divisions (Work, Analyse, Explain, Report), each with one fixed hue: on the cover headings and on the checked division tab.
 - Page ground ruled on an 8px hairline tile; flat sheets with 1px rules and a 6px corner.
 - Yellow 1px rules under table headers, current-project rows and the spread's gutter.
-- Every figure (counts, values, timings, paths, entry numbers) in JetBrains Mono.
+- Every figure (counts, values, timings, paths, entry numbers) in IBM Plex Mono.
 - One solid button accent per theme, 10px radius, shared by all three layouts.
 
 ## Colors
@@ -213,30 +213,43 @@ A theme-reactive neutral base with one solid accent, over which Layout 3 adds a 
 
 ## Typography
 
-**Display Font:** Space Grotesk (falls back to Georgia)
-**Body Font:** Inter (falls back to Segoe UI)
-**Label/Mono Font:** JetBrains Mono (falls back to Consolas)
+**Display Font:** Sora (falls back to Segoe UI Semibold)
+**Body Font:** Work Sans (falls back to Segoe UI)
+**Label/Mono Font:** IBM Plex Mono (falls back to Consolas)
 
-All three are bundled in `frontend/resources/fonts/` and registered at start-up; glyphs they lack fall back to Segoe UI, Segoe UI Symbol and Segoe UI Emoji. Sizes are in points because Qt Style Sheets set them in points.
+The same three families as GEE-Assist-Web, so the app and the website read as one product. All three are bundled in `frontend/resources/fonts/` and registered at start-up; glyphs they lack fall back to Segoe UI, Segoe UI Symbol and Segoe UI Emoji. Sizes are in points because Qt Style Sheets set them in points.
 
-**Character:** a geometric display face with real character for headings and warnings, a quiet body face for dense controls, and one measurement mono for every number, so a field book's figures line up and read as data.
+**Character:** a geometric display face for headings and warnings, a quiet body face for dense controls, and one measurement mono for every number, so a field book's figures line up and read as data.
+
+### Scale
+Sizes follow the website's golden-ratio scale (φ ≈ 1.618) on a 10pt body: each reading level is φ times the one below, with √φ half-steps between. The tokens live in `frontend/fonts.py`; use only these sizes.
+
+| Token | Size | Step | Use |
+|---|---|---|---|
+| XS | 8pt | small UI | hints, captions, chips, field errors |
+| SM | 9pt | small UI | labels, table cells, banners |
+| MD | 10pt | body ×1 | body, controls, buttons |
+| LG | 12.7pt | ×√φ | section titles |
+| XL | 16.2pt | ×φ | dialog titles, stat values |
+| XXL | 20.6pt | ×φ√φ | page titles |
+| HERO | 26.2pt | ×φ² | the sign-in headline |
 
 ### Hierarchy
-- **Display** (Space Grotesk, 23pt): the sign-in title.
-- **Page Title** (Space Grotesk 600, 20pt): the project name or page name at the top of each page.
-- **Section Title** (Space Grotesk 600, 12.5pt): sheet and section headings ("At a glance", "Recent analysis results").
-- **Body** (Inter 400, 10pt): all controls and paragraphs; the app default font.
-- **Button** (Inter 600, 10.5pt): every push button.
-- **Label** (Inter 600, 9.5pt): field labels, in ink.
-- **Hint** (Inter, 8.5pt): field hints, in the subtle colour.
-- **Warning** (Space Grotesk 600, 9.5pt banners; 8.5pt field errors): error, success and info banners and field errors, set apart from body text.
-- **Table Header** (Inter 600, 9pt, muted): table column headers over a yellow rule.
-- **Figure Large** (JetBrains Mono, 17pt): glance values and stat values.
-- **Figure** (JetBrains Mono, 9pt): paths, sizes, ETAs, table values and timings.
-- **Entry Number** (JetBrains Mono 600, 10pt, yellow): zero-padded entry numbers in ruled tables; index numbers in the nav (10pt bold).
+- **Display** (Sora, 26.2pt): the sign-in title.
+- **Page Title** (Sora 600, 20.6pt): the project name or page name at the top of each page.
+- **Section Title** (Sora 600, 12.7pt): sheet and section headings ("At a glance", "Recent analysis results").
+- **Body** (Work Sans 400, 10pt): all controls and paragraphs; the app default font.
+- **Button** (Work Sans 600, 10pt): every push button.
+- **Label** (Work Sans 600, 9pt): field labels, in ink.
+- **Hint** (Work Sans, 8pt): field hints, in the subtle colour.
+- **Warning** (Sora 600, 9pt banners; 8pt field errors): error, success and info banners and field errors, set apart from body text.
+- **Table Header** (Work Sans 600, 9pt, muted): table column headers over a yellow rule.
+- **Figure Large** (IBM Plex Mono, 16.2pt): glance values and stat values.
+- **Figure** (IBM Plex Mono, 9pt): paths, sizes, ETAs, table values and timings.
+- **Entry Number** (IBM Plex Mono 600, 10pt, yellow): zero-padded entry numbers in ruled tables; index numbers in the nav (10pt bold).
 
 ### Named Rules
-**The One Measurement Face Rule.** In Layout 3 every figure is JetBrains Mono. A number set in Inter is a defect.
+**The One Measurement Face Rule.** In Layout 3 every figure is IBM Plex Mono. A number set in Work Sans is a defect.
 
 ## Layout
 
@@ -277,7 +290,7 @@ Solid, theme-reactive and confident, matching the companion website.
 - **Link:** transparent, OCEAN text, underline on hover.
 
 ### Division Tabs (Layout 3)
-- **Style:** transparent, muted text, 1px rule-colour outline, 10px radius, 5px 14px padding, Inter 600.
+- **Style:** transparent, muted text, 1px rule-colour outline, 10px radius, 5px 14px padding, Work Sans 600.
 - **Hover:** ink text, BORDER_HOVER outline.
 - **Checked:** filled with the division's hue, text on-division-dark (dark themes) or white (light theme). Clicking a tab opens its division's first page.
 
@@ -289,7 +302,7 @@ Solid, theme-reactive and confident, matching the companion website.
 - **Internal Padding:** 18px 16px for panels; 24px 20px for the spread's pages.
 
 ### Ruled Tables (Layout 3)
-- **Header:** transparent, muted Inter 600 9pt, 6px 8px padding, 1px yellow bottom rule.
+- **Header:** transparent, muted Work Sans 600 9pt, 6px 8px padding, 1px yellow bottom rule.
 - **Rows:** transparent, 4px 6px padding, 1px border-colour bottom rule per row, no grid boxes.
 - **Columns:** the results table runs #, Analysis, Dataset, When, Result, Run. Entry numbers are zero-padded mono in yellow (pencil-dark yellow in the light theme); values, dates and timings are mono.
 
@@ -300,16 +313,16 @@ Solid, theme-reactive and confident, matching the companion website.
 - **Error / Disabled:** 1.5px error outline on ERROR_FIELD_BG; disabled text in subtle on DISABLED_BG.
 
 ### Navigation (Layout 3 index)
-- **Style:** the graphite cover, with a 6px yellow right border as the spine. Buttons 40px high, 8px radius, Inter 500 in cover text.
-- **Index:** each page button paints its Alt shortcut number (JetBrains Mono bold 10pt, yellow) where the icon would be. Tools carry no number.
-- **Division headings:** Inter 600 9pt in the division's cover hue, 12px top padding.
+- **Style:** the graphite cover, with a 6px yellow right border as the spine. Buttons 40px high, 8px radius, Work Sans 500 in cover text.
+- **Index:** each page button paints its Alt shortcut number (IBM Plex Mono bold 10pt, yellow) where the icon would be. Tools carry no number.
+- **Division headings:** Work Sans 600 9pt in the division's cover hue, 12px top padding.
 - **Hover:** cover-raised fill. **Current:** cover-raised fill, 1px yellow border, white text, weight 600.
 
 ### Run Log (gkonsol)
-Docked under every page and open by default in Layout 3. JetBrains Mono, recoloured live with the theme; warnings in amber per theme (#9A6700 light, #F2C46D dark blue-green, #F0C674 dark grey); the prompt in field-book yellow in Layout 3 (the theme leaf elsewhere).
+Docked under every page and open by default in Layout 3. IBM Plex Mono, recoloured live with the theme; warnings in amber per theme (#9A6700 light, #F2C46D dark blue-green, #F0C674 dark grey); the prompt in field-book yellow in Layout 3 (the theme leaf elsewhere).
 
 ### Glance Row
-Five counts (Downloads, Analyses run, Saved result maps, AI explanations, PDF reports): a 17pt mono value over a muted Inter caption, in transparent tiles divided by 1px vertical rules.
+Five counts (Downloads, Analyses run, Saved result maps, AI explanations, PDF reports): a 16.2pt mono value over a muted Work Sans caption, in transparent tiles divided by 1px vertical rules.
 
 ## Do's and Don'ts
 
@@ -317,7 +330,7 @@ Five counts (Downloads, Analyses run, Saved result maps, AI explanations, PDF re
 - **Do** build every theme-dependent stylesheet through `theming.styled(widget, builder)`, with a builder that reads current theme values, so it recolours live. Painter-drawn widgets read `theme.*` at paint time; subscribe anything else with `theming.on_theme_changed`.
 - **Do** expect a theme change to apply live and a layout change to restart the app; read `fieldbook.active()` once.
 - **Do** keep every button at `BUTTON_RADIUS` (10px) and every primary button on the theme's solid accent.
-- **Do** set every figure in JetBrains Mono in Layout 3.
+- **Do** set every figure in IBM Plex Mono in Layout 3.
 - **Do** mark division with the division strip and the side index, and number entries in yellow.
 - **Do** use the ink variants of division hues on the light theme, and pencil-dark yellow (yellow-ink-light) where yellow is text on a light page.
 - **Do** check every new Layout 3 surface in all three themes, dark first.
@@ -329,4 +342,4 @@ Five counts (Downloads, Analyses run, Saved result maps, AI explanations, PDF re
 - **Don't** add shadows to Layout 3 sheets or cards.
 - **Don't** fill buttons or large areas with field-book yellow, and don't give charts or chrome full colour in Layout 3: result maps carry the colour.
 - **Don't** use a division hue outside its own division's heading and tab.
-- **Don't** set figures in Inter or the display face in Layout 3.
+- **Don't** set figures in Work Sans or the display face in Layout 3.

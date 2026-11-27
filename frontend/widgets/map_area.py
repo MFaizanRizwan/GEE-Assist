@@ -15,14 +15,14 @@ from frontend.widgets.raster_canvas import RasterCanvas
 _ZOOM_STYLE_LIGHT = """
 QPushButton#ZoomButton {
     background: rgba(255,255,255,0.92); color: #1C2B26; border: 1px solid #D8DED9;
-    font-size: 15pt; font-weight: 600; padding: 0;
+    font-size: 16.2pt; font-weight: 600; padding: 0;
 }
 QPushButton#ZoomButton:hover { background: #FFFFFF; }
 """
 _ZOOM_STYLE_DARK = """
 QPushButton#ZoomButton {
     background: rgba(20,30,26,0.85); color: #E7EEEA; border: 1px solid #2A3A32;
-    font-size: 15pt; font-weight: 600; padding: 0;
+    font-size: 16.2pt; font-weight: 600; padding: 0;
 }
 QPushButton#ZoomButton:hover { background: rgba(40,56,48,0.95); }
 """

@@ -62,7 +62,7 @@ QLabel#CardKey {{ color: {theme.INK}; font-weight: 700; font-size: 10pt; }}
 QFrame#ProcessCard[available="false"] QLabel#CardKey {{ color: {theme.MUTED}; }}
 QLabel#CardName {{ color: {theme.TEXT}; font-size: 9pt; }}
 QLabel#CardFormula {{ color: {theme.MUTED}; font-family: "{FORMULA_FONT}", "{theme.SERIF}"; font-size: 9pt; }}
-QLabel#CardReason {{ color: {theme.ERROR}; font-size: 8.5pt; }}
+QLabel#CardReason {{ color: {theme.ERROR}; font-size: 8pt; }}
 QLabel#CardCheck {{
     border: 1.5px solid {theme.BORDER_STRONG}; border-radius: 10px; background: {theme.WHITE};
     color: {theme.WHITE}; font-weight: 700; font-size: 9pt;
@@ -72,7 +72,7 @@ QLabel#CardBadge {{
     color: {theme.OCEAN_DARK}; background: {theme.INFO_BG}; border: 1px solid {theme.INFO_BORDER};
     border-radius: 8px; padding: 0 6px; font-size: 8pt;
 }}
-QLabel#GroupTitle {{ color: {theme.MUTED}; font-size: 8.5pt; font-weight: 700; letter-spacing: 0.5px; }}
+QLabel#GroupTitle {{ color: {theme.MUTED}; font-size: 8pt; font-weight: 700; letter-spacing: 0.5px; }}
 QLabel#SectionCan {{ color: {theme.SUCCESS}; font-weight: 700; }}
 QPushButton#SectionCannot {{
     color: {theme.MUTED}; font-weight: 700; border: none; background: transparent; padding: 2px 0;
@@ -80,7 +80,7 @@ QPushButton#SectionCannot {{
 }}
 QPushButton#SectionCannot:hover {{ color: {theme.INK}; }}
 QPushButton#SubtypeChip {{
-    border: 1px solid {theme.BORDER_STRONG}; border-radius: 12px; padding: 3px 10px; font-size: 8.5pt;
+    border: 1px solid {theme.BORDER_STRONG}; border-radius: 12px; padding: 3px 10px; font-size: 8pt;
     font-weight: 600; background: {theme.WHITE}; color: {theme.INK};
 }}
 QPushButton#SubtypeChip:hover {{ background: {theme.FOAM}; }}

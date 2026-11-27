@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import QApplication
 
 from frontend import accent, fonts, palette
 
-# Bundled families: Space Grotesk for headings/warnings, Inter for body. The names
+# Bundled families (as on GEE-Assist-Web): Sora for headings/warnings, Work Sans for body. The names
 # keep the historic SERIF/SANS spellings so the many call sites need no change.
 # Fonts do not change with the theme, so they stay as plain constants.
 SERIF = fonts.DISPLAY
@@ -90,17 +90,17 @@ QToolTip {{
 }}
 
 /* ---- text ---- */
-QLabel#Title {{ font-family: "{SERIF}"; font-size: 23pt; color: {INK}; }}
-QLabel#Subtitle {{ color: {MUTED}; font-size: 10.5pt; }}
-QLabel#FieldLabel {{ color: {INK}; font-weight: 600; font-size: 9.5pt; }}
-QLabel#FieldError {{ color: {ERROR}; font-family: "{WARNING}"; font-size: 8.5pt; }}
-QLabel#FieldHint {{ color: {SUBTLE}; font-size: 8.5pt; }}
+QLabel#Title {{ font-family: "{SERIF}"; font-size: 26.2pt; color: {INK}; }}
+QLabel#Subtitle {{ color: {MUTED}; font-size: 10pt; }}
+QLabel#FieldLabel {{ color: {INK}; font-weight: 600; font-size: 9pt; }}
+QLabel#FieldError {{ color: {ERROR}; font-family: "{WARNING}"; font-size: 8pt; }}
+QLabel#FieldHint {{ color: {SUBTLE}; font-size: 8pt; }}
 QLabel#Muted {{ color: {MUTED}; }}
 QLabel#Divider {{ color: {SUBTLE}; font-size: 9pt; }}
 
 /* ---- banners ---- */
 QLabel#ErrorBanner, QLabel#SuccessBanner, QLabel#InfoBanner {{
-    border-radius: 8px; padding: 9px 12px; font-size: 9.5pt;
+    border-radius: 8px; padding: 9px 12px; font-size: 9pt;
     font-family: "{WARNING}"; font-weight: 600;
 }}
 QLabel#ErrorBanner {{ background: {ERROR_BG}; color: {ERROR}; border: 1px solid {ERROR_BORDER}; }}
@@ -120,7 +120,7 @@ QLineEdit {{
     border: 1px solid {BORDER_STRONG};
     border-radius: 9px;
     padding: 9px 12px;
-    font-size: 10.5pt;
+    font-size: 10pt;
     color: {INK};
     selection-background-color: {OCEAN};
 }}
@@ -142,7 +142,7 @@ QCheckBox::indicator:checked {{
 
 /* ---- buttons: one radius ({rad}px) everywhere, so corners are consistent ---- */
 QPushButton {{
-    border-radius: {rad}px; padding: 10px 18px; font-size: 10.5pt; font-weight: 600;
+    border-radius: {rad}px; padding: 10px 18px; font-size: 10pt; font-weight: 600;
 }}
 /* Primary buttons match GEE-Assist-Web: a solid accent fill that changes with the theme,
    darken on hover, and a small downward nudge on press (Qt has no CSS transitions). */
@@ -200,5 +200,5 @@ refresh()  # build the colour constants and stylesheets for the saved theme at i
 
 def apply_theme(app: QApplication) -> None:
     app.setStyle("Fusion")
-    app.setFont(QFont(SANS, 10))
+    app.setFont(QFont(SANS, fonts.MD))
     app.setStyleSheet(STYLESHEET)

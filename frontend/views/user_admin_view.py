@@ -72,7 +72,7 @@ class UserDetailsPanel(QFrame):
         self.avatar = Avatar(56)
         self.name = QLabel("Select a user")
         self.name.setWordWrap(True)
-        theming.styled(self.name, lambda: f"font-family: '{theme.SERIF}'; font-size: 15pt; color: {theme.INK};")
+        theming.styled(self.name, lambda: f"font-family: '{theme.SERIF}'; font-size: 16.2pt; color: {theme.INK};")
         self.meta = QLabel("", objectName="Muted")
         self.meta.setWordWrap(True)
         self.meta.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)

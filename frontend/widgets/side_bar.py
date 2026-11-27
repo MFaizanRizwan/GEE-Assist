@@ -35,7 +35,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from frontend import theme, theming
+from frontend import fonts, theme, theming
 from frontend.widgets.side_icons import SideIcon
 
 LOGO_SIZE = 64
@@ -190,7 +190,7 @@ class SideButton(QPushButton):
             from frontend import fieldbook
 
             painter = QPainter(self)
-            font = QFont(fieldbook.MONO, 10)
+            font = QFont(fieldbook.MONO, fonts.MD)
             font.setStyleHint(QFont.StyleHint.Monospace)
             font.setBold(True)
             painter.setFont(font)
