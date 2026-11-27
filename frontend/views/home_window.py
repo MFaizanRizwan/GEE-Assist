@@ -418,6 +418,7 @@ class HomeWindow(QMainWindow):
         self._connect_menu_bar()
         self._admin_dialog: UserAdminDialog | None = None
         self._was_maximized = False  # before going full screen
+        self.full_map = None         # the full-screen "Show on map" window, while open
         self.set_user(user)
         self._project_shown: str | None = "none yet"
         self.refresh_projects()
@@ -711,14 +712,21 @@ class HomeWindow(QMainWindow):
         if path:
             self.show_viewer(path)
 
-    def show_on_map(self, png: bytes, bounds: tuple, title: str) -> None:
-        """Lay a viewer picture over the Query Input map and go there."""
-        form_view = getattr(self.query_input, "form_view", None)
-        map_widget = getattr(form_view, "map_widget", None)
-        if map_widget is None:
-            return
-        map_widget.show_image(png, bounds, title)
-        self.show_query_input()
+    def show_on_map(self, png: bytes, bounds: tuple, title: str, extras=None) -> None:
+        """Lay a picture (an analysis result, or a GeoTIFF's view) over the world map, full
+        screen, with its legend, opacity and the value under the pointer. The page it came
+        from stays as it was underneath (it used to switch to the Query Input form's map)."""
+        from frontend.views.full_map_window import FullMapWindow  # late: loads the web map
+
+        if self.full_map is not None:
+            self.full_map.close()
+        window = FullMapWindow(png, bounds, title, extras)
+        window.destroyed.connect(self._full_map_closed)
+        self.full_map = window
+        window.showFullScreen()
+
+    def _full_map_closed(self, *_args) -> None:
+        self.full_map = None
 
     def show_viewer(self, path: str) -> None:
         """Show the GeoTIFF at ``path`` on the Viewer page."""

@@ -139,7 +139,11 @@ class LegendOverlay(QFrame):
         grid.setColumnStretch(1, 1)
         self._finish(bool(rows))
 
-    def show_scale(self, title: str, colours: tuple[str, ...], low: float, mid: float, high: float) -> None:
+    def show_scale(self, title: str, colours: tuple[str, ...], low: float, mid: float, high: float,
+                   meaning: tuple[str, str] | None = None) -> None:
+        """A colour bar from ``low`` to ``high``; with ``meaning`` (what low and high values
+        mean, e.g. "Bare ground / water" and "Dense, healthy vegetation"), a swatch of each
+        end's colour beside its meaning, so the legend says what the colours are."""
         self._title.setText(title.upper())
         body = QVBoxLayout(self._new_content())
         body.setContentsMargins(0, 0, 0, 0)
@@ -154,7 +158,73 @@ class LegendOverlay(QFrame):
             label.setAlignment(align | Qt.AlignmentFlag.AlignVCenter)
             ends.addWidget(label, 1)
         body.addLayout(ends)
+        if meaning and colours:
+            means = QGridLayout()
+            means.setContentsMargins(0, 2, 0, 0)
+            means.setHorizontalSpacing(7)
+            means.setVerticalSpacing(3)
+            # high first: it reads like the bar's right end, then its left
+            for row, (colour, text, arrow) in enumerate(((colours[-1], meaning[1], "High"),
+                                                         (colours[0], meaning[0], "Low"))):
+                swatch = QLabel()
+                swatch.setFixedSize(11, 11)
+                swatch.setStyleSheet(f"background: {colour}; border-radius: 2px;")
+                label = QLabel(f"<span style='color:{self._muted}'>{arrow}</span>&nbsp; {text}")
+                label.setStyleSheet(f"color: {self._ink}; font-size: 8.5pt;")
+                means.addWidget(swatch, row, 0)
+                means.addWidget(label, row, 1)
+            means.setColumnStretch(1, 1)
+            body.addLayout(means)
         self._finish(True)
+
+
+class ValueReadout(QFrame):
+    """The value under the pointer, floating over a map: the value (or class) in bold with
+    what it is, and the place under the pointer. Hidden while the pointer is off the map."""
+
+    def __init__(self, dark: bool = False, parent: QWidget | None = None):
+        super().__init__(parent)
+        self.setObjectName("ValueReadout")
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)  # never blocks the map
+        bg = "rgba(14, 22, 19, 0.86)" if dark else "rgba(255, 255, 255, 0.94)"
+        border = "#2A3A32" if dark else "#D8DED9"
+        self._ink = "#E7EEEA" if dark else "#1C2B26"
+        self._muted = "#93A79D" if dark else "#5A6B63"
+        self.setStyleSheet(
+            f"#ValueReadout {{ background: {bg}; border: 1px solid {border}; border-radius: 9px; }}"
+            f"#ValueReadout QLabel {{ background: transparent; }}"
+        )
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(11, 7, 12, 8)
+        layout.setSpacing(1)
+        self.value = QLabel()
+        self.value.setStyleSheet(f"color: {self._ink}; font-size: 10.5pt;")
+        self.place = QLabel()
+        self.place.setStyleSheet(f"color: {self._muted}; font-size: 8pt;")
+        layout.addWidget(self.value)
+        layout.addWidget(self.place)
+        self.hide()
+
+    def show_value(self, value: str, what: str, lon: float, lat: float) -> None:
+        """e.g. value "0.421", what "NDVI": shows **0.421** NDVI, then 31.42710° N, 73.09210° E."""
+        what_html = f"&nbsp; <span style='color:{self._muted}; font-size:8.5pt'>{_escape(what)}</span>" if what else ""
+        self.value.setText(f"<b>{_escape(value)}</b>{what_html}")
+        self.place.setText(_place(lon, lat))
+        self.adjustSize()
+        self.show()
+        self.raise_()
+
+    def text(self) -> str:
+        """What it shows, as plain text (for tests)."""
+        return f"{self.value.text()} | {self.place.text()}"
+
+
+def _escape(text: str) -> str:
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _place(lon: float, lat: float) -> str:
+    return f"{abs(lat):.5f}° {'N' if lat >= 0 else 'S'},  {abs(lon):.5f}° {'E' if lon >= 0 else 'W'}"
 
 
 class _OverlayColourBar(QWidget):

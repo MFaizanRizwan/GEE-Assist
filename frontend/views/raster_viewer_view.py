@@ -31,10 +31,13 @@ from backend.business.facade import IBusinessFacade
 from backend.business.map.colour_maps import DYNAMIC_WORLD_CLASSES
 from backend.dto.map_dto import RasterInfoDTO, RasterViewDTO, ViewPresetDTO
 from backend.exceptions import GeeAssistError
-from frontend import theme, theming
+from frontend import palette, theme, theming
 from frontend.download_format import format_size
 from frontend.widgets.form_parts import StatusBanner
 from frontend.widgets.raster_canvas import RasterCanvas, rgba_to_image
+from frontend.views.full_map_window import MapExtras
+from frontend.widgets.layer_meaning import meaning as legend_meaning
+from frontend.widgets.map_overlays import ValueReadout
 from frontend.widgets.raster_legend import RasterLegend, format_value
 from frontend.widgets.toggle_switch import ToggleSwitch
 from frontend.workers.task_worker import run_task
@@ -90,7 +93,8 @@ class ElidedLabel(QLabel):
 
 
 class RasterViewerView(QWidget):
-    show_on_map_requested = pyqtSignal(bytes, object, str)  # PNG, (west, south, east, north), title
+    show_on_map_requested = pyqtSignal(bytes, object, str, object)  # PNG, (west, south, east, north), title,
+                                                                    # MapExtras (legend, value probe)
 
     def __init__(self, facade: IBusinessFacade, parent: QWidget | None = None):
         super().__init__(parent)
@@ -109,6 +113,8 @@ class RasterViewerView(QWidget):
 
         # ---- picture
         self.canvas = RasterCanvas()
+        # the value under the pointer, floating over the picture (as on the Analysis map)
+        self.readout = ValueReadout(palette.IS_DARK, self.canvas)
         canvas_card = QFrame(objectName="ViewerCanvasCard")
         canvas_layout = QVBoxLayout(canvas_card)
         canvas_layout.setContentsMargins(6, 6, 6, 6)
@@ -149,7 +155,7 @@ class RasterViewerView(QWidget):
 
         self.map_button = QPushButton("Show on map", objectName="PrimaryButton")
         self.map_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.map_button.setToolTip("Lay this view over the Query Input map")
+        self.map_button.setToolTip("Lay this view over the world map, full screen")
         self.fit_button = QPushButton("Fit to window", objectName="SecondaryButton")
         self.folder_button = QPushButton("Open folder", objectName="SecondaryButton")
         self.buttons = QHBoxLayout()
@@ -270,7 +276,7 @@ class RasterViewerView(QWidget):
         same_file = self.view is not None and (self.view.width, self.view.height) == (view.width, view.height)
         self.view = view
         self.canvas.set_image(rgba_to_image(view.rgba), keep_view=same_file)
-        self.legend.set_legend(view.legend)
+        self.legend.set_legend(view.legend, legend_meaning(view.legend.title, view.preset.style))
         self.map_button.setEnabled(True)
         if view.notes:
             self.banner.show_info(" ".join(view.notes))
@@ -296,7 +302,15 @@ class RasterViewerView(QWidget):
         if self.info is None or self.view is None:
             return
         title = f"{self.info.name} · {self.view.preset.label}"
-        self.show_on_map_requested.emit(self.map_png(), self.info.bounds, title)
+        legend = self.view.legend
+        spec = None
+        if legend.kind == "scale":
+            spec = ("scale", (legend.title, tuple(legend.colours), legend.low, legend.high,
+                              legend_meaning(legend.title, self.view.preset.style)))
+        elif legend.kind == "classes":
+            spec = ("classes", (legend.title, list(zip(legend.labels, legend.colours))))
+        self.show_on_map_requested.emit(self.map_png(), self.info.bounds, title,
+                                        MapExtras(spec, self.reading_at))
 
     def map_png(self, max_size: int = MAP_IMAGE_SIZE) -> bytes:
         """The current view as PNG, at most ``max_size`` pixels on its longer side."""
@@ -322,6 +336,7 @@ class RasterViewerView(QWidget):
         self._pointer = None
         self._hover_timer.stop()
         self.pointer_label.setText("Point at the picture to see its values.")
+        self.readout.hide()
         for label in self.value_labels.values():
             label.setText("–")
 
@@ -345,6 +360,39 @@ class RasterViewerView(QWidget):
         self.pointer_label.setText(f"{lat:.5f}°, {lon:.5f}°" + self._view_value(values))
         for band, label in self.value_labels.items():
             label.setText(format_value(values.get(band)))
+        if self._pointer is not None:
+            self.readout.show_value(*self._reading(values), lon, lat)
+            self.readout.move(10, 10)
+
+    def reading_at(self, lon: float, lat: float) -> tuple[str, str] | None:
+        """The current view's value at a longitude and latitude: (value, what it is), or None."""
+        if self.info is None or self.view is None:
+            return None
+        west, south, east, north = self.info.bounds
+        if not (west <= lon <= east and south <= lat <= north):
+            return None
+        try:
+            return self._reading(self._facade.raster_values_at(self.info, lon, lat))
+        except GeeAssistError:
+            return None
+
+    def _reading(self, values: dict[str, float | None]) -> tuple[str, str]:
+        """What the readout shows for these band values: the view's index or class, its single
+        band, or each band of a colour picture."""
+        preset = self.view.preset
+        if preset.kind == "index":
+            a, b = (values.get(band) for band in preset.bands)
+            if a is None or b is None or a + b == 0:
+                return ("no data", preset.label)
+            return (format_value((a - b) / (a + b)), preset.label.split()[0])
+        if preset.kind == "classes":
+            value = values.get(preset.bands[0])
+            if value is not None and 0 <= int(value) < len(DYNAMIC_WORLD_CLASSES):
+                return (DYNAMIC_WORLD_CLASSES[int(value)][0], "land cover")
+            return ("no data", "land cover")
+        if len(preset.bands) == 1:
+            return (format_value(values.get(preset.bands[0])), preset.bands[0])
+        return ("   ".join(f"{band} {format_value(values.get(band))}" for band in preset.bands), "")
 
     def _view_value(self, values: dict[str, float | None]) -> str:
         """The current view's own value there: the index, or the land-cover class."""

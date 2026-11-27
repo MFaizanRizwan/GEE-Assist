@@ -60,6 +60,9 @@ from frontend.download_format import format_size
 from frontend.widgets.earth_loader import EarthLoader
 from frontend.widgets.flow_layout import FlowLayout
 from frontend.widgets.form_parts import StatusBanner
+from frontend.views.full_map_window import MapExtras
+from frontend.widgets.layer_meaning import meaning
+from frontend.widgets.layer_values import layer_value, layer_value_at
 from frontend.widgets.map_area import MapArea
 from frontend.widgets.process_picker import stylesheet as picker_stylesheet
 from frontend.widgets.run_filmstrip import RunFilmstrip
@@ -246,7 +249,8 @@ NO_PROJECT = ("Create or open a project: the datasets downloaded into it are lis
 
 class AnalysisView(QWidget):
     open_in_viewer_requested = pyqtSignal(str)               # result GeoTIFF
-    show_on_map_requested = pyqtSignal(bytes, object, str)   # PNG, (west, south, east, north), title
+    show_on_map_requested = pyqtSignal(bytes, object, str, object)  # PNG, (west, south, east, north), title,
+                                                                    # MapExtras (legend, value probe)
     explain_requested = pyqtSignal(object)                   # ResultDTO to explain with Gemini
     analysis_finished = pyqtSignal(object)                   # ResultDTO of an analysis that ran successfully
 
@@ -390,6 +394,7 @@ class AnalysisView(QWidget):
         self.map_area = MapArea(dark=self._dark)
         self.canvas = self.map_area.canvas        # kept name: the raster canvas inside the map area
         self.canvas.setMinimumHeight(200)
+        self.map_area.set_value_probe(self._value_at)   # the value under the pointer
 
         self.sym_panel = SymbologyPanel(dark=self._dark)
         self.sym_panel.changed.connect(self._recolor)
@@ -970,7 +975,7 @@ class AnalysisView(QWidget):
     def _update_overlay_legend(self, layer: MapLayerDTO) -> None:
         if layer.kind == "scale":
             colours, low, high = self.sym_panel.scale_legend()
-            self.map_area.show_legend_scale(layer.name, colours, low, high)
+            self.map_area.show_legend_scale(layer.name, colours, low, high, meaning(layer.id, layer.style))
         else:
             rows = self.sym_panel.legend_rows()
             self.map_area.show_legend_classes(layer.legend.title or "Legend", rows)
@@ -1077,12 +1082,19 @@ class AnalysisView(QWidget):
         if self.result is not None and self.result.saved:
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(Path(self.result.output_path).parent)))
 
+    # ------------------------------------------------------------- the value under the pointer
+    def _value_at(self, x: int, y: int) -> tuple[str, str] | None:
+        """The current layer's value at preview pixel (x, y): (value, what it is), or None."""
+        return layer_value(self._current_layer, x, y, self.sym_panel.legend_rows())
+
     def show_on_map(self) -> None:
+        """Lay the layer, in its current colours, over the world map, full screen."""
         index = self.layer_box.currentIndex()
         if self.result is None or not 0 <= index < len(self.layers):
             return
         layer = self.layers[index]
-        image = rgba_to_image(layer.data)
+        rgba = self.sym_panel.current_rgba() if layer is self._current_layer else None
+        image = rgba_to_image(rgba if rgba is not None else layer.data)
         if max(image.width(), image.height()) > MAP_IMAGE_SIZE:
             image = image.scaled(MAP_IMAGE_SIZE, MAP_IMAGE_SIZE, Qt.AspectRatioMode.KeepAspectRatio,
                                  Qt.TransformationMode.SmoothTransformation)
@@ -1090,7 +1102,10 @@ class AnalysisView(QWidget):
         buffer.open(QIODevice.OpenModeFlag.WriteOnly)
         image.save(buffer, "PNG")
         name = self.dataset.name if self.dataset and self.dataset.name else Path(self.result.output_path).stem
-        self.show_on_map_requested.emit(bytes(buffer.data()), layer.bounds, f"{name} · {layer.name}")
+        rows = self.sym_panel.legend_rows()
+        extras = MapExtras(self.map_area._legend_call if layer is self._current_layer else None,
+                           lambda lon, lat: layer_value_at(layer, lon, lat, rows))
+        self.show_on_map_requested.emit(bytes(buffer.data()), layer.bounds, f"{name} · {layer.name}", extras)
 
     def _show_error(self, exc: Exception) -> None:
         self.banner.show_error(str(exc) if isinstance(exc, GeeAssistError) else

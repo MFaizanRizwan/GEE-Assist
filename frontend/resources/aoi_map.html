@@ -196,15 +196,33 @@
     return div;
   };
 
-  function showImage(url, west, south, east, north, title, opacity) {
+  // controls === false: no box on the map (the window around it has its own opacity control)
+  function showImage(url, west, south, east, north, title, opacity, controls) {
     clearImage();
     image = L.imageOverlay(url, [[south, west], [north, east]], { opacity: opacity }).addTo(map);
-    imageBox.addTo(map);
-    var box = imageBox.getContainer();
-    box.querySelector('.overlay-title').textContent = title;
-    box.querySelector('input').value = Math.round(opacity * 100);
+    if (controls !== false) {
+      imageBox.addTo(map);
+      var box = imageBox.getContainer();
+      box.querySelector('.overlay-title').textContent = title;
+      box.querySelector('input').value = Math.round(opacity * 100);
+    }
     map.fitBounds(image.getBounds());
   }
+
+  function setImageOpacity(opacity) { if (image) image.setOpacity(opacity); }
+
+  // The pointer over the laid-over picture, so Python can show the value there.
+  var pointerInside = false;
+  map.on('mousemove', function (e) {
+    var inside = image !== null && image.getBounds().contains(e.latlng);
+    if (inside && bridge && bridge.pointerMoved) bridge.pointerMoved(e.latlng.lng, e.latlng.lat);
+    else if (!inside && pointerInside && bridge && bridge.pointerLeft) bridge.pointerLeft();
+    pointerInside = inside;
+  });
+  map.on('mouseout', function () {
+    if (pointerInside && bridge && bridge.pointerLeft) bridge.pointerLeft();
+    pointerInside = false;
+  });
 
   function clearImage() {
     if (image) { map.removeLayer(image); image = null; }

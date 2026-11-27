@@ -134,12 +134,18 @@ def test_show_on_map_sends_the_current_view_where_the_file_lies(viewer, sentinel
     viewer.open(str(sentinel))
     viewer.preset_box.setCurrentIndex(2)      # NDVI
     sent = []
-    viewer.show_on_map_requested.connect(lambda png, bounds, title: sent.append((png, bounds, title)))
+    viewer.show_on_map_requested.connect(lambda png, bounds, title, extras: sent.append((png, bounds, title, extras)))
 
     assert viewer.map_button.isEnabled()
     viewer.map_button.click()
 
-    [(png, bounds, title)] = sent
+    [(png, bounds, title, extras)] = sent
+    # the map shows its legend, and the NDVI under the pointer (read from the file)
+    assert extras.legend[0] == "scale"
+    west, south, east, north = bounds
+    value, what = extras.probe((west + east) / 2, (south + north) / 2)
+    assert what == "NDVI" and value != "no data"
+    assert extras.probe(west - 1, south) is None   # off the picture
     image = QImage.fromData(png, "PNG")
     assert png.startswith(b"\x89PNG") and (image.width(), image.height()) == (80, 60)
     assert bounds == viewer.info.bounds

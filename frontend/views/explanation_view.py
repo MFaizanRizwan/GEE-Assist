@@ -34,6 +34,8 @@ from backend.dto.result_dto import ResultDTO
 from backend.exceptions import GeeAssistError
 from frontend import layout_mode, palette, theme, theming
 from frontend.widgets.earth_loader import EarthLoader
+from frontend.widgets.layer_meaning import meaning
+from frontend.widgets.layer_values import layer_value
 from frontend.widgets.map_area import MapArea
 from frontend.widgets.raster_canvas import rgba_to_image
 from frontend.widgets.form_parts import StatusBanner
@@ -198,9 +200,11 @@ class ExplanationView(QWidget):
         try:
             layer = list(layers)[0]
             self.map_area.set_image(rgba_to_image(layer.data), layer.bounds, layer.width)
+            self.map_area.set_value_probe(lambda x, y, layer=layer: layer_value(layer, x, y))
             legend = layer.legend
             if legend.kind == "scale":
-                self.map_area.show_legend_scale(layer.name, tuple(legend.colours), legend.low, legend.high)
+                self.map_area.show_legend_scale(layer.name, tuple(legend.colours), legend.low, legend.high,
+                                                meaning(layer.id, layer.style))
             elif legend.kind == "classes":
                 self.map_area.show_legend_classes(legend.title or layer.name,
                                                   list(zip(legend.labels, legend.colours)))

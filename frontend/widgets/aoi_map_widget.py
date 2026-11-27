@@ -76,10 +76,20 @@ class _MapBridge(QObject):
     circle_drawn = pyqtSignal(float, float, float)
     polygon_drawn = pyqtSignal(str)
     shape_cleared = pyqtSignal()
+    pointer_moved = pyqtSignal(float, float)   # lon, lat over a laid-over picture
+    pointer_left = pyqtSignal()
 
     @pyqtSlot()
     def mapReady(self) -> None:  # noqa: N802 (called from JS)
         self.ready.emit()
+
+    @pyqtSlot(float, float)
+    def pointerMoved(self, lon: float, lat: float) -> None:  # noqa: N802 (called from JS)
+        self.pointer_moved.emit(lon, lat)
+
+    @pyqtSlot()
+    def pointerLeft(self) -> None:  # noqa: N802 (called from JS)
+        self.pointer_left.emit()
 
     @pyqtSlot(float, float, float, float)
     def bboxDrawn(self, west: float, south: float, east: float, north: float) -> None:  # noqa: N802
@@ -103,6 +113,8 @@ class AoiMapWidget(QWidget):
     circle_drawn = pyqtSignal(float, float, float)      # centre lon, centre lat, radius (m)
     polygon_drawn = pyqtSignal(str)                     # GeoJSON Polygon geometry
     shape_cleared = pyqtSignal()
+    pointer_moved = pyqtSignal(float, float)            # lon, lat of the pointer over a laid-over picture
+    pointer_left = pyqtSignal()                         # the pointer left that picture
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -131,6 +143,8 @@ class AoiMapWidget(QWidget):
         self._bridge.circle_drawn.connect(self.circle_drawn)
         self._bridge.polygon_drawn.connect(self.polygon_drawn)
         self._bridge.shape_cleared.connect(self.shape_cleared)
+        self._bridge.pointer_moved.connect(self.pointer_moved)
+        self._bridge.pointer_left.connect(self.pointer_left)
 
         self._channel = QWebChannel(self)
         self._channel.registerObject("bridge", self._bridge)
@@ -186,16 +200,23 @@ class AoiMapWidget(QWidget):
         self._run(script)
 
     def show_image(self, png: bytes, bounds: tuple[float, float, float, float], title: str,
-                   opacity: float = 0.8) -> None:
+                   opacity: float = 0.8, controls: bool = True) -> None:
         """Lay a PNG over the map at ``bounds`` (west, south, east, north in degrees), with an
-        opacity slider and a "Remove from map" button on the map.
+        opacity slider and a "Remove from map" button on the map (``controls=False``: none,
+        for a window with its own; see ``set_image_opacity``).
 
         The image is stretched over the bounds, which suits the small areas GEE-Assist
         downloads; over many degrees of latitude it drifts slightly from the map.
         """
         url = "data:image/png;base64," + base64.b64encode(png).decode("ascii")
         west, south, east, north = bounds
-        self._run(f"showImage({json.dumps(url)}, {west}, {south}, {east}, {north}, {json.dumps(title)}, {opacity})")
+        last = "" if controls else ", false"
+        self._run(f"showImage({json.dumps(url)}, {west}, {south}, {east}, {north}, {json.dumps(title)}, "
+                  f"{opacity}{last})")
+
+    def set_image_opacity(self, opacity: float) -> None:
+        """The laid-over picture's opacity, 0 (hidden) to 1 (opaque)."""
+        self._run(f"setImageOpacity({max(0.0, min(1.0, float(opacity)))})")
 
     def clear_image(self) -> None:
         self._run("clearImage()")

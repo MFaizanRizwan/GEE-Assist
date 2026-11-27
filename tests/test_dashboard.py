@@ -590,19 +590,30 @@ def test_file_menu_opens_any_geotiff(home, monkeypatch, chosen):
         assert opened == [] and home.current_page() is home.dashboard
 
 
-def test_show_on_map_lays_the_picture_over_the_query_input_map(home):
-    class FakeMap:
-        def __init__(self):
-            self.images = []
+def test_show_on_map_opens_the_picture_on_a_full_screen_map_and_stays_on_the_page(home, monkeypatch):
+    from PyQt6.QtWidgets import QWidget
 
-        def show_image(self, png, bounds, title):
-            self.images.append((png, bounds, title))
+    from frontend.views import full_map_window
 
-    home.query_input.form_view = type("Form", (), {"map_widget": FakeMap()})()
-    home.viewer.show_on_map_requested.emit(b"png", (73.0, 31.0, 73.2, 31.1), "x · NDVI")
+    opened = []
 
-    assert home.query_input.form_view.map_widget.images == [(b"png", (73.0, 31.0, 73.2, 31.1), "x · NDVI")]
-    assert isinstance(home.current_page(), StubQueryWorkspace)
+    class FakeMapWindow(QWidget):  # the real one loads the web map
+        def __init__(self, png, bounds, title, extras=None):
+            super().__init__()
+            opened.append((png, bounds, title, extras))
+
+        def showFullScreen(self):  # noqa: N802 (Qt API)
+            opened.append("full screen")
+
+    monkeypatch.setattr(full_map_window, "FullMapWindow", FakeMapWindow)
+    home.show_analysis()
+    extras = full_map_window.MapExtras()
+    home.analysis.show_on_map_requested.emit(b"png", (73.0, 31.0, 73.2, 31.1), "x · NDVI", extras)
+
+    assert opened == [(b"png", (73.0, 31.0, 73.2, 31.1), "x · NDVI", extras), "full screen"]
+    assert home.current_page() is home.analysis   # it used to jump to the Query Input form
+    assert isinstance(home.full_map, FakeMapWindow)
+    home.full_map.close()
 
 
 def test_every_pages_button_stays_in_the_side_bar_on_every_page(home):

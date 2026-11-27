@@ -60,6 +60,17 @@ class RasterCanvas(QGraphicsView):
         """Fade the raster (0 transparent, 1 opaque) — the "map overlay opacity" control."""
         self._item.setOpacity(max(0.0, min(1.0, opacity)))
 
+    def opacity(self) -> float:
+        return self._item.opacity()
+
+    def image(self) -> QImage:
+        """The picture shown (for a full-screen copy of the map)."""
+        return self._item.pixmap().toImage()
+
+    def image_size(self):
+        """The picture's size in image pixels (a QSize, empty when there is none)."""
+        return self._item.pixmap().size()
+
     def clear(self) -> None:
         self._item.setPixmap(QPixmap())
 

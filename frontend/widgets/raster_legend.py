@@ -78,7 +78,9 @@ class RasterLegend(QWidget):
         layout.addWidget(self.title)
         layout.addLayout(self._body)
 
-    def set_legend(self, legend: LegendDTO) -> None:
+    def set_legend(self, legend: LegendDTO, meaning: tuple[str, str] | None = None) -> None:
+        """Show ``legend``; for a colour scale, ``meaning`` says what its low and high ends
+        are (e.g. "Bare ground / water", "Dense, healthy vegetation")."""
         self.legend = legend
         self.title.setText(legend.title)
         self._clear()
@@ -91,6 +93,18 @@ class RasterLegend(QWidget):
             ends.addWidget(low)
             ends.addWidget(high)
             self._body.addLayout(ends)
+            if meaning and legend.colours:
+                grid = QGridLayout()
+                grid.setHorizontalSpacing(8)
+                grid.setVerticalSpacing(4)
+                for row, (colour, text) in enumerate(((legend.colours[-1], f"High: {meaning[1]}"),
+                                                      (legend.colours[0], f"Low: {meaning[0]}"))):
+                    label = QLabel(text)
+                    label.setWordWrap(True)
+                    grid.addWidget(_swatch(colour), row, 0)
+                    grid.addWidget(label, row, 1)
+                grid.setColumnStretch(1, 1)
+                self._body.addLayout(grid)
         else:
             if legend.kind == "classes":
                 rows = list(zip(legend.labels, legend.colours))
