@@ -24,6 +24,7 @@ from PyQt6.QtWidgets import (
     QListWidgetItem,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QSlider,
     QStackedWidget,
     QVBoxLayout,
@@ -205,11 +206,18 @@ class DistributionChart(QWidget):
         font.setPointSize(8)
         painter.setFont(font)
         y = self.height() - 4
-        painter.drawText(0, y, _fmt(self._vmin))
+        low, high = _fmt(self._vmin), _fmt(self._vmax)
+        painter.drawText(0, y, low)
         if self._label:
-            painter.setPen(QColor(self._p.subtle))
-            painter.drawText(self.rect().adjusted(0, chart, 0, 0),
-                             Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignBottom, self._label)
+            # Between the min and max, elided so it never runs over them.
+            metrics = painter.fontMetrics()
+            gap = 10
+            room = self.width() - 2 * max(metrics.horizontalAdvance(low), metrics.horizontalAdvance(high)) - 2 * gap
+            if room > 30:
+                name = metrics.elidedText(self._label, Qt.TextElideMode.ElideRight, room)
+                painter.setPen(QColor(self._p.subtle))
+                painter.drawText(self.rect().adjusted(0, chart, 0, 0),
+                                 Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignBottom, name)
         painter.setPen(QColor(self._p.muted))
         painter.drawText(self.rect().adjusted(0, chart, -2, 0),
                          Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom, _fmt(self._vmax))
@@ -346,7 +354,15 @@ class SymbologyPanel(QWidget):
             self._ramp_buttons[name] = swatch
             label = QLabel(name)
             label.setStyleSheet(f"color: {self._p.subtle}; font-size: 8pt;")
+            # Long names ("Purple–Green (diverging)") wrap within their third of the column;
+            # unwrapped they made the panel ~470px wide in a ~290px column, so its right side
+            # (sliders, Reset symbology) was cut off.
+            label.setWordWrap(True)
+            label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+            label.setToolTip(name)
+            swatch.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)  # a third of the row
             cell = QVBoxLayout()
+            cell.setContentsMargins(0, 0, 0, 0)
             cell.setSpacing(2)
             cell.addWidget(swatch)
             cell.addWidget(label)
@@ -366,6 +382,9 @@ class SymbologyPanel(QWidget):
             button = QPushButton(label, objectName="SegButton")
             button.setCheckable(True)
             button.setCursor(Qt.CursorShape.PointingHandCursor)
+            button.setToolTip(label)
+            # the four of a row share the column equally instead of setting its width
+            button.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
             button.clicked.connect(lambda _=False, k=key: self._on_stretch(k))
             group.addButton(button)
             self._stretch_buttons[key] = button
@@ -445,10 +464,13 @@ class SymbologyPanel(QWidget):
         box.setContentsMargins(14, 10, 14, 14)
         box.setSpacing(12)
         self._stats_grid = QGridLayout()
+        self._stats_grid.setColumnStretch(0, 1)  # two equal columns of tiles
+        self._stats_grid.setColumnStretch(1, 1)
         self._stats_grid.setHorizontalSpacing(8)
         self._stats_grid.setVerticalSpacing(8)
         box.addLayout(self._stats_grid)
-        box.addWidget(_section("Distribution", self._p))
+        self._dist_title = _section("Distribution", self._p)  # hidden with the chart (class layers)
+        box.addWidget(self._dist_title)
         self._dist = DistributionChart(self._dark)
         box.addWidget(self._dist)
         box.addWidget(_section("Run", self._p))
@@ -569,7 +591,7 @@ class SymbologyPanel(QWidget):
         swatch = QLabel()
         swatch.setFixedSize(14, 14)
         swatch.setStyleSheet(f"background: {colour}; border-radius: 3px;")
-        name = QLabel(label)
+        name = _fitting(QLabel(label))
         name.setStyleSheet(f"color: {self._p.ink}; font-weight: 600; font-size: 9pt;")
         pct = QLabel(f"{fraction * 100:.1f}%")
         pct.setStyleSheet(f"color: {self._p.muted}; font-size: 9pt;")
@@ -615,8 +637,10 @@ class SymbologyPanel(QWidget):
             self._dist.set_data(counts, stats.get("min", 0.0), stats.get("max", 1.0),
                                 self.state.ramp, self.state.invert, layer.name)
             self._dist.setVisible(True)
+            self._dist_title.setVisible(True)
         else:
             self._dist.setVisible(False)
+            self._dist_title.setVisible(False)
             for i, (label, _colour, fraction) in enumerate(layer.class_fractions):
                 self._stats_grid.addWidget(self._stat_tile(label, f"{fraction * 100:.1f}%"), i // 2, i % 2)
         rows = [("Compute", self._run_info.get("device", "")),
@@ -626,10 +650,10 @@ class SymbologyPanel(QWidget):
         for i, (name, value) in enumerate(rows):
             key = QLabel(name)
             key.setStyleSheet(f"color: {self._p.muted}; font-size: 9pt;")
-            val = QLabel(str(value))
+            val = _fitting(QLabel(_breakable(str(value))))
             val.setStyleSheet(f"color: {self._p.ink}; font-size: 9pt; font-weight: 600;")
             val.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-            val.setWordWrap(True)
+            val.setToolTip(str(value))
             self._run_grid.addWidget(key, i, 0)
             self._run_grid.addWidget(val, i, 1)
         self._run_grid.setColumnStretch(1, 1)
@@ -639,9 +663,9 @@ class SymbologyPanel(QWidget):
         layout = QVBoxLayout(tile)
         layout.setContentsMargins(12, 9, 12, 9)
         layout.setSpacing(2)
-        key = QLabel(name.upper())
+        key = _fitting(QLabel(name.upper()))
         key.setStyleSheet(f"color: {self._p.muted}; font-size: 8pt; font-weight: 700; letter-spacing: 0.5px;")
-        val = QLabel(value)
+        val = _fitting(QLabel(value))
         val.setStyleSheet(f"color: {self._p.ink}; font-size: 12.7pt; font-weight: 700;")
         layout.addWidget(key)
         layout.addWidget(val)
@@ -760,7 +784,7 @@ class SymbologyPanel(QWidget):
         QPushButton#SymTab:checked {{ color: {p.ink}; border-bottom: 2px solid {p.accent}; }}
         QPushButton#SegButton {{
             background: {p.field}; color: {p.muted}; border: 1px solid {p.line};
-            padding: 6px 8px; font-weight: 600; font-size: 8pt;
+            padding: 6px 3px; font-weight: 600; font-size: 8pt;
         }}
         QPushButton#SegButton:checked {{ background: {p.card}; color: {p.ink}; border-color: {p.accent}; }}
         QPushButton#ToggleChip {{
@@ -805,6 +829,22 @@ class SymbologyPanel(QWidget):
                 buttons[-1].setStyleSheet("#SegButton { border-top-right-radius: 8px; border-bottom-right-radius: 8px; }")
         self._std_button.setStyleSheet("#SegButton { border-top-left-radius: 8px; border-bottom-left-radius: 8px; }")
         self._hc_button.setStyleSheet("#SegButton { border-top-right-radius: 8px; border-bottom-right-radius: 8px; }")
+
+
+def _fitting(label: QLabel) -> QLabel:
+    """A label that wraps and takes the width it is given, instead of widening the panel.
+
+    The panel sits in a ~300px column; one unwrappable label (a class name, a dataset name, a
+    stat tile title) used to make a whole tab wider than that and cut off its right side."""
+    label.setWordWrap(True)
+    label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+    label.setToolTip(label.toolTip() or label.text().replace("​", ""))
+    return label
+
+
+def _breakable(text: str) -> str:
+    """Let long names without spaces (Sentinel-2_73.09_31.42_…) wrap after "_" (zero-width space)."""
+    return text.replace("_", "_​")
 
 
 def _fmt(value) -> str:

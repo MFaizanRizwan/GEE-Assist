@@ -73,13 +73,23 @@ def qcolor(hex_value: str, alpha: int = 255) -> QColor:
     return c
 
 
+def use_fusion(app: QApplication) -> None:
+    """Use Qt's Fusion style, unless it is already in use. Setting a style rebuilds it for
+    every widget (seconds in a full window), so a live theme change must not repeat it.
+    (Once an app stylesheet is set, Qt wraps the style and reports no name, so whether
+    Fusion is set is remembered on the application.)"""
+    if not app.property("gee_fusion"):
+        app.setStyle("Fusion")
+        app.setProperty("gee_fusion", True)
+
+
 def apply_palette(app: QApplication) -> None:
     """Give Qt the theme's colours, whatever colour scheme Windows uses.
 
     Fusion follows the system colour scheme, which turned the light form dark: the
     scheme is set to the theme's (light or dark) instead.
     """
-    app.setStyle("Fusion")
+    use_fusion(app)
     app.styleHints().setColorScheme(Qt.ColorScheme.Dark if palette.IS_DARK else Qt.ColorScheme.Light)
 
     p = QPalette()

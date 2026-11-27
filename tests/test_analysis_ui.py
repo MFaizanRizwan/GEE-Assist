@@ -528,3 +528,43 @@ def test_the_legend_keeps_its_bar_and_range_when_the_symbology_changes():
     labels = [w.text() for w in legend.findChildren(QLabel) if w.isVisibleTo(legend)]
     assert {"0", "0.250", "0.500"} <= set(labels)
     host.deleteLater()
+
+
+def test_every_tab_of_the_symbology_panel_fits_the_column_beside_the_map():
+    import numpy as np
+    from PyQt6.QtWidgets import QScrollArea
+
+    from frontend.views.analysis_view import SIDE_WIDTH
+    from frontend.widgets.symbology_panel import SymbologyPanel
+
+    values = np.linspace(-1234.5, 98765.4, 600, dtype="float32").reshape(20, 30)  # wide numbers
+    counts, edges = np.histogram(values, bins=40)
+    scale = MapLayerDTO("NDVI", "Normalized Difference Vegetation Index", "vegetation", np.zeros((20, 30, 4), "uint8"),
+                        LegendDTO("scale", "NDVI", -0.2, 0.8, ("#000000", "#FFFFFF")), 30, 20, kind="scale",
+                        values=values, stats={"min": -1234.5, "max": 98765.4, "mean": 45678.9, "std": 12345.6,
+                                              "p2": -1000.2, "p98": 97000.1},
+                        histogram=(counts.tolist(), edges.tolist()))
+    classes = MapLayerDTO("LC", "Land cover", "classes", np.zeros((20, 30, 4), "uint8"),
+                          LegendDTO("classes", "Land cover", 0, 1, ()), 30, 20, kind="classes",
+                          class_fractions=(("Trees", "#397d49", 0.3), ("Shrub and scrub land cover", "#dfc35a", 0.7)))
+    run = {"device": "GPU: NVIDIA GeForce RTX 3060 Laptop GPU", "duration": "12.34 s",
+           "dataset": "Sentinel-2_73.0921_31.4270_2026-08-27_2026-11-27"}
+    panel = SymbologyPanel(dark=True)
+    panel.resize(SIDE_WIDTH - 28, 640)  # the column, less its margins
+    panel.show()
+    # Unwrappable text (ramp names, class names, the dataset name, stat tile titles) used to make
+    # tabs ~400-470px wide, cutting off their right side (sliders, "Reset symbology", values).
+    for layer in (scale, classes):
+        panel.set_layer(layer, run)
+        for tab in range(3):
+            panel._tabs.button(tab).click()
+            QTest.qWait(30)
+            page = panel._pages.currentWidget()
+            if page is panel._sym_stack:
+                page = page.currentWidget()
+            if isinstance(page, QScrollArea):
+                assert page.horizontalScrollBar().maximum() == 0, (layer.kind, tab)
+                assert page.widget().width() <= page.viewport().width(), (layer.kind, tab)
+            assert page.minimumSizeHint().width() <= panel.width(), (layer.kind, tab)
+    panel.deleteLater()
+

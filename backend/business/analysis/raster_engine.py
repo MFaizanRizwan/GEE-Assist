@@ -32,6 +32,7 @@ from backend.exceptions import AnalysisError
 
 EARTH_RADIUS_KM = 6371.0088
 DEFAULT_BLOCK_ROWS = 1024
+WRITE_CACHE_MB = 64          # GDAL's block cache while writing a result (see RasterEngine.run)
 
 Progress = Callable[[float], None]
 
@@ -335,12 +336,18 @@ class RasterEngine:
             Path(output_path).parent.mkdir(parents=True, exist_ok=True)
             profile = dict(driver="GTiff", width=self.width, height=self.height, count=len(layers), dtype="float32",
                            crs=self.crs, transform=self.transform, nodata=NODATA, compress="deflate", tiled=True,
-                           blockxsize=256, blockysize=256, BIGTIFF="IF_SAFER")
+                           blockxsize=256, blockysize=256, BIGTIFF="IF_SAFER",
+                           # band by band, so a block's write completes whole tiles of each band
+                           interleave="band", num_threads="ALL_CPUS")
             if self.width < 256 or self.height < 256:
                 profile.update(tiled=False)
                 profile.pop("blockxsize")
                 profile.pop("blockysize")
-            with rasterio.open(output_path, "w", **profile) as dst:
+            # A small GDAL block cache makes GDAL compress and write finished tiles DURING the
+            # writes below, which run without Python's GIL. With the default (large) cache it kept
+            # every tile and compressed them all when the file closed, which holds the GIL: on a
+            # 30-layer result that froze the whole app (the loading animation too) for ~20 s.
+            with rasterio.Env(GDAL_CACHEMAX=WRITE_CACHE_MB), rasterio.open(output_path, "w", **profile) as dst:
                 for index, layer in enumerate(layers, start=1):
                     dst.set_band_description(index, layer.key)
                 for row, height in self.blocks():

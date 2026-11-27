@@ -199,6 +199,10 @@ refresh()  # build the colour constants and stylesheets for the saved theme at i
 
 
 def apply_theme(app: QApplication) -> None:
-    app.setStyle("Fusion")
-    app.setFont(QFont(SANS, fonts.MD))
+    from frontend.form_theme import use_fusion  # late: form_theme imports this module
+
+    use_fusion(app)
+    font = QFont(SANS, fonts.MD)
+    if app.font() != font:  # setting it again re-polishes every widget
+        app.setFont(font)
     app.setStyleSheet(STYLESHEET)
