@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import numpy as np
 from PyQt6.QtCore import QPointF, Qt, pyqtSignal
-from PyQt6.QtGui import QColor, QImage, QPainter, QPixmap
+from PyQt6.QtGui import QColor, QCursor, QImage, QPainter, QPixmap
 from PyQt6.QtWidgets import QFrame, QGraphicsPixmapItem, QGraphicsScene, QGraphicsView, QWidget
 
 from frontend import theme
@@ -46,6 +46,7 @@ class RasterCanvas(QGraphicsView):
         self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
         self.setMouseTracking(True)
         self._fit_scale = 1.0
+        self._hover_cursor: QCursor | None = None   # over the picture, when its values can be read
 
     # ------------------------------------------------------------- image
     def set_image(self, image: QImage, keep_view: bool = False) -> None:
@@ -111,9 +112,24 @@ class RasterCanvas(QGraphicsView):
     def mouseDoubleClickEvent(self, event) -> None:  # noqa: N802 (Qt API)
         self.fit()
 
+    def set_hover_cursor(self, cursor: QCursor | None) -> None:
+        """The pointer to show over the picture (e.g. a ring where values are read); None: the hand."""
+        self._hover_cursor = cursor
+        if cursor is None:
+            self.viewport().setCursor(Qt.CursorShape.OpenHandCursor)
+
+    def _show_cursor(self, over_image: bool) -> None:
+        if self._hover_cursor is None or event_dragging():
+            return  # dragging keeps the closed hand
+        self.viewport().setCursor(self._hover_cursor if over_image else Qt.CursorShape.OpenHandCursor)
+
     def mouseMoveEvent(self, event) -> None:  # noqa: N802 (Qt API)
         super().mouseMoveEvent(event)
-        self.report_position(self.mapToScene(event.position().toPoint()))
+        self._show_cursor(self.report_position(self.mapToScene(event.position().toPoint())))
+
+    def mouseReleaseEvent(self, event) -> None:  # noqa: N802 (Qt API)
+        super().mouseReleaseEvent(event)  # (the view puts its open hand back here)
+        self._show_cursor(self.report_position(self.mapToScene(event.position().toPoint())))
 
     def leaveEvent(self, event) -> None:  # noqa: N802 (Qt API)
         super().leaveEvent(event)
@@ -124,10 +140,19 @@ class RasterCanvas(QGraphicsView):
         if self.has_image() and abs(self.zoom() - 1.0) < 1e-6:
             self.fit()  # still showing the whole image: keep it whole
 
-    def report_position(self, point: QPointF) -> None:
-        """Emit the image pixel at ``point`` (scene coordinates), or that it is off the image."""
+    def report_position(self, point: QPointF) -> bool:
+        """Emit the image pixel at ``point`` (scene coordinates), or that it is off the image.
+        True when it is on the image."""
         size = self._item.pixmap().size()
         if self.has_image() and 0 <= point.x() < size.width() and 0 <= point.y() < size.height():
             self.hovered.emit(point.x(), point.y())
-        else:
-            self.left_image.emit()
+            return True
+        self.left_image.emit()
+        return False
+
+
+def event_dragging() -> bool:
+    """A mouse button is held (the map is being dragged)."""
+    from PyQt6.QtWidgets import QApplication
+
+    return QApplication.mouseButtons() != Qt.MouseButton.NoButton

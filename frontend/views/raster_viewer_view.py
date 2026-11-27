@@ -38,6 +38,7 @@ from frontend.widgets.raster_canvas import RasterCanvas, rgba_to_image
 from frontend.views.full_map_window import MapExtras
 from frontend.widgets.layer_meaning import meaning as legend_meaning
 from frontend.widgets.map_overlays import ValueReadout
+from frontend.widgets.probe_cursor import probe_cursor
 from frontend.widgets.raster_legend import RasterLegend, format_value
 from frontend.widgets.toggle_switch import ToggleSwitch
 from frontend.workers.task_worker import run_task
@@ -115,6 +116,8 @@ class RasterViewerView(QWidget):
         self.canvas = RasterCanvas()
         # the value under the pointer, floating over the picture (as on the Analysis map)
         self.readout = ValueReadout(palette.IS_DARK, self.canvas)
+        self._ring_cursor()
+        theming.on_theme_changed(self._ring_cursor)   # the ring takes the new theme's colour
         canvas_card = QFrame(objectName="ViewerCanvasCard")
         canvas_layout = QVBoxLayout(canvas_card)
         canvas_layout.setContentsMargins(6, 6, 6, 6)
@@ -328,6 +331,10 @@ class RasterViewerView(QWidget):
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(Path(self.info.path).parent)))
 
     # ------------------------------------------------------------- values under the pointer
+    def _ring_cursor(self) -> None:
+        """Over the picture the pointer is a hollow ring in the theme's colour: values are read there."""
+        self.canvas.set_hover_cursor(probe_cursor(self.devicePixelRatioF()))
+
     def _on_hovered(self, x: float, y: float) -> None:
         self._pointer = (x, y)
         self._hover_timer.start()

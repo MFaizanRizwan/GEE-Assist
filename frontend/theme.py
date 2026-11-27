@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import tempfile
 from pathlib import Path
 
 from PyQt6.QtGui import QColor, QFont
@@ -184,7 +185,7 @@ QScrollArea > QWidget > QWidget {{ background: transparent; }}
 QScrollBar:vertical {{ background: transparent; width: 10px; margin: 2px; }}
 QScrollBar::handle:vertical {{ background: {BORDER_STRONG}; border-radius: 4px; min-height: 30px; }}
 QScrollBar::add-line, QScrollBar::sub-line {{ height: 0; }}
-"""
+""" + spin_buttons_css()
 
     # Pop-up menus (the account menu, the menu bar's menus).
     MENU_STYLE = f"""
@@ -193,6 +194,74 @@ QMenu::item {{ color: {INK}; padding: 8px 18px; border-radius: 6px; }}
 QMenu::item:selected {{ background: {FOAM}; }}
 QMenu::item:disabled {{ color: {SUBTLE}; }}
 """
+
+
+# ----------------------------------------------------------------------------- spin box buttons
+_GENERATED_ICONS = Path(tempfile.gettempdir()) / "gee-assist-icons"
+_CHEVRON = {"up": "M2.5 7.5 L6 4 L9.5 7.5", "down": "M2.5 4.5 L6 8 L9.5 4.5"}
+
+
+def chevron_icon(direction: str, colour: str) -> str:
+    """A chevron ("up" or "down") drawn in ``colour``, as an SVG file path for a stylesheet.
+
+    The bundled chevrons are one fixed dark colour, invisible on the dark themes; these
+    follow the theme. Written once per colour and reused."""
+    path = _GENERATED_ICONS / f"chevron_{direction}_{colour.lstrip('#').lower()}.svg"
+    if not path.exists():
+        try:
+            _GENERATED_ICONS.mkdir(parents=True, exist_ok=True)
+            path.write_text(
+                '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 12 12">'
+                f'<path d="{_CHEVRON[direction]}" fill="none" stroke="{colour}" stroke-width="1.7" '
+                'stroke-linecap="round" stroke-linejoin="round"/></svg>', encoding="utf-8")
+        except OSError:  # no writable temp folder: the bundled (fixed-colour) chevron
+            return (_ICONS_DIR / f"chevron_{direction}.svg").as_posix()
+    return path.as_posix()
+
+
+def spin_buttons_css() -> str:
+    """The up / down buttons of every number box, in the app stylesheet.
+
+    A page that gives its number boxes their own border or padding (most pages do) turns
+    off Qt's native arrows, and its buttons were drawn empty: two blank boxes at the
+    right edge. These rules draw them on every page, in the theme's colours."""
+    up, down = chevron_icon("up", INK), chevron_icon("down", INK)
+    up_off, down_off = chevron_icon("up", SUBTLE), chevron_icon("down", SUBTLE)
+    boxes = ("QSpinBox", "QDoubleSpinBox")
+
+    def rule(part: str) -> str:
+        return ", ".join(f"{box}::{part}" for box in boxes)
+
+    return f"""
+{rule("up-button")}, {rule("down-button")} {{
+    subcontrol-origin: border; width: 22px; background: transparent;
+    border: none; border-left: 1px solid {BORDER};
+}}
+{rule("up-button")} {{ subcontrol-position: top right; border-top-right-radius: 7px; }}
+{rule("down-button")} {{ subcontrol-position: bottom right; border-bottom-right-radius: 7px; }}
+{rule("up-button:hover")}, {rule("down-button:hover")} {{ background: {ACCENT_SOFT or MINT}; }}
+{rule("up-button:pressed")}, {rule("down-button:pressed")} {{ background: {BORDER}; }}
+{rule("up-arrow")} {{ image: url("{up}"); width: 10px; height: 10px; }}
+{rule("down-arrow")} {{ image: url("{down}"); width: 10px; height: 10px; }}
+{rule("up-arrow:disabled")}, {rule("up-arrow:off")} {{ image: url("{up_off}"); }}
+{rule("down-arrow:disabled")}, {rule("down-arrow:off")} {{ image: url("{down_off}"); }}
+"""
+
+
+# ----------------------------------------------------------------------------- the least-used colour
+def least_used_colour() -> str:
+    """The theme's own colour it uses least: of its accent, its second colour and its button
+    colour, the one that appears least in the app's stylesheets (for small marks that should
+    stand apart from the rest of the UI, such as the map's probe cursor).
+
+    In every bundled theme this is its second colour (OCEAN): blue in Light, celadon in Indigo,
+    cream in Navy... It is measured, not assumed, so a new theme gets its own."""
+    from frontend import form_theme  # late: form_theme imports this module
+
+    sheets = (STYLESHEET + form_theme.FORM_STYLESHEET + form_theme.MAIN_WINDOW_STYLESHEET
+              + form_theme.STUDIO_FORM_STYLESHEET).upper()
+    candidates = [colour for colour in (OCEAN, LEAF, ACCENT_SOLID) if colour]
+    return min(candidates, key=lambda colour: sheets.count(colour.upper())) if candidates else "#2F7FC1"
 
 
 refresh()  # build the colour constants and stylesheets for the saved theme at import

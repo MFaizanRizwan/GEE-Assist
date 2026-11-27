@@ -15,7 +15,9 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QImage, QKeySequence, QShortcut
 from PyQt6.QtWidgets import QPushButton, QVBoxLayout, QWidget
 
+from frontend import theming
 from frontend.widgets.map_overlays import LegendOverlay, ScaleBar, ValueReadout
+from frontend.widgets.probe_cursor import probe_cursor
 from frontend.widgets.raster_canvas import RasterCanvas
 
 # image pixel (x, y) -> (the value there as text, what it is), or None (no value there)
@@ -92,6 +94,7 @@ class MapArea(QWidget):
 
         self.canvas.view_changed.connect(self._update_scalebar)
         self.canvas.hovered.connect(self._on_hovered)
+        theming.on_theme_changed(self._refresh_cursor)   # the ring takes the new theme's colour
         self.canvas.left_image.connect(self.readout.hide)
 
     def _round_zoom_corners(self) -> None:
@@ -123,18 +126,24 @@ class MapArea(QWidget):
 
     # ------------------------------------------------------------- value under the pointer
     def set_value_probe(self, probe: ValueProbe | None) -> None:
-        """Show the value under the pointer, read by ``probe`` (None: show nothing)."""
+        """Show the value under the pointer, read by ``probe`` (None: show nothing). While
+        there is one, the pointer over the map is a hollow ring in the theme's colour."""
         self._probe = probe
         self.readout.hide()
+        self._refresh_cursor()
+
+    def _refresh_cursor(self) -> None:
+        self.canvas.set_hover_cursor(probe_cursor(self.devicePixelRatioF()) if self._probe is not None else None)
 
     def lon_lat_at(self, x: float, y: float) -> tuple[float, float] | None:
-        """Longitude and latitude at image pixel (x, y): exact for EPSG:4326 results."""
+        """Longitude and latitude at image position (x, y) (fractional: the pointer's own
+        spot, not its pixel's centre). Exact for EPSG:4326 results."""
         size = self.canvas.image_size()
         if self._bounds is None or size.isEmpty():
             return None
         west, south, east, north = self._bounds
-        return (west + (x + 0.5) / size.width() * (east - west),
-                north - (y + 0.5) / size.height() * (north - south))
+        return (west + x / size.width() * (east - west),
+                north - y / size.height() * (north - south))
 
     def _on_hovered(self, x: float, y: float) -> None:
         place = self.lon_lat_at(x, y)
@@ -161,7 +170,7 @@ class MapArea(QWidget):
             return None
         if self.full_window is not None:
             self.full_window.close()
-        window = QWidget(None, Qt.WindowType.Window)
+        window = _FullScreenWindow()
         window.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
         window.setWindowTitle(self.window().windowTitle() or "Map")
         layout = QVBoxLayout(window)
@@ -230,6 +239,19 @@ class MapArea(QWidget):
         self._legend_call = ("scale", (title, colours, low, high, meaning))
         self.legend.show_scale(title, colours, low, (low + high) / 2, high, meaning)
         self._reposition_legend()
+
+
+class _FullScreenWindow(QWidget):
+    """The window of a full-screen map: Esc closes it, wherever the focus is inside it."""
+
+    def __init__(self):
+        super().__init__(None, Qt.WindowType.Window)
+
+    def keyPressEvent(self, event) -> None:  # noqa: N802 (Qt API)
+        if event.key() == Qt.Key.Key_Escape:
+            self.close()
+        else:
+            super().keyPressEvent(event)
 
 
 class _IconButton(QPushButton):

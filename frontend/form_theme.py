@@ -67,6 +67,13 @@ CHEVRON_UP = (_ICONS / "chevron_up.svg").as_posix()
 SPARKLE_WHITE_ICON = (_ICONS / "sparkle_white.svg").as_posix()
 
 
+def _chevron(direction: str) -> str:
+    """A chevron in the theme's ink (the bundled one is a fixed dark grey, unseen on dark themes)."""
+    from frontend.theme import chevron_icon  # late: theme imports this module
+
+    return chevron_icon(direction, INK)
+
+
 def qcolor(hex_value: str, alpha: int = 255) -> QColor:
     c = QColor(hex_value)
     c.setAlpha(alpha)
@@ -213,7 +220,7 @@ QComboBox::drop-down, QDateEdit::drop-down {{
     subcontrol-origin: padding; subcontrol-position: center right;
     width: 24px; border: none;
 }}
-QComboBox::down-arrow, QDateEdit::down-arrow {{ image: url("{CHEVRON_DOWN}"); width: 12px; height: 12px; }}
+QComboBox::down-arrow, QDateEdit::down-arrow {{ image: url("{_chevron("down")}"); width: 12px; height: 12px; }}
 QSpinBox::up-button, QDoubleSpinBox::up-button, QSpinBox::down-button, QDoubleSpinBox::down-button {{
     subcontrol-origin: border; width: 20px; border: none; background: transparent;
 }}
@@ -221,8 +228,8 @@ QSpinBox::up-button, QDoubleSpinBox::up-button {{ subcontrol-position: top right
 QSpinBox::down-button, QDoubleSpinBox::down-button {{ subcontrol-position: bottom right; }}
 QSpinBox::up-button:hover, QDoubleSpinBox::up-button:hover,
 QSpinBox::down-button:hover, QDoubleSpinBox::down-button:hover {{ background: {MINT}; border-radius: 4px; }}
-QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {{ image: url("{CHEVRON_UP}"); width: 10px; height: 10px; }}
-QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {{ image: url("{CHEVRON_DOWN}"); width: 10px; height: 10px; }}
+QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {{ image: url("{_chevron("up")}"); width: 10px; height: 10px; }}
+QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {{ image: url("{_chevron("down")}"); width: 10px; height: 10px; }}
 
 QComboBox QAbstractItemView {{
     background: {WHITE};

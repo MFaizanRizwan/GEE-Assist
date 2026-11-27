@@ -125,6 +125,12 @@ class FullMapWindow(QWidget):
         self.map.show_image(png, bounds, title, opacity=DEFAULT_OPACITY, controls=False)
         self._on_opacity(self.opacity.value())
 
+    def keyPressEvent(self, event) -> None:  # noqa: N802 (Qt API)
+        if event.key() == Qt.Key.Key_Escape:  # also when the shortcut cannot fire (window not active)
+            self.close()
+        else:
+            super().keyPressEvent(event)
+
     # ------------------------------------------------------------- opacity
     def _on_opacity(self, value: int) -> None:
         self.opacity_value.setText(f"{value}%")
