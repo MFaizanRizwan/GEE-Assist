@@ -136,3 +136,43 @@ def test_the_mouse_resizes_and_moves_the_arrow_and_stretches_the_scale_bar():
     drag(at(bar, end), at(bar, end + QPointF(60, 0)))                    # its right end, stretched
     assert bar.length > length + 30 and bar.distance()[0] > metres * 1.3
     dialog.deleteLater()
+
+
+def test_the_pdf_fills_the_other_areas_in_one_colour_and_keeps_the_surface_s_colours(tmp_path):
+    """The fill lies under the surface and leaves the analysed area out. It once also faded the
+    surface: the PDF engine kept the see-through brush's transparency for the image after it."""
+    pymupdf = pytest.importorskip("pymupdf")
+    spec = _spec()
+    spec.boundary_rings = [COUNTRY, CITY]                  # the country around the analysed city
+    spec.extent = (72.0, 30.3, 74.3, 32.6)                 # the city in the middle, the country around it
+    rgba = np.zeros((46, 46, 4), np.uint8)                 # a surface clipped to the city: see-through around
+    rgba[20:26, 20:26, 0], rgba[20:26, 20:26, 3] = 230, 255
+    spec.image = rgba_to_image(rgba)
+    spec.fill_colour, spec.fill_opacity = "#00AA00", 0.5
+    dialog = MapLayoutDialog(spec)
+    assert dialog.toggles["fill"].isVisibleTo(dialog)
+    for key in ("legend", "north", "scale", "title", "note", "points"):
+        dialog.toggles[key].setChecked(False)
+    frame = dialog.frame_item
+
+    def pixel(pdf, x, y):
+        page = pymupdf.open(pdf)[0]
+        pix = page.get_pixmap(dpi=72)
+        point = frame.to_page(x, y)
+        return pix.pixel(int(point.x() * pix.width / page.rect.width), int(point.y() * pix.height / page.rect.height))
+
+    filled = dialog.export(str(tmp_path / "filled.pdf"))
+    surface, around = pixel(filled, 73.15, 31.45), pixel(filled, 72.4, 30.6)
+    assert surface[0] > 200 and surface[1] < 40          # the surface's red, at full strength
+    assert around[1] > around[0] + 60                     # the area around: green
+    dialog.toggles["fill"].setChecked(False)
+    plain = dialog.export(str(tmp_path / "plain.pdf"))
+    assert pixel(plain, 73.15, 31.45) == surface          # the fill never changes the surface
+    assert pixel(plain, 72.4, 30.6) == (255, 255, 255)    # without the fill: white
+    dialog.deleteLater()
+
+
+def test_without_a_fill_the_designer_offers_no_fill_toggle():
+    dialog = MapLayoutDialog(_spec())
+    assert not dialog.toggles["fill"].isVisibleTo(dialog)
+    dialog.deleteLater()

@@ -361,6 +361,34 @@ class IdwView(QWidget):
             self.focus_toggles[key] = toggle
             layers.addWidget(toggle)
         self.focus_toggles["other_areas"].toggled.connect(self._on_other_areas)
+        # ---- how the boundaries are drawn: outlines, or every area filled in one colour
+        self.boundary_style_box = QComboBox()
+        self.boundary_style_box.addItem("Outlines", "outline")
+        self.boundary_style_box.addItem("Filled, one colour", "filled")
+        self.boundary_style_box.setToolTip("Draw the shapefile as outlines, or as a single-colour map")
+        self.fill_colour = "#2E7D32"
+        self.fill_colour_button = QPushButton()
+        self.fill_colour_button.setObjectName("SecondaryButton")
+        self.fill_colour_button.setToolTip("The fill colour")
+        self.fill_colour_button.setFixedWidth(44)
+        self.fill_opacity = QSlider(Qt.Orientation.Horizontal)
+        self.fill_opacity.setRange(5, 100)
+        self.fill_opacity.setValue(55)
+        self.fill_opacity.setToolTip("How solid the fill is")
+        self.boundary_style_box.currentIndexChanged.connect(lambda *_: self._apply_boundary_style())
+        self.fill_opacity.valueChanged.connect(lambda *_: self._apply_boundary_style())
+        self.fill_colour_button.clicked.connect(self._choose_fill_colour)
+        style_row = QHBoxLayout()
+        style_row.setSpacing(6)
+        style_row.addWidget(self.boundary_style_box, 1)
+        style_row.addWidget(self.fill_colour_button)
+        layers.addLayout(style_row)
+        fill_row = QHBoxLayout()
+        fill_row.addWidget(QLabel("Fill", objectName="Muted"))
+        fill_row.addWidget(self.fill_opacity, 1)
+        layers.addLayout(fill_row)
+        self._paint_fill_button()
+        self._set_fill_controls_enabled(False)
         self.focus_toggles["outside_points"].toggled.connect(lambda *_: self._points_changed())
         self.basemap_box = QComboBox()
         self.basemap_box.addItem("Streets", "streets")
@@ -654,6 +682,34 @@ class IdwView(QWidget):
     def _on_other_areas(self, on: bool) -> None:
         self.world.set_other_areas_visible(on)
 
+    # ---- boundary style
+    def _apply_boundary_style(self) -> None:
+        filled = self.boundary_style_box.currentData() == "filled"
+        self._set_fill_controls_enabled(filled)
+        self.world.set_boundary_style(filled, self.fill_colour, self.fill_opacity.value() / 100)
+
+    def _set_fill_controls_enabled(self, on: bool) -> None:
+        self.fill_colour_button.setEnabled(on)
+        self.fill_opacity.setEnabled(on)
+
+    def _choose_fill_colour(self) -> None:
+        from PyQt6.QtGui import QColor
+        from PyQt6.QtWidgets import QColorDialog
+
+        chosen = QColorDialog.getColor(QColor(self.fill_colour), self, "Fill colour")
+        if chosen.isValid():
+            self.set_fill_colour(chosen.name())
+
+    def set_fill_colour(self, colour: str) -> None:
+        self.fill_colour = colour
+        self._paint_fill_button()
+        self._apply_boundary_style()
+
+    def _paint_fill_button(self) -> None:
+        self.fill_colour_button.setStyleSheet(
+            f"QPushButton {{ background: {self.fill_colour}; border: 1px solid #55625D; border-radius: 4px; "
+            f"min-height: 22px; }} QPushButton:disabled {{ background: {self.fill_colour}; opacity: 0.4; }}")
+
     # ================================================================ boundaries and the selection
     def open_boundaries(self) -> None:
         path, _ = QFileDialog.getOpenFileName(self, "Open boundaries", "", "Shapefiles (*.shp);;All files (*)")
@@ -930,7 +986,10 @@ class IdwView(QWidget):
             title=f"{result.field} (IDW){where}", image=rgba_to_image(self._rgba), extent=result.bounds,
             geographic=True, legend_title=f"{result.field}", legend=self._legend, boundary_rings=rings + selected,
             selected_rings=selected, points=points, note=note, load_boundary=load_boundary,
-            context_rings=context, context_extent=self._boundary.bounds if self._boundary is not None else None)
+            context_rings=context, context_extent=self._boundary.bounds if self._boundary is not None else None,
+            # the one-colour fill, when the map draws the areas that way
+            fill_colour=self.fill_colour if self.boundary_style_box.currentData() == "filled" else "",
+            fill_opacity=self.fill_opacity.value() / 100)
 
     def export_pdf(self) -> None:
         if self.result is None:

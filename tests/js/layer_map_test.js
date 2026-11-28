@@ -47,7 +47,7 @@ global.L = {
     data.features.forEach(feature => {
       const layer = layerish({ feature, kind: 'area' });
       layer.style = opts.style(feature);
-      opts.onEachFeature(feature, layer);
+      if (opts.onEachFeature) opts.onEachFeature(feature, layer);
       group.children.push(layer);
     });
     return group;
@@ -67,7 +67,7 @@ const ctrl = (lng, lat) => ({ originalEvent: { ctrlKey: true }, latlng: { lng, l
 const plain = (lng, lat) => ({ originalEvent: { ctrlKey: false }, latlng: { lng, lat } });
 const toggled = () => calls.filter(c => c[0] === 'toggled').map(c => c[1]);
 
-eval(html.match(/<script>\n([\s\S]*?)<\/script>\s*<\/body>/)[1] + `
+eval(html.match(/<script>\r?\n([\s\S]*?)<\/script>\s*<\/body>/)[1] + `
   var result = {};
   setPoints([[0.5, 0.5, 'pH: 6.5'], [1.5, 0.5, 'pH: 7.1']]);
   setBoundaries(JSON.stringify({ type: 'FeatureCollection', features: [
@@ -94,6 +94,22 @@ eval(html.match(/<script>\n([\s\S]*?)<\/script>\s*<\/body>/)[1] + `
   setOtherAreasVisible(true);
   result.westBack = west.style.stroke === true && west.style.weight === 1.2;
 
+  // one-colour fill, in its own layer under the surface; the outlines keep no fill of their own
+  var westFill = areaFills.children[0], eastFill = areaFills.children[1];
+  result.fillUnderSurface = fakeMap.panes.areafill.style.zIndex < fakeMap.panes.surface.style.zIndex;
+  setBoundaryStyle(true, '#AA3300', 0.6);
+  result.filled = westFill.style.fillColor === '#AA3300' && westFill.style.fillOpacity === 0.6
+    && eastFill.style.fillOpacity === 0.6 && west.style.fillOpacity === 0 && east.style.weight === 3;
+  // after IDW, the selected area (East) shows the analysed colours: no fill over it
+  setSurface('data:idw', 0, 0, 2, 1, 0.85);
+  result.selectedShowsSurface = eastFill.style.fillOpacity === 0 && westFill.style.fillOpacity === 0.6;
+  clearSurface();
+  result.fillBackWithoutSurface = eastFill.style.fillOpacity === 0.6;
+  setVisible('boundaries', false); result.fillHidesWithBoundaries = !fakeMap.hasLayer(areaFills);
+  setVisible('boundaries', true);
+  setBoundaryStyle(false, '#AA3300', 0.6);
+  result.outlinesBack = westFill.style.fillOpacity === 0 && west.style.weight === 1.2;
+
   setVisible('boundaries', false); result.hidden = !fakeMap.hasLayer(boundaries);
   setVisible('boundaries', true);
   result.pointsStillOnTop = drawOrder[drawOrder.length - 1].kind === 'point';
@@ -107,7 +123,9 @@ eval(html.match(/<script>\n([\s\S]*?)<\/script>\s*<\/body>/)[1] + `
       result.lefts = calls.filter(c => c[0] === 'left').length;
       var ok = result.pointsOnTop && JSON.stringify(result.toggles) === '[1,0,1]' && result.eastWeight === 3
         && result.westWeight === 1.2 && result.westHidden && result.hiddenIgnored && result.westBack && result.hidden
-        && result.pointsStillOnTop && result.moves === 1 && result.lefts === 1;
+        && result.pointsStillOnTop && result.moves === 1 && result.lefts === 1 && result.filled && result.outlinesBack
+        && result.fillUnderSurface && result.selectedShowsSurface && result.fillBackWithoutSurface
+        && result.fillHidesWithBoundaries;
       console.log(JSON.stringify(result));
       console.log(ok ? 'MAP LOGIC OK' : 'MAP LOGIC FAILED');
       process.exit(ok ? 0 : 1);

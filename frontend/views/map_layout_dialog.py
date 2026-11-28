@@ -88,6 +88,9 @@ class MapLayoutSpec:
     # the whole boundary layer (e.g. the country), for the "country with magnified area" layout
     context_rings: list = field(default_factory=list)
     context_extent: tuple[float, float, float, float] | None = None
+    # the areas filled in one colour, under the surface (as on the IDW page's map); "" = outlines only
+    fill_colour: str = ""
+    fill_opacity: float = 0.55
 
 
 def ground_size(extent, geographic: bool) -> tuple[float, float]:
@@ -205,6 +208,7 @@ class MapFrameItem(QGraphicsItem):
         self.caption = caption
         self.show_boundaries = True
         self.show_points = True
+        self.show_fill = True
         self.box: QRectF | None = None    # the magnified area, drawn as a box (locator)
         self._layout()
 
@@ -220,6 +224,14 @@ class MapFrameItem(QGraphicsItem):
         self.metres_per_point = width_m / w if w else 0.0
         self._boundary_path = self._path(self.rings)
         self._selected_path = self._path(self.selected)
+        self._fill_path: QPainterPath | None = None     # worked out when first painted
+
+    def fill_path(self) -> QPainterPath:
+        """The areas to fill: every area but the analysed one, whose surface shows its colours."""
+        if self._fill_path is None:
+            path = QPainterPath(self._boundary_path)
+            self._fill_path = path.subtracted(self._selected_path) if not self._selected_path.isEmpty() else path
+        return self._fill_path
 
     def to_page(self, x: float, y: float) -> QPointF:
         west, south, east, north = self.extent
@@ -243,6 +255,7 @@ class MapFrameItem(QGraphicsItem):
         self.rings = rings
         self.spec.boundary_rings = rings
         self._boundary_path = self._path(rings)
+        self._fill_path = None
         self.update()
 
     def boundingRect(self) -> QRectF:  # noqa: N802 (Qt API)
@@ -254,7 +267,18 @@ class MapFrameItem(QGraphicsItem):
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
         painter.setClipRect(self.frame)
         painter.fillRect(self.frame, QColor("#FFFFFF"))
-        if self.context and self.show_boundaries and not self._boundary_path.isEmpty():
+        filled = bool(self.spec.fill_colour) and self.show_fill and self.show_boundaries
+        if filled and not self._boundary_path.isEmpty():       # the one-colour areas, under the surface
+            # A solid colour at the painter's opacity, inside save/restore: a see-through brush made
+            # the PDF engine keep its transparency, and the surface drawn next printed half-faded.
+            painter.save()
+            painter.setOpacity(max(0.0, min(1.0, self.spec.fill_opacity)))
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(self.spec.fill_colour))
+            painter.drawPath(self.fill_path())
+            painter.restore()
+            painter.setOpacity(1.0)
+        elif self.context and self.show_boundaries and not self._boundary_path.isEmpty():
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(QColor("#EEF1EF"))
             painter.drawPath(self._boundary_path)
@@ -655,14 +679,16 @@ class MapLayoutDialog(QDialog):
                                    "the area magnified beside it" if has_context else
                                    "Needs a boundary layer (open boundaries on the IDW page)")
         self.toggles: dict[str, QCheckBox] = {}
-        for key, label in (("title", "Title"), ("north", "North arrow"), ("scale", "Scale bar"),
+        for key, label in (("title", "Title"), ("north", "North arrow"), ("scale", "Scale bars"),
                            ("legend", "Legend"), ("boundaries", "Boundary layer"), ("points", "Sample points"),
-                           ("note", "Note under the map")):
+                           ("fill", "Area fill (one colour)"), ("note", "Note under the map")):
             box = QCheckBox(label)
             box.setChecked(True)
             box.toggled.connect(self._apply_toggles)
             self.toggles[key] = box
         self.toggles["points"].setVisible(bool(spec.points))
+        self.toggles["fill"].setVisible(bool(spec.fill_colour))
+        self.toggles["fill"].setToolTip("The areas in one colour under the surface, as on the map")
 
         self.arrow_box = QComboBox()
         for key, (label, _draw, _n) in NORTH_ARROWS.items():
@@ -733,7 +759,7 @@ class MapLayoutDialog(QDialog):
         self.layout_box.currentIndexChanged.connect(lambda *_: self.build())
         self.arrow_box.currentIndexChanged.connect(lambda *_: self.north_item.set_style(self.arrow_box.currentData()))
         self.arrow_size.valueChanged.connect(lambda value: self.north_item.set_size(value))
-        self.round_button.clicked.connect(lambda: self.scale_item.round_length())
+        self.round_button.clicked.connect(self._round_scale_bars)
         self.reset_button.clicked.connect(self.build)
         self.export_button.clicked.connect(self.choose_and_export)
         self.close_button.clicked.connect(self.accept)
@@ -798,10 +824,20 @@ class MapLayoutDialog(QDialog):
         self.north_item.setPos(frame.right() - 34, frame.top() + 40)
         self.north_item.on_resized = self._arrow_resized
 
-        self.scale_item = ScaleBarItem(frames)
+        # One scale bar per map, each tied to its own map (wherever it is dragged), so the country's
+        # scale is never read as the magnified area's: the magnified map's bottom right, and with
+        # the country layout, the country map's bottom left.
+        self.scale_item = ScaleBarItem([self.frame_item])
         self.scene.addItem(self.scale_item)
         self.scale_item.setPos(frame.right() - self.scale_item.length - 34, frame.bottom() - 28)
         self.scale_item.round_length()
+        self.overview_scale_item: ScaleBarItem | None = None
+        if self.overview_item is not None:
+            self.overview_scale_item = ScaleBarItem([self.overview_item], length=90.0)
+            self.scene.addItem(self.overview_scale_item)
+            locator = self.overview_item.frame
+            self.overview_scale_item.setPos(locator.left() + 22, locator.bottom() - 28)
+            self.overview_scale_item.round_length()
 
         self.legend_item = LegendItem(self.spec.legend_title, self.spec.legend)
         self.scene.addItem(self.legend_item)
@@ -816,6 +852,13 @@ class MapLayoutDialog(QDialog):
         self._apply_toggles()
         self.view.fitInView(page.adjusted(-12, -12, 12, 12), Qt.AspectRatioMode.KeepAspectRatio)
 
+    def scale_bars(self) -> list[ScaleBarItem]:
+        return [bar for bar in (self.scale_item, self.overview_scale_item) if bar is not None]
+
+    def _round_scale_bars(self) -> None:
+        for bar in self.scale_bars():
+            bar.round_length()
+
     def _arrow_resized(self, size: float) -> None:
         self.arrow_size.blockSignals(True)
         self.arrow_size.setValue(round(size))
@@ -827,13 +870,15 @@ class MapLayoutDialog(QDialog):
         shown = {key: box.isChecked() for key, box in self.toggles.items()}
         self.title_item.setVisible(shown["title"])
         self.north_item.setVisible(shown["north"])
-        self.scale_item.setVisible(shown["scale"])
+        for bar in self.scale_bars():
+            bar.setVisible(shown["scale"])
         self.legend_item.setVisible(shown["legend"] and bool(self.spec.legend))
         self.note_item.setVisible(shown["note"] and bool(self.spec.note))
         for frame in (self.frame_item, self.overview_item):
             if frame is not None:
                 frame.show_boundaries = shown["boundaries"]
                 frame.show_points = shown["points"]
+                frame.show_fill = shown["fill"]
                 frame.update()
 
     def showEvent(self, event) -> None:  # noqa: N802 (Qt API) - fit the page once the view has its size

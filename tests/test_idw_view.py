@@ -372,3 +372,15 @@ def test_the_map_rechecks_its_size_only_once_it_is_laid_out():
         text = page_file.read_text(encoding="utf-8")
         assert "clientWidth > 0 && el.clientHeight > 0" in text, page_file.name
     assert AoiMapWidget.showEvent.__code__.co_names.count("SAFE_RESIZE") == 1
+
+
+def test_the_boundaries_can_be_drawn_as_a_one_colour_map(page):
+    assert not page.fill_colour_button.isEnabled()                  # outlines: no fill controls
+    page.boundary_style_box.setCurrentIndex(page.boundary_style_box.findData("filled"))
+    assert page.fill_colour_button.isEnabled() and page.fill_opacity.isEnabled()
+    assert page.world.sent[-1] == "setBoundaryStyle(true, \"#2E7D32\", 0.55)"
+    page.set_fill_colour("#c0392b")
+    page.fill_opacity.setValue(80)
+    assert page.world.sent[-1] == "setBoundaryStyle(true, \"#c0392b\", 0.8)"
+    page.boundary_style_box.setCurrentIndex(page.boundary_style_box.findData("outline"))
+    assert page.world.sent[-1].startswith("setBoundaryStyle(false") and not page.fill_opacity.isEnabled()

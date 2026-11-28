@@ -138,6 +138,12 @@ class LayerMapWidget(QWidget):
         """Draw the boundaries of the areas not selected (off: only the selected area's outline)."""
         self._run(f"setOtherAreasVisible({'true' if on else 'false'})", remember="others")
 
+    def set_boundary_style(self, filled: bool, colour: str = "#2E7D32", opacity: float = 0.55) -> None:
+        """Outlines only, or every area filled in one colour (a single-colour map of the layer)."""
+        opacity = max(0.0, min(1.0, float(opacity)))
+        self._run(f"setBoundaryStyle({'true' if filled else 'false'}, {json.dumps(colour)}, {opacity})",
+                  remember="boundary_style")
+
     def set_points(self, points) -> None:
         """[(lon, lat, label), ...]. The same points again are not re-sent: rebuilding thousands of
         markers on every selection change blocked the map for seconds."""
@@ -171,7 +177,8 @@ class LayerMapWidget(QWidget):
     def _on_ready(self) -> None:
         """The page (re)loaded: re-apply the state in drawing order, then anything still queued."""
         self._ready = True
-        order = ["basemap", "surface", "opacity", "boundaries", "selection", "others", "points"] + \
+        order = ["basemap", "surface", "opacity", "boundaries", "boundary_style", "selection", "others",
+                 "points"] + \
             [f"visible:{name}" for name in LAYERS] + ["view"]
         scripts = [self._state[key] for key in order if key in self._state]
         scripts += [s for s in self._pending if s not in scripts]

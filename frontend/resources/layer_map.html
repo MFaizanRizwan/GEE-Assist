@@ -34,16 +34,22 @@
   // Drawing order: basemap, surface, then the boundaries and the points on ONE canvas (points
   // drawn after the boundaries, so on top). One canvas matters: a second canvas for the points
   // lay over the whole map and swallowed every click, so Ctrl+click never reached the areas.
+  // the one-colour area fill lies UNDER the surface: where IDW was computed, its colours show
+  map.createPane('areafill');  map.getPane('areafill').style.zIndex = 405;
+  map.getPane('areafill').style.pointerEvents = 'none';
+  var fillRenderer = L.canvas({ pane: 'areafill', padding: 0.3 });
   map.createPane('surface');  map.getPane('surface').style.zIndex = 410;
   map.createPane('vectors');  map.getPane('vectors').style.zIndex = 420;
   map.getPane('surface').style.pointerEvents = 'none';
   var vectorRenderer = L.canvas({ pane: 'vectors', padding: 0.3 });
 
-  var surface = null, boundaries = null, points = L.layerGroup();
+  var surface = null, boundaries = null, areaFills = null, points = L.layerGroup();
   var visible = { basemap: true, surface: true, boundaries: true, points: true };
   var selected = {};
   var showOthers = true;     // the boundaries of the areas not selected
   var boundaryColour = '#1F2A44', selectedColour = '#00A8E8';
+  // "Filled": every area in one colour (a single-colour map of the shapefile); else outlines only
+  var areaFill = { filled: false, colour: '#2E7D32', opacity: 0.55 };
 
   // Follow the view's size, but never re-measure a 0 x 0 (hidden) page: Leaflet can hang on it.
   function refreshMapSize() {
@@ -145,9 +151,10 @@
     if (surface) map.removeLayer(surface);
     surface = L.imageOverlay(url, [[south, west], [north, east]], { pane: 'surface', opacity: opacity });
     if (visible.surface) surface.addTo(map);
+    restyle();
   }
 
-  function clearSurface() { if (surface) { map.removeLayer(surface); surface = null; } }
+  function clearSurface() { if (surface) { map.removeLayer(surface); surface = null; } restyle(); }
 
   function setSurfaceOpacity(opacity) { if (surface) surface.setOpacity(opacity); }
 
@@ -158,16 +165,42 @@
     }
     // stroke: true is spelled out: setStyle() merges, so after hiding (stroke: false) an area
     // would otherwise stay invisible when the other areas are shown again.
+    if (areaFill.filled) {     // the colour is in the fill layer below; here only the outline
+      return { stroke: true, color: on ? selectedColour : boundaryColour, weight: on ? 3 : 0.8,
+               fill: true, fillColor: '#000', fillOpacity: 0.0 };
+    }
     return { stroke: true, color: on ? selectedColour : boundaryColour, weight: on ? 3 : 1.2,
              fill: true, fillColor: on ? selectedColour : '#000', fillOpacity: on ? 0.12 : 0.0 };
   }
 
+  // The fill of one area: none for an area hidden, or for a selected area once there is a
+  // surface (its analysed colours show, untinted).
+  function fillStyleFor(index) {
+    var hidden = !areaFill.filled || areaHidden(index) || (selected[index] && surface !== null);
+    return { stroke: false, fill: !hidden, fillColor: areaFill.colour, fillOpacity: hidden ? 0 : areaFill.opacity };
+  }
+
+  function restyle() {
+    if (boundaries) boundaries.eachLayer(function (layer) { layer.setStyle(styleFor(layer.feature.properties.index)); });
+    if (areaFills) areaFills.eachLayer(function (layer) { layer.setStyle(fillStyleFor(layer.feature.properties.index)); });
+  }
+
+  function setBoundaryStyle(filled, colour, opacity) {
+    areaFill = { filled: !!filled, colour: colour || areaFill.colour,
+                 opacity: Math.max(0, Math.min(1, opacity)) };
+    restyle();
+  }
+
   function setBoundaries(text) {
     if (boundaries) map.removeLayer(boundaries);
-    boundaries = null;
+    if (areaFills) map.removeLayer(areaFills);
+    boundaries = null; areaFills = null;
     selected = {};
     if (!text) return;
     var data = JSON.parse(text);
+    areaFills = L.geoJSON(data, { pane: 'areafill', renderer: fillRenderer, interactive: false,
+                                  style: function (feature) { return fillStyleFor(feature.properties.index); } });
+    if (visible.boundaries) areaFills.addTo(map);
     boundaries = L.geoJSON(data, {
       pane: 'vectors', renderer: vectorRenderer,
       style: function (feature) { return styleFor(feature.properties.index); },
@@ -186,14 +219,12 @@
   function setSelection(indices) {
     selected = {};
     indices.forEach(function (i) { selected[i] = true; });
-    if (!boundaries) return;
-    boundaries.eachLayer(function (layer) { layer.setStyle(styleFor(layer.feature.properties.index)); });
+    restyle();
   }
 
   function setOtherAreasVisible(on) {
     showOthers = on;
-    if (!boundaries) return;
-    boundaries.eachLayer(function (layer) { layer.setStyle(styleFor(layer.feature.properties.index)); });
+    restyle();
   }
 
   function setPoints(list) {      // [[lon, lat, value-text], ...]
@@ -212,6 +243,10 @@
     visible[name] = on;
     var layer = name === 'basemap' ? basemap : name === 'surface' ? surface
               : name === 'boundaries' ? boundaries : points;
+    if (name === 'boundaries' && areaFills) {       // the fill goes with its boundaries (own pane)
+      if (on && !map.hasLayer(areaFills)) areaFills.addTo(map);
+      if (!on && map.hasLayer(areaFills)) map.removeLayer(areaFills);
+    }
     if (!layer) return;
     if (on && !map.hasLayer(layer)) {
       layer.addTo(map);
