@@ -7,8 +7,8 @@
 
 Sequence models read the first ``sequence_length`` feature columns as the time series
 (oldest first) and the remaining columns as static features joined after the sequence
-part. Training stops early when a held-out tenth stops improving. Runs on the CPU (or a
-CUDA GPU when PyTorch has one).
+part. Training stops early when a held-out tenth stops improving. Runs on the CPU, or on a
+CUDA GPU when the service sets ``device="cuda"`` (and PyTorch can see one).
 """
 
 from __future__ import annotations
@@ -29,8 +29,8 @@ def _torch():
     return torch
 
 
-def _device(torch):
-    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+def _device(torch, wanted: str = "cpu"):
+    return torch.device("cuda" if wanted == "cuda" and torch.cuda.is_available() else "cpu")
 
 
 def _network(torch, kind: str, n_in: int, n_out: int, sequence_length: int):
@@ -73,12 +73,11 @@ def _network(torch, kind: str, n_in: int, n_out: int, sequence_length: int):
     return Sequence()
 
 
-def _train(torch, model, x: np.ndarray, y: np.ndarray, loss_fn, seed: int, y_dtype) -> None:
+def _train(torch, model, x: np.ndarray, y: np.ndarray, loss_fn, seed: int, y_dtype, device) -> None:
     rng = np.random.default_rng(seed)
     order = rng.permutation(len(x))
     cut = max(1, len(x) // 10)
     hold, train = order[:cut], order[cut:] if len(x) > 20 else order
-    device = _device(torch)
     model.to(device)
     xt = torch.tensor(x, dtype=torch.float32)
     yt = torch.tensor(y, dtype=y_dtype)
@@ -110,8 +109,7 @@ def _train(torch, model, x: np.ndarray, y: np.ndarray, loss_fn, seed: int, y_dty
     model.eval()
 
 
-def _run(torch, model, x: np.ndarray) -> np.ndarray:
-    device = _device(torch)
+def _run(torch, model, x: np.ndarray, device) -> np.ndarray:
     out = []
     with torch.no_grad():
         for start in range(0, len(x), 65_536):
@@ -123,12 +121,17 @@ from sklearn.base import BaseEstimator, ClassifierMixin, OutlierMixin, Regressor
 
 
 class _Base(BaseEstimator):
-    """``sequence_length``: how many leading feature columns are the time series (set by the service)."""
+    """``sequence_length``: how many leading feature columns are the time series (set by the service);
+    ``device``: "cpu" or "cuda" (set by the service when the GPU is used)."""
 
-    def __init__(self, kind: str = "mlp", seed: int = 7, sequence_length: int = 0):
+    def __init__(self, kind: str = "mlp", seed: int = 7, sequence_length: int = 0, device: str = "cpu"):
         self.kind = kind
         self.seed = seed
         self.sequence_length = sequence_length
+        self.device = device
+
+    def _on(self, torch):
+        return _device(torch, self.device)
 
 
 class TorchRegressor(RegressorMixin, _Base):
@@ -140,12 +143,13 @@ class TorchRegressor(RegressorMixin, _Base):
         self._y_mean, self._y_std = float(y.mean()), float(y.std() or 1.0)
         self.model_ = _network(torch, self.kind, x.shape[1], 1, self.sequence_length)
         _train(torch, self.model_, x, ((y - self._y_mean) / self._y_std)[:, None], torch.nn.MSELoss(), self.seed,
-               torch.float32)
+               torch.float32, self._on(torch))
         return self
 
     def predict(self, x):
         torch = _torch()
-        return _run(torch, self.model_, np.asarray(x, dtype="float32"))[:, 0] * self._y_std + self._y_mean
+        out = _run(torch, self.model_, np.asarray(x, dtype="float32"), self._on(torch))
+        return out[:, 0] * self._y_std + self._y_mean
 
 
 class TorchClassifier(ClassifierMixin, _Base):
@@ -157,13 +161,13 @@ class TorchClassifier(ClassifierMixin, _Base):
         counts = np.bincount(codes, minlength=len(self.classes_)).astype("float32")
         weights = torch.tensor(counts.sum() / np.maximum(counts, 1) / len(counts), dtype=torch.float32)
         self.model_ = _network(torch, self.kind, x.shape[1], len(self.classes_), self.sequence_length)
-        loss = torch.nn.CrossEntropyLoss(weight=weights.to(_device(torch)))
-        _train(torch, self.model_, x, codes, loss, self.seed, torch.long)
+        loss = torch.nn.CrossEntropyLoss(weight=weights.to(self._on(torch)))
+        _train(torch, self.model_, x, codes, loss, self.seed, torch.long, self._on(torch))
         return self
 
     def predict_proba(self, x):
         torch = _torch()
-        logits = _run(torch, self.model_, np.asarray(x, dtype="float32"))
+        logits = _run(torch, self.model_, np.asarray(x, dtype="float32"), self._on(torch))
         logits = logits - logits.max(axis=1, keepdims=True)
         p = np.exp(logits)
         return p / p.sum(axis=1, keepdims=True)
@@ -185,11 +189,11 @@ class TorchAutoencoder(OutlierMixin, _Base):
         middle = max(1, n // 2)
         self.model_ = nn.Sequential(nn.Linear(n, 32), nn.ReLU(), nn.Linear(32, middle), nn.ReLU(),
                                     nn.Linear(middle, 32), nn.ReLU(), nn.Linear(32, n))
-        _train(torch, self.model_, x, x, nn.MSELoss(), self.seed, torch.float32)
+        _train(torch, self.model_, x, x, nn.MSELoss(), self.seed, torch.float32, self._on(torch))
         return self
 
     def score_samples(self, x):
         torch = _torch()
         x = np.asarray(x, dtype="float32")
-        rebuilt = _run(torch, self.model_, x)
+        rebuilt = _run(torch, self.model_, x, self._on(torch))
         return -((rebuilt - x) ** 2).mean(axis=1)

@@ -18,6 +18,7 @@ from backend.dto.terrain_dto import TerrainInfoDTO, TerrainProductDTO
 from backend.dto.interpolation_dto import IDWParamsDTO, IDWResultDTO, SamplePointDTO
 from backend.dto.prediction_dto import (
     AlgorithmDTO,
+    PredictionDeviceDTO,
     PredictionProgress,
     PredictionRequestDTO,
     PredictionResultDTO,
@@ -339,6 +340,10 @@ class IBusinessFacade(ABC):
     @abstractmethod
     def describe_prediction_input(self, path: str) -> RasterBandsDTO:
         """A GeoTIFF's bands and the date its name suggests, for the Prediction page."""
+
+    @abstractmethod
+    def get_prediction_device(self, use_gpu: bool = True) -> PredictionDeviceDTO:
+        """Where the Prediction page trains (GPU or CPU, per library), the graphics cards found, and why."""
 
     @abstractmethod
     def run_prediction(self, request: PredictionRequestDTO,

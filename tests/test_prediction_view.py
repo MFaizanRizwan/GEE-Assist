@@ -186,3 +186,23 @@ def test_the_icon_animates_its_forecast():
 
     assert PredictIcon.forecast_reach(None) == 1.0
     assert PredictIcon.forecast_reach(0.0) < PredictIcon.forecast_reach(0.5) <= 1.0
+
+
+def test_the_page_shows_where_it_trains_and_can_turn_the_gpu_off(page):
+    from backend.dto.analysis_dto import GPU_DEDICATED, GpuDTO
+    from backend.dto.prediction_dto import PredictionDeviceDTO
+
+    view, _facade = page
+    rtx = GpuDTO("NVIDIA GeForce RTX 3060", "NVIDIA", GPU_DEDICATED)
+    view._on_device(PredictionDeviceDTO("NVIDIA GeForce RTX 3060", ("xgboost",), (rtx,), "XGBoost models train "
+                                                                                       "on the RTX 3060."))
+    assert view.use_gpu.isVisibleTo(view) and view.use_gpu.isChecked() and view.use_gpu.isEnabled()
+    assert "GPU: NVIDIA GeForce RTX 3060" in view.device_label.text()
+    assert view.request().options.use_gpu is True
+    view.use_gpu.setChecked(False)
+    assert view.device_label.text() == "Trains on the CPU" and "turned off" in view.device_label.toolTip()
+    assert view.request().options.use_gpu is False
+
+    view._on_device(PredictionDeviceDTO("CPU", (), (), "No NVIDIA GPU (graphics: none found)."))
+    assert not view.use_gpu.isVisibleTo(view) and view.request().options.use_gpu is False
+    assert view.device_label.text() == "Trains on the CPU" and "No NVIDIA GPU" in view.device_label.toolTip()

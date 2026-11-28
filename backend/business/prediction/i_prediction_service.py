@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 
 from backend.dto.prediction_dto import (
     AlgorithmDTO,
+    PredictionDeviceDTO,
     PredictionProgress,
     PredictionRequestDTO,
     PredictionResultDTO,
@@ -21,6 +22,10 @@ class IPredictionService(ABC):
     @abstractmethod
     def describe(self, path: str) -> RasterBandsDTO:
         """A GeoTIFF's bands, the date its name suggests and which bands hold class codes."""
+
+    @abstractmethod
+    def device(self, use_gpu: bool = True) -> PredictionDeviceDTO:
+        """Where models train (which libraries use the GPU), the graphics cards found and why."""
 
     @abstractmethod
     def run(self, request: PredictionRequestDTO, progress: PredictionProgress | None = None) -> PredictionResultDTO:

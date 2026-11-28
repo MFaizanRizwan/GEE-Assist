@@ -28,15 +28,19 @@ importance and an uncertainty layer (how much the best models disagree).
 
 from __future__ import annotations
 
+import logging
 import math
 import time
+import warnings
 from datetime import date
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import numpy as np
 
+from backend.business.analysis.compute_device import cached_gpus
 from backend.business.prediction import algorithms as algo
+from backend.business.prediction.device import place_on_device, select_prediction_device
 from backend.business.prediction.i_prediction_service import IPredictionService
 from backend.business.prediction.stack import (
     Grid,
@@ -56,12 +60,20 @@ from backend.dto.prediction_dto import (
     TASKS,
     AlgorithmDTO,
     ModelScoreDTO,
+    PredictionDeviceDTO,
     PredictionProgress,
     PredictionRequestDTO,
     PredictionResultDTO,
     RasterBandsDTO,
 )
+from backend.dto.analysis_dto import GpuDTO
 from backend.exceptions import PredictionError
+
+logger = logging.getLogger(__name__)
+
+# An XGBoost model trained on the GPU and asked to predict NumPy (CPU) arrays copies them over
+# and says so on every call; the result is the same, so this note is not worth the console noise.
+warnings.filterwarnings("ignore", message=r".*mismatched devices.*", category=UserWarning)
 
 ENSEMBLE = "ensemble"
 VALIDATION_ROWS = 20_000
@@ -76,6 +88,22 @@ class _Cancelled(Exception):
 
 
 class PredictionService(IPredictionService):
+    def __init__(
+        self,
+        find_gpus: Callable[[], tuple[GpuDTO, ...]] = cached_gpus,
+        select_device: Callable[..., PredictionDeviceDTO] = select_prediction_device,
+    ):
+        self._find_gpus = find_gpus
+        self._select_device = select_device
+        # the run in progress: its device, the algorithms that trained on the GPU, and those that
+        # had to fall back to the CPU (one run at a time: the page waits for it to finish)
+        self._run_device = PredictionDeviceDTO("CPU")
+        self._gpu_trained: set[str] = set()
+        self._gpu_fallbacks: dict[str, str] = {}
+
+    def device(self, use_gpu: bool = True) -> PredictionDeviceDTO:
+        return self._select_device(self._find_gpus(), use_gpu)
+
     # ------------------------------------------------------------- what the page needs first
     def algorithms(self, task: str) -> list[AlgorithmDTO]:
         if task not in TASKS:
@@ -122,6 +150,8 @@ class PredictionService(IPredictionService):
             raise PredictionError(f"This needs at least {need[request.task]}.")
         if len({parse_date(i.date) for i in inputs}) != len(inputs):
             raise PredictionError("Two of the files have the same date; give each its own date.")
+        self._run_device = self.device(request.options.use_gpu)
+        self._gpu_trained, self._gpu_fallbacks = set(), {}
         try:
             runner = {FORECAST: self._forecast, CHANGE: self._change, CLASSIFY: self._classify,
                       ANOMALY: self._anomaly}[request.task]
@@ -602,20 +632,39 @@ class PredictionService(IPredictionService):
                 x, y = _balanced_sample(rng, spec.max_train, x, y)
             else:
                 x, y = _sample(rng, spec.max_train, x, y)
-        estimator = spec.build(role, n_classes, opts.seed)
-        if hasattr(estimator, "sequence_length"):
-            estimator.sequence_length = sequence_length
-        model = self._pipeline(estimator, spec, opts, role)
         y_fit = y
         encoder = None
         if role == algo.CLASSIFIER and spec.library in ("xgboost",):
             encoder = np.unique(y)          # XGBoost wants classes 0..K-1
             y_fit = np.searchsorted(encoder, y)
-        if opts.tune and spec.grid and len(np.unique(y_fit)) > 1:
-            model = self._tune(model, spec, x, y_fit, opts, role)
-        else:
+
+        def train(gpu: bool):
+            estimator = spec.build(role, n_classes, opts.seed)
+            if hasattr(estimator, "sequence_length"):
+                estimator.sequence_length = sequence_length
+            place_on_device(estimator, spec.library, gpu)
+            model = self._pipeline(estimator, spec, opts, role)
+            if opts.tune and spec.grid and len(np.unique(y_fit)) > 1:
+                return self._tune(model, spec, x, y_fit, opts, role)
             model.fit(x, y_fit)
+            return model
+
+        model = self._on_device(spec, train)
         return _Decoded(model, encoder) if encoder is not None else model
+
+    def _on_device(self, spec: algo.Spec, train: Callable[[bool], Any]):
+        """Train on the GPU when this algorithm's library uses it; if that fails (out of memory,
+        a driver problem), train again on the CPU and remember why for the result's notes."""
+        if spec.library not in self._run_device.gpu_libraries or spec.key in self._gpu_fallbacks:
+            return train(False)
+        try:
+            model = train(True)
+        except Exception as exc:  # noqa: BLE001 - the CPU still works
+            logger.warning("%s failed on the GPU, retrying on the CPU: %s", spec.label, exc)
+            self._gpu_fallbacks[spec.key] = _short(exc)
+            return train(False)
+        self._gpu_trained.add(spec.key)
+        return model
 
     def _pipeline(self, estimator, spec: algo.Spec, opts, role: str):
         steps = []
@@ -663,12 +712,17 @@ class PredictionService(IPredictionService):
         rng = np.random.default_rng(opts.seed)
         if spec.max_train and len(sample) > spec.max_train:
             sample, _ = _sample(rng, spec.max_train, sample, np.zeros(len(sample)))
-        estimator = spec.build(algo.OUTLIER, 0, opts.seed)
-        if spec.key == "isolation_forest":
-            estimator.set_params(contamination=min(0.4, max(0.001, opts.contamination)))
-        model = self._pipeline(estimator, spec, opts, algo.OUTLIER)
-        model.fit(sample)
-        return model
+
+        def train(gpu: bool):
+            estimator = spec.build(algo.OUTLIER, 0, opts.seed)
+            if spec.key == "isolation_forest":
+                estimator.set_params(contamination=min(0.4, max(0.001, opts.contamination)))
+            place_on_device(estimator, spec.library, gpu)
+            model = self._pipeline(estimator, spec, opts, algo.OUTLIER)
+            model.fit(sample)
+            return model
+
+        return self._on_device(spec, train)
 
     # ------------------------------------------------------------- shared: importance, series, result
     def _importance(self, ranked, fitted, val_x, val_y, names, opts, progress, regression: bool) -> None:
@@ -708,6 +762,12 @@ class PredictionService(IPredictionService):
             raise PredictionError(f"Every chosen algorithm failed ({reasons}).")
         t = grid.transform
         notes = list(notes)
+        trained_on_gpu = self._gpu_trained - set(self._gpu_fallbacks)
+        for score in ranked:
+            score.device = "GPU" if score.key in trained_on_gpu else ""
+        device = f"GPU: {self._run_device.device_name}" if trained_on_gpu else "CPU"
+        for key, why in self._gpu_fallbacks.items():
+            notes.append(f"{algo.SPEC_BY_KEY[key].label} could not train on the GPU ({why}), so it used the CPU.")
         if grid.scale > 1.01:
             notes.append(f"Computed at 1/{grid.scale:.1f} of the present image's resolution "
                          f"({grid.width} × {grid.height} cells).")
@@ -716,7 +776,8 @@ class PredictionService(IPredictionService):
             scores=ranked, primary_metric=metric, higher_is_better=higher, width=grid.width, height=grid.height,
             bounds=grid.bounds_wgs84, crs=str(grid.crs), transform=(t.a, t.b, t.c, t.d, t.e, t.f),
             present=None if present is None else present.astype("float32"), uncertainty=uncertainty,
-            classes=classes, feature_names=names, validation=validation, notes=notes, scale=grid.scale)
+            classes=classes, feature_names=names, validation=validation, notes=notes, scale=grid.scale,
+            device=device)
 
     @staticmethod
     def _class_label(band: str, code) -> str:

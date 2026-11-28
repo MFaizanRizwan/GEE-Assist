@@ -58,6 +58,7 @@ from backend.dto.prediction_dto import (
     FORECAST,
     TASK_LABELS,
     AlgorithmDTO,
+    PredictionDeviceDTO,
     PredictionInputDTO,
     PredictionOptionsDTO,
     PredictionProgress,
@@ -110,6 +111,7 @@ QFrame#PredictPanel QLabel, QFrame#PredictCard QLabel {{ background: transparent
 QLabel#SectionTitle {{ color: {theme.MUTED}; font-size: 8pt; font-weight: 600; letter-spacing: 0.5px; }}
 QLabel#StepTitle {{ color: {theme.INK}; font-weight: 700; font-size: 10.5pt; }}
 QLabel#Help {{ color: {theme.MUTED}; font-size: 8.5pt; }}
+QLabel#DeviceLine {{ color: {theme.INK}; font-weight: 600; }}
 QPushButton#TaskTile {{
     text-align: left; padding: 8px 10px; border-radius: 8px; border: 1px solid {theme.BORDER_STRONG};
     background: {theme.FIELD_BG}; color: {theme.INK}; font-weight: 600;
@@ -212,6 +214,7 @@ class PredictionView(QWidget):
         self._layer_values: np.ndarray | None = None
         self._progress: PredictionProgress | None = None
         self.running = False
+        self.device: PredictionDeviceDTO | None = None   # looked up the first time the page is shown
 
         self.title = QLabel("Prediction (ML)", objectName="PageTitle")
         self.subtitle = QLabel("Learn from past and present imagery and predict: future values, future land cover, "
@@ -397,9 +400,17 @@ class PredictionView(QWidget):
         self.progress_text.hide()
         self.run_button = QPushButton("Run prediction", objectName="PrimaryButton")
         self.run_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.device_label = QLabel("Looking for a GPU…", objectName="DeviceLine")
+        self.device_label.setWordWrap(True)
+        self.use_gpu = QCheckBox("Use the GPU")
+        self.use_gpu.setToolTip("Train XGBoost and PyTorch models on the NVIDIA graphics card")
+        self.use_gpu.hide()      # shown when the computer has an NVIDIA card
+        self.use_gpu.toggled.connect(self._show_device)
         run_box = QVBoxLayout()
         run_box.setContentsMargins(18, 8, 18, 14)
         run_box.setSpacing(6)
+        run_box.addWidget(self.device_label)
+        run_box.addWidget(self.use_gpu)
         run_box.addWidget(self.progress_text)
         run_box.addWidget(self.progress_bar)
         run_box.addWidget(self.run_button)
@@ -766,6 +777,40 @@ class PredictionView(QWidget):
         self.labels_button.setText(Path(path).name if self._label_path else "Choose labels…")
         self._update_run_button()
 
+    # ================================================================ device (GPU / CPU)
+    def showEvent(self, event) -> None:  # noqa: N802 (Qt API)
+        super().showEvent(event)
+        if self.device is None:
+            self.find_device()
+
+    def find_device(self) -> None:
+        """Look up the graphics cards once (about a second) without blocking the page."""
+        run_task(self, self._facade.get_prediction_device, True, on_success=self._on_device,
+                 on_error=lambda exc: self.device_label.setText("Trains on the CPU"))
+
+    def _on_device(self, device) -> None:
+        if not isinstance(device, PredictionDeviceDTO):
+            return
+        self.device = device
+        self.use_gpu.blockSignals(True)
+        self.use_gpu.setChecked(device.uses_gpu)
+        self.use_gpu.setEnabled(device.uses_gpu)
+        self.use_gpu.blockSignals(False)
+        self.use_gpu.setVisible(device.has_nvidia)
+        self._show_device()
+
+    def _show_device(self) -> None:
+        device = self.device
+        if device is None:
+            return
+        on_gpu = device.uses_gpu and self.use_gpu.isChecked()
+        self.device_label.setText(f"⚡ Trains on the GPU: {device.device_name}" if on_gpu else "Trains on the CPU")
+        cards = "\n".join(f"• {gpu.name} ({gpu.kind})" for gpu in device.gpus) or "none found"
+        reason = device.reason if device.uses_gpu == on_gpu else f"GPU turned off: {device.device_name} is not used."
+        tip = f"{reason}\n\nGraphics cards on this computer:\n{cards}"
+        self.device_label.setToolTip(tip)
+        self.use_gpu.setToolTip(tip)
+
     # ================================================================ running
     def request(self) -> PredictionRequestDTO:
         options = PredictionOptionsDTO(
@@ -775,7 +820,8 @@ class PredictionView(QWidget):
             pca=self.pca_box.isChecked() and self.task == CLASSIFY,
             cross_validation=self.cv_box.isChecked() and self.task == CLASSIFY,
             importance=self.importance_box.isChecked() and self.task != ANOMALY,
-            contamination=self.contamination.value() / 100.0, neighbourhood=self.neighbourhood.value())
+            contamination=self.contamination.value() / 100.0, neighbourhood=self.neighbourhood.value(),
+            use_gpu=self.use_gpu.isChecked())
         label_band = self.label_choice.currentText() if not self._label_path.lower().endswith(".shp") else ""
         label_field = self.label_choice.currentText() if self._label_path.lower().endswith(".shp") else ""
         return PredictionRequestDTO(
@@ -849,6 +895,8 @@ class PredictionView(QWidget):
         failed = [s for s in result.scores if s.error]
         best = result.best
         message = f"Best: {best.label} ({result.primary_metric} {best.metrics.get(result.primary_metric, 0):.4g})."
+        if result.device.startswith("GPU"):
+            message += f" Trained on the {result.device}."
         if failed:
             message += f" {len(failed)} algorithm(s) could not run: see the leaderboard."
         self.banner.show_info(message)
@@ -888,8 +936,10 @@ class PredictionView(QWidget):
         for row, score in enumerate(result.scores):
             cells = [str(score.rank) if score.rank else "–", score.label]
             cells += [f"{score.metrics[m]:.4g}" if m in score.metrics else "" for m in metrics]
-            cells += [f"{score.seconds:.1f} s" if score.seconds else "", score.error or ("best" if score.rank == 1
-                                                                                         else "ok")]
+            status = score.error or ("best" if score.rank == 1 else "ok")
+            if score.device and not score.error:
+                status += f" · {score.device}"
+            cells += [f"{score.seconds:.1f} s" if score.seconds else "", status]
             for col, text in enumerate(cells):
                 item = QTableWidgetItem(text)
                 item.setData(Qt.ItemDataRole.UserRole, score.key)

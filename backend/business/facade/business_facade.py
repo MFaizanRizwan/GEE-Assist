@@ -415,6 +415,9 @@ class BusinessFacade(IBusinessFacade):
     def describe_prediction_input(self, path: str):
         return self._prediction().describe(path)
 
+    def get_prediction_device(self, use_gpu: bool = True):
+        return self._prediction().device(use_gpu)
+
     def run_prediction(self, request: PredictionRequestDTO,
                        progress: PredictionProgress | None = None) -> PredictionResultDTO:
         return self._prediction().run(request, progress)

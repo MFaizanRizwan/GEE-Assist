@@ -14,6 +14,8 @@ import threading
 from dataclasses import dataclass, field
 from typing import Any
 
+from backend.dto.analysis_dto import GpuDTO
+
 FORECAST, CHANGE, CLASSIFY, ANOMALY = "forecast", "change", "classify", "anomaly"
 TASKS = (FORECAST, CHANGE, CLASSIFY, ANOMALY)
 
@@ -76,7 +78,26 @@ class PredictionOptionsDTO:
     importance: bool = True          # permutation importance of the best model's features
     contamination: float = 0.05      # share of pixels flagged as anomalies
     neighbourhood: int = 1           # window radius of class shares around a pixel (change)
+    use_gpu: bool = True             # train XGBoost / PyTorch models on an NVIDIA GPU when one works
     seed: int = 7
+
+
+@dataclass(frozen=True)
+class PredictionDeviceDTO:
+    """Where the Prediction page trains: which libraries run on the GPU, and why (not)."""
+
+    device_name: str                            # e.g. "NVIDIA GeForce RTX 3060" or "CPU"
+    gpu_libraries: tuple[str, ...] = ()         # libraries that train on the GPU, e.g. ("xgboost", "pytorch")
+    gpus: tuple[GpuDTO, ...] = ()               # every graphics card found
+    reason: str = ""                            # what runs where, or how to enable the GPU
+
+    @property
+    def uses_gpu(self) -> bool:
+        return bool(self.gpu_libraries)
+
+    @property
+    def has_nvidia(self) -> bool:
+        return any(gpu.vendor == "NVIDIA" and gpu.is_dedicated for gpu in self.gpus)
 
 
 @dataclass
@@ -106,6 +127,7 @@ class ModelScoreDTO:
     importance: list[tuple[str, float]] = field(default_factory=list)
     prediction: Any = None                   # numpy float32 (height, width): values, classes or scores
     confidence: Any = None                   # probability of the predicted class / anomaly score 0-1
+    device: str = ""                         # "GPU" when it trained on the GPU ("" = CPU)
 
 
 @dataclass
@@ -129,6 +151,7 @@ class PredictionResultDTO:
     validation: str = ""                     # how the scores were obtained
     notes: list[str] = field(default_factory=list)
     scale: float = 1.0                       # source pixels per working pixel
+    device: str = "CPU"                      # where the models trained, e.g. "GPU: NVIDIA GeForce RTX 3060"
 
     @property
     def best(self) -> ModelScoreDTO | None:
