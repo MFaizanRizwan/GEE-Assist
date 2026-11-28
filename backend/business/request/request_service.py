@@ -241,7 +241,7 @@ class RequestService(IRequestService):
         places: list[PlaceDTO] = []
         seen: set[str] = set()
         looked_up: set[str] = {query.casefold()}
-        key = query.split(",")[0].strip().casefold()
+        key = _words(query.split(",")[0])
 
         def usable(place: PlaceDTO) -> PlaceDTO | None:
             try:
@@ -260,7 +260,7 @@ class RequestService(IRequestService):
             # the levels of this match's hierarchy that carry the searched name
             for level in [part.strip() for part in found.display_name.split(",")[1:]]:
                 if (len(looked_up) > MAX_RELATED_LOOKUPS or level.casefold() in looked_up
-                        or not re.search(rf"{re.escape(key)}", level.casefold())):
+                        or f" {key} " not in f" {_words(level)} "):
                     continue
                 looked_up.add(level.casefold())
                 try:
@@ -401,6 +401,11 @@ class RequestService(IRequestService):
 
 def _now() -> str:
     return datetime.now().isoformat(timespec="seconds")
+
+
+def _words(text: str) -> str:
+    """Lower-case words separated by single spaces: "Faisalabad District" -> "faisalabad district"."""
+    return " ".join(re.findall(r"[^\W_]+", text.casefold()))
 
 
 def _place_size(place: PlaceDTO) -> float:

@@ -104,4 +104,6 @@ def _to_place(item: Any) -> PlaceDTO | None:
         return None
     kind = str(item.get("addresstype") or item.get("type") or "place").replace("_", " ")
     kind = KIND_NAMES.get(kind, kind)
+    if kind in ("tehsil", "municipality") and "city" in name.casefold().split():
+        kind = "city"          # "Faisalabad City Tehsil" is the city's own area
     return PlaceDTO(name=name, display_name=display_name or name, kind=kind, aoi=json.dumps(item["geojson"]))

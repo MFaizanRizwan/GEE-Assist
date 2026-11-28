@@ -154,3 +154,70 @@ def test_simplify_drops_tiny_islands_but_never_the_main_area():
     simplified = simplify_geometry(geometry, 200)
     assert simplified["type"] == "Polygon" and validate_geometry(simplified) is None
     assert count_vertices(simplified) <= 200
+
+
+# ------------------------------------------------------------------ a city, its district and its division
+def _square(size: float) -> str:
+    return json.dumps({"type": "Polygon", "coordinates": [[[73, 31], [73 + size, 31], [73 + size, 31 + size],
+                                                           [73, 31 + size], [73, 31]]]})
+
+
+class HierarchyFacade:
+    """Answers like the real service: a name gives one merged match; the levels by their full names."""
+
+    HIERARCHY = "Faisalabad District, Faisalabad Division, Punjab, Pakistan"
+
+    def __init__(self, city_has_boundary=True):
+        self.queries = []
+        self.answers = {
+            "Faisalabad": [PlaceDTO("Faisalabad City Tehsil", f"Faisalabad City Tehsil, {self.HIERARCHY}", "city",
+                                    _square(0.1) if city_has_boundary else json.dumps(POINT))],
+            "Faisalabad District": [
+                PlaceDTO("Ismail City", f"Ismail City, Faisalabad City Tehsil, {self.HIERARCHY}", "neighbourhood",
+                         _square(0.01)),                                   # not the district: skipped
+                PlaceDTO("Faisalabad District", self.HIERARCHY, "district", _square(0.8))],
+            "Faisalabad Division": [PlaceDTO("Faisalabad Division", "Faisalabad Division, Punjab, Pakistan",
+                                             "division", _square(2.0))],
+            "Punjab": [PlaceDTO("Punjab", "Punjab, Pakistan", "province", _square(6.0))],
+        }
+
+    def search_places(self, query):
+        self.queries.append(query)
+        return self.answers.get(query, [])
+
+
+def test_a_city_search_also_offers_its_district_and_division_smallest_first():
+    facade = HierarchyFacade()
+    places = RequestService(data_facade=facade).search_place("Faisalabad")
+    assert [(p.name, p.kind) for p in places] == [
+        ("Faisalabad City Tehsil", "city"), ("Faisalabad District", "district"), ("Faisalabad Division", "division")]
+    # only the levels that carry the name are looked up (not "Punjab", not "Pakistan")
+    assert facade.queries == ["Faisalabad", "Faisalabad District", "Faisalabad Division"]
+
+
+def test_a_city_mapped_only_as_a_point_still_finds_its_district():
+    places = RequestService(data_facade=HierarchyFacade(city_has_boundary=False)).search_place("Faisalabad")
+    assert [p.kind for p in places] == ["district", "division"]
+
+
+def test_a_failing_extra_level_never_loses_the_main_match():
+    facade = HierarchyFacade()
+
+    def flaky(query):
+        if query != "Faisalabad":
+            raise PlaceSearchError("busy")
+        return HierarchyFacade.search_places(facade, query)
+
+    facade.search_places = flaky
+    assert [p.kind for p in RequestService(data_facade=facade).search_place("Faisalabad")] == ["city"]
+
+
+def test_the_client_names_administrative_levels_as_people_say_them():
+    def handler(_request):
+        return httpx.Response(200, json=[
+            nominatim_item("Faisalabad City Tehsil", SQUARE, "subdistrict"),
+            nominatim_item("Okara Tehsil", SQUARE, "subdistrict"),
+            nominatim_item("Lahore District", SQUARE, "county"),
+            nominatim_item("Punjab", SQUARE, "state")])
+
+    assert [p.kind for p in client_answering(handler).search("x")] == ["city", "tehsil", "district", "province"]
