@@ -777,17 +777,31 @@ class ParameterFormView(QWidget):
         self.place_results_combo = QComboBox()
         self.place_results_combo.setToolTip("Places with this name: the city, its district, its division… "
                                             "Pick one to use its boundary")
-        self.place_results_combo.setMinimumContentsLength(24)
+        # long names ("Faisalabad City Tehsil, Faisalabad District, …") must not widen the form
+        self.place_results_combo.setMinimumContentsLength(10)
         self.place_results_combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
-        self.place_results_combo.hide()
+        self.place_results_label = QLabel("Use:")
+        self.place_results_label.setObjectName("Muted")
 
+        # the search on one row; the matches (city, district, division…) on their own row below,
+        # so the search box keeps its full width
         self.place_box = QWidget()
-        place_layout = QHBoxLayout(self.place_box)
+        place_layout = QVBoxLayout(self.place_box)
         place_layout.setContentsMargins(0, 0, 0, 0)
-        place_layout.setSpacing(8)
-        place_layout.addWidget(self.place_edit, 3)
-        place_layout.addWidget(self.place_search_button)
-        place_layout.addWidget(self.place_results_combo, 2)
+        place_layout.setSpacing(6)
+        search_row = QHBoxLayout()
+        search_row.setSpacing(8)
+        search_row.addWidget(self.place_edit, 1)
+        search_row.addWidget(self.place_search_button)
+        place_layout.addLayout(search_row)
+        self.place_results_row = QWidget()
+        results_row = QHBoxLayout(self.place_results_row)
+        results_row.setContentsMargins(0, 0, 0, 0)
+        results_row.setSpacing(8)
+        results_row.addWidget(self.place_results_label)
+        results_row.addWidget(self.place_results_combo, 1)
+        place_layout.addWidget(self.place_results_row)
+        self.place_results_row.hide()
 
         self.map_widget = AoiMapWidget()
         self.map_widget.setMinimumHeight(360)
@@ -1123,11 +1137,14 @@ class ParameterFormView(QWidget):
         self._places = list(places)
         self.place_results_combo.clear()
         for place in self._places:
-            self.place_results_combo.addItem(f"{place.display_name} ({place.kind})")
+            # name and kind first, so a cut-off item still says what it is
+            parents = place.display_name.split(",", 1)[1].strip() if "," in place.display_name else ""
+            self.place_results_combo.addItem(f"{place.name} ({place.kind})" + (f" — {parents}" if parents else ""))
             self.place_results_combo.setItemData(
                 self.place_results_combo.count() - 1, place.display_name, Qt.ItemDataRole.ToolTipRole
             )
         self.place_results_combo.setVisible(len(self._places) > 1)
+        self.place_results_row.setVisible(len(self._places) > 1)
         if self._places:
             self.place_results_combo.setCurrentIndex(0)
             self.set_place_area(self._places[0])
@@ -1157,6 +1174,7 @@ class ParameterFormView(QWidget):
         self._places = []
         self.place_results_combo.clear()
         self.place_results_combo.hide()
+        self.place_results_row.hide()
         self.place_edit.clear()
         self._set_place_busy(False)
 
