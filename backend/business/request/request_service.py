@@ -30,6 +30,10 @@ MAX_PLACE_NAME_LENGTH = 200
 # A place's outline is sent with every GEE request of a download, so very detailed
 # boundaries (whole countries) are simplified to this many vertices.
 MAX_PLACE_VERTICES = 5000
+# The search service merges places sharing a name ("Faisalabad" -> only the city tehsil). The
+# levels above a match that carry the same name ("Faisalabad District", "Faisalabad Division")
+# are looked up by their full names too, at most this many (each is one more request, a second apart).
+MAX_RELATED_LOOKUPS = 4
 
 
 class RequestService(IRequestService):
@@ -236,17 +240,41 @@ class RequestService(IRequestService):
 
         places: list[PlaceDTO] = []
         seen: set[str] = set()
-        for place in self._data_facade.search_places(query):
+        looked_up: set[str] = {query.casefold()}
+        key = query.split(",")[0].strip().casefold()
+
+        def usable(place: PlaceDTO) -> PlaceDTO | None:
             try:
                 geometry = json.loads(place.aoi)
             except (TypeError, json.JSONDecodeError):
-                continue
+                return None
             if not isinstance(geometry, dict) or geometry.get("type") not in POLYGON_TYPES:
-                continue  # no boundary mapped for this place
+                return None  # no boundary mapped for this place
             if place.display_name in seen or validate_geometry(geometry):
-                continue
+                return None
             seen.add(place.display_name)
-            places.append(replace(place, aoi=json.dumps(simplify_geometry(geometry, MAX_PLACE_VERTICES))))
+            return replace(place, aoi=json.dumps(simplify_geometry(geometry, MAX_PLACE_VERTICES)))
+
+        for found in self._data_facade.search_places(query):
+            family = [p for p in [usable(found)] if p is not None]
+            # the levels of this match's hierarchy that carry the searched name
+            for level in [part.strip() for part in found.display_name.split(",")[1:]]:
+                if (len(looked_up) > MAX_RELATED_LOOKUPS or level.casefold() in looked_up
+                        or not re.search(rf"{re.escape(key)}", level.casefold())):
+                    continue
+                looked_up.add(level.casefold())
+                try:
+                    related = self._data_facade.search_places(level)
+                except PlaceSearchError:
+                    continue  # the main match is still there; the extra level is a bonus
+                for candidate in related:
+                    # only that exact place (its full name starts with the level), not its neighbourhoods
+                    if candidate.display_name.casefold().startswith(level.casefold()):
+                        place = usable(candidate)
+                        if place is not None:
+                            family.append(place)
+                            break
+            places.extend(sorted(family, key=_place_size))   # city, then district, then division
 
         if not places:
             raise PlaceSearchError(
@@ -373,3 +401,21 @@ class RequestService(IRequestService):
 
 def _now() -> str:
     return datetime.now().isoformat(timespec="seconds")
+
+
+def _place_size(place: PlaceDTO) -> float:
+    """The area of a place's bounding box, to list a city before its district and division."""
+    coords: list = []
+
+    def collect(value) -> None:
+        if isinstance(value, (list, tuple)) and len(value) >= 2 and all(isinstance(v, (int, float)) for v in value[:2]):
+            coords.append(value)
+        elif isinstance(value, (list, tuple)):
+            for item in value:
+                collect(item)
+
+    collect(json.loads(place.aoi).get("coordinates", []))
+    if not coords:
+        return 0.0
+    xs, ys = [c[0] for c in coords], [c[1] for c in coords]
+    return (max(xs) - min(xs)) * (max(ys) - min(ys))

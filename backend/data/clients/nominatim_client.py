@@ -25,6 +25,9 @@ NOMINATIM_URL = "https://nominatim.openstreetmap.org"
 # Nominatim simplifies the outline to this tolerance (degrees, ~50 m) before sending it.
 POLYGON_THRESHOLD_DEG = 0.0005
 MIN_REQUEST_INTERVAL_S = 1.0
+# OSM's administrative levels, named as people say them
+KIND_NAMES = {"subdistrict": "tehsil", "county": "district", "state district": "division",
+              "historical division": "division", "state": "province"}
 
 _UNREACHABLE = "Couldn't reach the place search service. Check your internet connection and try again."
 
@@ -61,6 +64,7 @@ class NominatimClient(IGeocodingClient):
             "polygon_threshold": POLYGON_THRESHOLD_DEG,
             "limit": limit,
             "accept-language": "en",
+            "dedupe": 0,          # keep a city and its district apart (e.g. Lahore and Lahore District)
         }
         with self._lock:  # one request at a time, a second apart
             self._wait_turn()
@@ -99,4 +103,5 @@ def _to_place(item: Any) -> PlaceDTO | None:
     if not name:
         return None
     kind = str(item.get("addresstype") or item.get("type") or "place").replace("_", " ")
+    kind = KIND_NAMES.get(kind, kind)
     return PlaceDTO(name=name, display_name=display_name or name, kind=kind, aoi=json.dumps(item["geojson"]))

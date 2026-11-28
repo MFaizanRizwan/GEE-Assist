@@ -775,7 +775,8 @@ class ParameterFormView(QWidget):
         self.place_search_button.setObjectName("SecondaryButton")
         self.place_search_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.place_results_combo = QComboBox()
-        self.place_results_combo.setToolTip("Other places with this name")
+        self.place_results_combo.setToolTip("Places with this name: the city, its district, its division… "
+                                            "Pick one to use its boundary")
         self.place_results_combo.setMinimumContentsLength(24)
         self.place_results_combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
         self.place_results_combo.hide()
