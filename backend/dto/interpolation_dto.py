@@ -24,6 +24,11 @@ class IDWParamsDTO:
     neighbours: int = 12        # nearest points used per cell; 0 = every point
     radius: float = 0.0         # search radius in degrees; 0 = no limit
     resolution: int = 400       # longest side of the output grid, in cells
+    # An area to interpolate over (e.g. the cities the user selected): polygons as tuples of
+    # rings of (lon, lat), the first ring outer, the rest holes. With ``clip_to_boundary`` the
+    # surface stops sharply at its edge; without, it only widens the surface to cover it.
+    boundary: tuple = ()
+    clip_to_boundary: bool = True
 
 
 @dataclass(frozen=True)

@@ -1,6 +1,7 @@
 """IDW Interpolation page: turn point measurements into a continuous surface.
 
-Open a point shapefile, pick the numeric field to interpolate (e.g. rainfall, temperature,
+Open a point shapefile or a CSV of points (longitude and latitude columns in degrees),
+pick the numeric field to interpolate (e.g. rainfall, temperature,
 elevation at wells), set the IDW parameters (power, number of neighbours, search radius,
 output resolution) and run. The surface is drawn with a colour ramp and the sample points
 are dotted on top, as ArcGIS's IDW tool shows them. "Save surface…" writes it as a GeoTIFF.
@@ -72,11 +73,13 @@ class IdwView(QWidget):
         theming.styled(self, _stylesheet)
         self._facade = facade
         self._layer: VectorLayerDTO | None = None
+        self._csv_path = ""   # the CSV the points came from ("" for a shapefile)
         self.result: IDWResultDTO | None = None
         self._pointer: tuple[float, float] | None = None
 
         self.title = QLabel("IDW Interpolation", objectName="PageTitle")
-        self.subtitle = QLabel("Open a point shapefile and interpolate one of its numeric fields.",
+        self.subtitle = QLabel("Open a point shapefile or a CSV of points and interpolate one of its numeric "
+                               "fields.",
                                objectName="PageSubtitle")
         self.banner = StatusBanner()
 
@@ -131,6 +134,12 @@ class IdwView(QWidget):
     def _build_panel(self) -> None:
         self.field_box = QComboBox()
         self.field_box.setCursor(Qt.CursorShape.PointingHandCursor)
+        # A CSV's coordinate columns (guessed from their names; the user can correct them).
+        self.lon_box = QComboBox()
+        self.lat_box = QComboBox()
+        for box in (self.lon_box, self.lat_box):
+            box.setCursor(Qt.CursorShape.PointingHandCursor)
+            box.currentIndexChanged.connect(self._on_coordinate_column)
         self.power = self._dspin(0.1, 10.0, 2.0, 0.5, "")
         self.neighbours = QSpinBox()
         self.neighbours.setRange(0, 1000)
@@ -148,11 +157,17 @@ class IdwView(QWidget):
         params = QGridLayout()
         params.setHorizontalSpacing(12)
         params.setVerticalSpacing(6)
-        for row, (name, widget) in enumerate((("Value field", self.field_box), ("Power", self.power),
+        self._coordinate_rows = []
+        for row, (name, widget) in enumerate((("Longitude", self.lon_box), ("Latitude", self.lat_box),
+                                              ("Value field", self.field_box), ("Power", self.power),
                                               ("Neighbours", self.neighbours), ("Search radius", self.radius),
                                               ("Resolution", self.resolution))):
-            params.addWidget(QLabel(name, objectName="Muted"), row, 0)
+            label = QLabel(name, objectName="Muted")
+            params.addWidget(label, row, 0)
             params.addWidget(widget, row, 1)
+            if widget in (self.lon_box, self.lat_box):
+                self._coordinate_rows += [label, widget]
+        self._show_coordinate_columns(False)
         params.setColumnStretch(1, 1)
 
         self.legend = RasterLegend()
@@ -211,24 +226,70 @@ class IdwView(QWidget):
     # ------------------------------------------------------------- opening points
     def open_points(self) -> None:
         start = str(Path(self._layer.path).parent) if self._layer else ""
-        path, _ = QFileDialog.getOpenFileName(self, "Open point shapefile", start,
-                                              "Shapefiles (*.shp);;All files (*)")
+        path, _ = QFileDialog.getOpenFileName(self, "Open points", start,
+                                              "Points (*.shp *.csv);;Shapefiles (*.shp);;CSV tables (*.csv);;"
+                                              "All files (*)")
         if path:
             self.load(path)
 
     def load(self, path: str) -> None:
         self.subtitle.setText(Path(path).name)
+        self._csv_path = ""
+        if path.lower().endswith(".csv"):
+            self._open_csv(path)
+            return
+        self._show_coordinate_columns(False)
         self.banner.show_info("Reading the shapefile…")
         run_task(self, self._facade.load_shapefile, path, on_success=self._on_layer, on_error=self._on_error)
+
+    # ------------------------------------------------------------- a CSV of points
+    def _open_csv(self, path: str) -> None:
+        """Read the CSV's columns, guess which hold the longitude and latitude, and load its points."""
+        try:
+            table = self._facade.inspect_points_csv(path)
+        except GeeAssistError as exc:
+            self._on_error(exc)
+            return
+        self._csv_path = path
+        self._show_coordinate_columns(True)
+        for box, guess in ((self.lon_box, table.lon_column), (self.lat_box, table.lat_column)):
+            box.blockSignals(True)
+            box.clear()
+            box.addItem("Choose…", "")
+            for name in table.numeric:
+                box.addItem(name, name)
+            box.setCurrentIndex(max(0, box.findData(guess)))
+            box.blockSignals(False)
+        if table.lon_column and table.lat_column:
+            self._load_csv_points()
+        else:
+            self._layer = None
+            self._set_ready(False)
+            self.banner.show_info(f"{table.rows:,} rows. Choose the longitude and latitude columns "
+                                  "(in degrees).")
+
+    def _on_coordinate_column(self, *_args) -> None:
+        if getattr(self, "_csv_path", "") and self.lon_box.currentData() and self.lat_box.currentData():
+            self._load_csv_points()
+
+    def _load_csv_points(self) -> None:
+        self.banner.show_info("Reading the CSV…")
+        run_task(self, self._facade.load_points_csv, self._csv_path, self.lon_box.currentData(),
+                 self.lat_box.currentData(), on_success=self._on_layer, on_error=self._on_error)
+
+    def _show_coordinate_columns(self, visible: bool) -> None:
+        for widget in self._coordinate_rows:
+            widget.setVisible(visible)
 
     def _on_layer(self, layer: VectorLayerDTO) -> None:
         if layer.kind not in (POINT, MULTIPOINT):
             self._layer = None
             self._set_ready(False)
-            self.banner.show_error("IDW needs a point shapefile; this one holds "
+            self.banner.show_error("IDW needs points; this shapefile holds "
                                    f"{layer.kind}s. Open a layer of measured points.")
             return
-        numeric = [f.name for f in layer.fields if f.type == "number"]
+        coordinates = {self.lon_box.currentData(), self.lat_box.currentData()} if self._csv_path else set()
+        numeric = [f.name for f in layer.fields if f.type == "number" and f.name not in coordinates]
         if not numeric:
             self._layer = None
             self._set_ready(False)

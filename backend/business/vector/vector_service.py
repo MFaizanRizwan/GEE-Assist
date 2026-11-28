@@ -46,6 +46,24 @@ class VectorService(IVectorService):
         # A guard against pathologically large files locking up the UI; normal shapefiles are far smaller.
         self._max_features = max_features
 
+    def rings_in_crs(self, layer: VectorLayerDTO, crs: str) -> list[list[tuple[float, float]]]:
+        rings = [list(ring) for feature in layer.features for ring in feature.parts if ring]
+        if not crs or crs.upper() in ("EPSG:4326", "WGS84", "OGC:CRS84"):
+            return rings
+        from rasterio.warp import transform
+
+        xs = [x for ring in rings for x, _y in ring]
+        ys = [y for ring in rings for _x, y in ring]
+        try:
+            tx, ty = transform("EPSG:4326", crs, xs, ys)
+        except Exception as exc:  # noqa: BLE001 - an unknown CRS
+            raise VectorError(f"The boundary cannot be projected to {crs}: {exc}") from exc
+        out, cursor = [], 0
+        for ring in rings:
+            out.append(list(zip(tx[cursor:cursor + len(ring)], ty[cursor:cursor + len(ring)])))
+            cursor += len(ring)
+        return out
+
     def load_shapefile(self, path: str) -> VectorLayerDTO:
         file = Path(path)
         if file.suffix.lower() != ".shp":

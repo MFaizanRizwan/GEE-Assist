@@ -278,6 +278,10 @@ class IBusinessFacade(ABC):
     def load_shapefile(self, path: str) -> VectorLayerDTO:
         """Read a shapefile (.shp) and reproject it to WGS84 for the Vector Maps page."""
 
+    @abstractmethod
+    def vector_rings_in_crs(self, layer: VectorLayerDTO, crs: str) -> list[list[tuple[float, float]]]:
+        """A loaded layer's rings in another coordinate system (to draw it over a projected raster)."""
+
     # ------------------------------------------------------------- digital elevation model (DEM)
     @abstractmethod
     def describe_dem(self, path: str) -> TerrainInfoDTO:
@@ -301,6 +305,14 @@ class IBusinessFacade(ABC):
     @abstractmethod
     def save_interpolation(self, result: IDWResultDTO, path: str) -> str:
         """Write an interpolated surface as a GeoTIFF (EPSG:4326); returns its path."""
+
+    @abstractmethod
+    def inspect_points_csv(self, path: str):
+        """A CSV of sample points: its columns and the longitude / latitude columns guessed."""
+
+    @abstractmethod
+    def load_points_csv(self, path: str, lon_column: str = "", lat_column: str = "") -> VectorLayerDTO:
+        """A CSV's rows as a point layer (WGS84 degrees), for IDW."""
 
     # ------------------------------------------------------------- machine-learning prediction
     @abstractmethod

@@ -268,7 +268,7 @@ class HomeWindow(QMainWindow):
         self.dem_button = self.side_bar.add_button("Elevation (DEM)", "E", icon=TerrainIcon())
         self.dem_button.setToolTip("Digital Elevation Model: hillshade, slope, aspect and contours from a DEM (Ctrl+9)")
         self.idw_button = self.side_bar.add_button("IDW Interpolation", "I", icon=InterpolateIcon())
-        self.idw_button.setToolTip("IDW: interpolate a point shapefile's values into a surface (Ctrl+0)")
+        self.idw_button.setToolTip("IDW: interpolate the values of a point shapefile or CSV into a surface (Ctrl+0)")
         self.prediction_button = self.side_bar.add_button("Prediction (ML)", "P", icon=PredictIcon())
         self.prediction_button.setToolTip("Prediction (ML): forecast values, future land cover, classify or find "
                                           "anomalies from past and present images (Ctrl+Shift+P)")

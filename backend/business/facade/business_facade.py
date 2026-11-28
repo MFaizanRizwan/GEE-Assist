@@ -348,6 +348,9 @@ class BusinessFacade(IBusinessFacade):
     def load_shapefile(self, path: str) -> VectorLayerDTO:
         return self._vector().load_shapefile(path)
 
+    def vector_rings_in_crs(self, layer: VectorLayerDTO, crs: str):
+        return self._vector().rings_in_crs(layer, crs)
+
     def _vector(self) -> IVectorService:
         if self._vector_service is None:
             raise VectorError("Vector maps are not set up in this build.")
@@ -376,6 +379,12 @@ class BusinessFacade(IBusinessFacade):
 
     def save_interpolation(self, result: IDWResultDTO, path: str) -> str:
         return self._interpolation().save_surface(result, path)
+
+    def inspect_points_csv(self, path: str):
+        return self._interpolation().inspect_points_csv(path)
+
+    def load_points_csv(self, path: str, lon_column: str = "", lat_column: str = ""):
+        return self._interpolation().load_points_csv(path, lon_column, lat_column)
 
     # ------------------------------------------------------------- machine-learning prediction
     def prediction_algorithms(self, task: str):

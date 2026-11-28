@@ -575,11 +575,14 @@ class PredictionService(IPredictionService):
     def _cross_validate(self, spec, data, opts, lags) -> dict[str, float]:
         from sklearn.model_selection import StratifiedKFold
 
+        from dataclasses import replace
+
         x, y = data
         folds = StratifiedKFold(n_splits=5, shuffle=True, random_state=opts.seed)
         f1s, accuracies = [], []
+        fold_opts = replace(opts, tune=False)   # the folds score the algorithm; re-tuning each one took ~5x as long
         for train, test in folds.split(x, y):
-            model = self._fit(spec, algo.CLASSIFIER, x[train], y[train], opts, lags, len(np.unique(y[train])))
+            model = self._fit(spec, algo.CLASSIFIER, x[train], y[train], fold_opts, lags, len(np.unique(y[train])))
             metrics = _classification_metrics(y[test], model.predict(x[test]))
             f1s.append(metrics["F1 (macro)"])
             accuracies.append(metrics["Accuracy"])

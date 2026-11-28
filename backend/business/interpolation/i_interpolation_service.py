@@ -17,3 +17,11 @@ class IInterpolationService(ABC):
     @abstractmethod
     def save_surface(self, result: IDWResultDTO, path: str) -> str:
         """Write an interpolated surface as a GeoTIFF (EPSG:4326); returns its path."""
+
+    @abstractmethod
+    def inspect_points_csv(self, path: str):
+        """A CSV's columns, its numeric ones and the longitude / latitude columns guessed (CsvTableDTO)."""
+
+    @abstractmethod
+    def load_points_csv(self, path: str, lon_column: str = "", lat_column: str = ""):
+        """A CSV's rows as a point layer (VectorLayerDTO, WGS84), for IDW."""

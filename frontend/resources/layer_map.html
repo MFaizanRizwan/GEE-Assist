@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<!--
+  The IDW page's map (frontend/widgets/layer_map_widget.py). Layers, bottom to top:
+    1. the world basemap (Esri streets or satellite tiles),
+    2. the interpolated surface (an image),
+    3. the boundaries (a shapefile: cities, districts, fields…),
+    4. the sample points.
+  Ctrl+click a boundary to select / deselect it. Python <-> JS through QWebChannel ("bridge").
+  Needs an internet connection for Leaflet and the tiles (SRS constraint C-01).
+-->
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <style>
+    html, body, #map { height: 100%; margin: 0; background: #DDE3E1; }
+    .leaflet-tooltip.name { font: 12px sans-serif; padding: 2px 6px; }
+  </style>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</head>
+<body>
+<div id="map"></div>
+<script>
+  var esri = 'https://server.arcgisonline.com/ArcGIS/rest/services/';
+  var basemaps = {
+    streets: L.tileLayer(esri + 'World_Street_Map/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Tiles &copy; Esri' }),
+    satellite: L.tileLayer(esri + 'World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Tiles &copy; Esri' })
+  };
+  var map = L.map('map', { worldCopyJump: true, preferCanvas: true }).setView([30.4, 69.3], 5);
+  map.attributionControl.setPrefix(false);
+  L.control.scale().addTo(map);
+  var basemap = basemaps.streets.addTo(map);
+
+  // fixed drawing order, whatever is switched on or off
+  map.createPane('surface');    map.getPane('surface').style.zIndex = 410;
+  map.createPane('boundaries'); map.getPane('boundaries').style.zIndex = 420;
+  map.createPane('points');     map.getPane('points').style.zIndex = 430;
+  map.getPane('surface').style.pointerEvents = 'none';
+  var boundaryRenderer = L.canvas({ pane: 'boundaries', padding: 0.3 });
+  var pointRenderer = L.canvas({ pane: 'points' });
+
+  var surface = null, boundaries = null, points = L.layerGroup();
+  var visible = { basemap: true, surface: true, boundaries: true, points: true };
+  var selected = {};
+  var boundaryColour = '#1F2A44', selectedColour = '#00A8E8';
+
+  if (typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(function () { map.invalidateSize(false); }).observe(document.getElementById('map'));
+  }
+
+  var bridge = null;
+  new QWebChannel(qt.webChannelTransport, function (channel) {
+    bridge = channel.objects.bridge;
+    bridge.mapReady();
+  });
+
+  // ---- the pointer over the surface, for the value readout
+  map.on('mousemove', function (e) {
+    var inside = surface !== null && visible.surface && surface.getBounds().contains(e.latlng);
+    if (bridge) {
+      if (inside) bridge.pointerMoved(e.latlng.lng, e.latlng.lat);
+      else bridge.pointerLeft();
+    }
+  });
+  map.on('mouseout', function () { if (bridge) bridge.pointerLeft(); });
+
+  // ---- called from Python
+  function setBasemap(name) {
+    if (!basemaps[name]) return;
+    if (basemap && map.hasLayer(basemap)) map.removeLayer(basemap);
+    basemap = basemaps[name];
+    if (visible.basemap) basemap.addTo(map);
+    basemap.bringToBack();
+  }
+
+  function setSurface(url, west, south, east, north, opacity) {
+    if (surface) map.removeLayer(surface);
+    surface = L.imageOverlay(url, [[south, west], [north, east]], { pane: 'surface', opacity: opacity });
+    if (visible.surface) surface.addTo(map);
+  }
+
+  function clearSurface() { if (surface) { map.removeLayer(surface); surface = null; } }
+
+  function setSurfaceOpacity(opacity) { if (surface) surface.setOpacity(opacity); }
+
+  function styleFor(index) {
+    var on = !!selected[index];
+    return { color: on ? selectedColour : boundaryColour, weight: on ? 3 : 1.2,
+             fill: true, fillColor: on ? selectedColour : '#000', fillOpacity: on ? 0.12 : 0.0 };
+  }
+
+  function setBoundaries(text) {
+    if (boundaries) map.removeLayer(boundaries);
+    boundaries = null;
+    selected = {};
+    if (!text) return;
+    var data = JSON.parse(text);
+    boundaries = L.geoJSON(data, {
+      pane: 'boundaries', renderer: boundaryRenderer,
+      style: function (feature) { return styleFor(feature.properties.index); },
+      onEachFeature: function (feature, layer) {
+        if (feature.properties.name) layer.bindTooltip(feature.properties.name, { sticky: true, className: 'name' });
+        layer.on('click', function (e) {
+          if (!(e.originalEvent.ctrlKey || e.originalEvent.metaKey)) return;   // Ctrl+click selects
+          L.DomEvent.stop(e);
+          if (bridge) bridge.featureToggled(feature.properties.index);
+        });
+      }
+    });
+    if (visible.boundaries) boundaries.addTo(map);
+  }
+
+  function setSelection(indices) {
+    selected = {};
+    indices.forEach(function (i) { selected[i] = true; });
+    if (!boundaries) return;
+    boundaries.eachLayer(function (layer) { layer.setStyle(styleFor(layer.feature.properties.index)); });
+  }
+
+  function setPoints(list) {      // [[lon, lat, value-text], ...]
+    points.clearLayers();
+    list.forEach(function (p) {
+      L.circleMarker([p[1], p[0]], { pane: 'points', renderer: pointRenderer, radius: 4, weight: 1.2,
+                                     color: '#FFFFFF', fillColor: '#111111', fillOpacity: 0.9 })
+        .bindTooltip(p[2], { className: 'name' }).addTo(points);
+    });
+    if (visible.points && !map.hasLayer(points)) points.addTo(map);
+  }
+
+  function setVisible(name, on) {
+    visible[name] = on;
+    var layer = name === 'basemap' ? basemap : name === 'surface' ? surface
+              : name === 'boundaries' ? boundaries : points;
+    if (!layer) return;
+    if (on && !map.hasLayer(layer)) { layer.addTo(map); if (name === 'basemap') layer.bringToBack(); }
+    if (!on && map.hasLayer(layer)) map.removeLayer(layer);
+  }
+
+  function fitTo(west, south, east, north) {
+    map.fitBounds([[south, west], [north, east]], { padding: [20, 20], maxZoom: 16 });
+  }
+</script>
+</body>
+</html>

@@ -44,7 +44,14 @@ class InterpolationService(IInterpolationService):
         if params.power <= 0:
             raise InterpolationError("The power must be greater than 0.")
 
-        bounds, (cx, cy), width, height = _grid(px, py, params.resolution)
+        ex, ey = px, py                      # what the grid covers
+        boundary_x, boundary_y = _boundary_vertices(params.boundary)
+        if boundary_x.size:
+            if params.clip_to_boundary:      # the boundary alone: the surface is cut to it below
+                ex, ey = boundary_x, boundary_y
+            else:                            # the points and the boundary
+                ex, ey = np.concatenate([px, boundary_x]), np.concatenate([py, boundary_y])
+        bounds, (cx, cy), width, height = _grid(ex, ey, params.resolution)
         xs = bounds[0] + (np.arange(width) + 0.5) * cx
         ys = bounds[3] - (np.arange(height) + 0.5) * cy  # top row first
         surface = np.full((height, width), np.nan, dtype="float64")
@@ -52,21 +59,38 @@ class InterpolationService(IInterpolationService):
         radius = params.radius if params.radius > 0 else 0.0
 
         _fill_surface(surface, xs, ys, px, py, pz, params.power, neighbours, radius)
+        if boundary_x.size and params.clip_to_boundary:
+            surface[~_inside(params.boundary, bounds, (cx, cy), width, height)] = np.nan
 
         estimated = np.isfinite(surface)
         if not estimated.any():
+            if boundary_x.size and params.clip_to_boundary:
+                raise InterpolationError("Nothing was estimated inside the selected boundary: it may be smaller than "
+                                         "one cell (raise the resolution), or no point is within the search radius.")
             raise InterpolationError("No cell had a sample point within the search radius; widen it or use no radius.")
         rgba, legend, low, high = _draw(surface, estimated, field, bounds, (cx, cy), px, py)
         values = estimated_values = surface[estimated]
         stats = {"min": float(values.min()), "max": float(values.max()), "mean": float(values.mean())}
         notes = [f"{px.size:,} sample points · power {params.power:g}"
                  + (f" · {neighbours} neighbours" if neighbours else " · all points")
-                 + (f" · radius {radius:g}°" if radius else "")]
+                 + (f" · radius {radius:g}°" if radius else "")
+                 + ((" · clipped to the selected boundary" if params.clip_to_boundary
+                     else " · covering the selected boundary") if boundary_x.size else "")]
         return IDWResultDTO(
             values=np.where(estimated, surface, np.nan).astype("float32"), rgba=rgba, legend=legend,
             width=width, height=height, bounds=bounds, cell_size=(cx, cy), crs="EPSG:4326",
             point_count=int(px.size), field=field, params=params, stats=stats, notes=notes,
         )
+
+    def inspect_points_csv(self, path: str):
+        from backend.business.interpolation.point_table import inspect_csv
+
+        return inspect_csv(path)
+
+    def load_points_csv(self, path: str, lon_column: str = "", lat_column: str = ""):
+        from backend.business.interpolation.point_table import read_point_csv
+
+        return read_point_csv(path, lon_column, lat_column)
 
     def save_surface(self, result: IDWResultDTO, path: str) -> str:
         import rasterio
@@ -185,6 +209,30 @@ def _sample_arrays(points: Sequence[SamplePointDTO]):
     pz = np.array([p.value for p in points], dtype="float64")
     finite = np.isfinite(px) & np.isfinite(py) & np.isfinite(pz)
     return px[finite], py[finite], pz[finite]
+
+
+def _boundary_vertices(boundary) -> tuple[np.ndarray, np.ndarray]:
+    """Every vertex of the boundary polygons, as (lons, lats)."""
+    xs, ys = [], []
+    for polygon in boundary or ():
+        for ring in polygon:
+            for lon, lat in ring:
+                xs.append(float(lon))
+                ys.append(float(lat))
+    return np.array(xs, dtype="float64"), np.array(ys, dtype="float64")
+
+
+def _inside(boundary, bounds, cell, width: int, height: int) -> np.ndarray:
+    """True for the grid cells whose centre lies inside the boundary polygons (holes excluded)."""
+    from rasterio.features import geometry_mask
+    from rasterio.transform import from_origin
+
+    shapes = [{"type": "Polygon", "coordinates": [[list(map(float, p)) for p in ring] for ring in polygon]}
+              for polygon in boundary if polygon and len(polygon[0]) >= 3]
+    if not shapes:
+        return np.ones((height, width), dtype=bool)
+    transform = from_origin(bounds[0], bounds[3], cell[0], cell[1])
+    return geometry_mask(shapes, out_shape=(height, width), transform=transform, invert=True)
 
 
 def _grid(px: np.ndarray, py: np.ndarray, resolution: int):
