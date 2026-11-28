@@ -78,6 +78,7 @@ from frontend.widgets.symbology import colorize, ramp_stops
 from frontend.workers.task_worker import run_task
 
 PANEL_WIDTH = 380
+ALGORITHM_COLUMN_MAX = 260   # leaderboard: longer algorithm names wrap instead of widening the column
 PROGRESS_POLL_MS = 120
 MAP_IMAGE_SIZE = 1024
 
@@ -466,6 +467,10 @@ class PredictionView(QWidget):
         self.leaderboard.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.leaderboard.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.leaderboard.itemSelectionChanged.connect(self._on_model_chosen)
+        # Long Algorithm names / Status messages wrap onto more lines and their row grows to fit
+        # (kept up to date as the Status column's width follows the window).
+        self.leaderboard.setWordWrap(True)
+        self.leaderboard.verticalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         self.validation_note = _help("Train and run to see how every algorithm scores on data it did not see.")
         self.importance = ImportanceBars()
 
@@ -897,12 +902,15 @@ class PredictionView(QWidget):
                     font.setBold(True)
                     item.setFont(font)
                 board.setItem(row, col, item)
-        # Algorithm names and numbers always show in full; the (sometimes long) Status message
-        # takes whatever width is left and is elided, with the full text in its tooltip.
+        # Numbers size to their text; the Algorithm column fits its names up to a cap; the
+        # (sometimes long) Status message takes the width that is left. Text too long for its
+        # column wraps, and that row grows taller so all of it shows.
         header = board.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
         header.setSectionResizeMode(len(columns) - 1, QHeaderView.ResizeMode.Stretch)
-        board.setTextElideMode(Qt.TextElideMode.ElideRight)
+        board.resizeColumnToContents(1)
+        board.setColumnWidth(1, min(board.columnWidth(1), ALGORITHM_COLUMN_MAX))
         board.blockSignals(False)
 
     def _on_model_chosen(self) -> None:
