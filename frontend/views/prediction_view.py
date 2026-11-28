@@ -157,9 +157,12 @@ class ImportanceBars(QWidget):
         self._rows: list[tuple[str, float]] = []
         self.setMinimumHeight(40)
 
+    ROW_H = 34   # a full-width label line with its bar underneath
+
     def set_rows(self, rows: list[tuple[str, float]]) -> None:
         self._rows = rows[:10]
-        self.setMinimumHeight(max(40, 22 * len(self._rows) + 6))
+        self.setMinimumHeight(max(40, self.ROW_H * len(self._rows) + 6))
+        self.setToolTip("\n".join(f"{name}: {value:.4g}" for name, value in self._rows))
         self.updateGeometry()
         self.update()
 
@@ -175,17 +178,17 @@ class ImportanceBars(QWidget):
                              "Feature importance appears after a run.")
             return
         top = max(max(v for _n, v in self._rows), 1e-12)
-        label_w = int(self.width() * 0.48)
+        full_w = self.width() - 4
+        metrics = painter.fontMetrics()
         for i, (name, value) in enumerate(self._rows):
-            y = 4 + i * 22
+            y = 4 + i * self.ROW_H
             painter.setPen(QColor(theme.TEXT))
-            metrics = painter.fontMetrics()
-            painter.drawText(0, y, label_w - 6, 18, Qt.AlignmentFlag.AlignVCenter,
-                             metrics.elidedText(name, Qt.TextElideMode.ElideRight, label_w - 6))
-            width = max(0.0, value / top) * (self.width() - label_w - 4)
+            painter.drawText(0, y, full_w, 18, Qt.AlignmentFlag.AlignVCenter,
+                             metrics.elidedText(name, Qt.TextElideMode.ElideRight, full_w))
+            width = max(0.0, value / top) * full_w
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(QColor(theme.LEAF))
-            painter.drawRoundedRect(label_w, y + 4, int(width), 10, 3, 3)
+            painter.drawRoundedRect(0, y + 20, int(width), 8, 3, 3)
         painter.end()
 
 
@@ -885,6 +888,7 @@ class PredictionView(QWidget):
             for col, text in enumerate(cells):
                 item = QTableWidgetItem(text)
                 item.setData(Qt.ItemDataRole.UserRole, score.key)
+                item.setToolTip(text)
                 if score.error:
                     item.setForeground(QColor(theme.ERROR if col == len(cells) - 1 else theme.SUBTLE))
                     item.setToolTip(score.error)
@@ -893,9 +897,12 @@ class PredictionView(QWidget):
                     font.setBold(True)
                     item.setFont(font)
                 board.setItem(row, col, item)
+        # Algorithm names and numbers always show in full; the (sometimes long) Status message
+        # takes whatever width is left and is elided, with the full text in its tooltip.
         header = board.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(len(columns) - 1, QHeaderView.ResizeMode.Stretch)
+        board.setTextElideMode(Qt.TextElideMode.ElideRight)
         board.blockSignals(False)
 
     def _on_model_chosen(self) -> None:

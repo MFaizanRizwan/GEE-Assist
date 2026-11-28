@@ -197,7 +197,7 @@ SPECS: tuple[Spec, ...] = (
     Spec("mlp", "Neural network (MLP)", "Neural networks", (REGRESS, CLASSIFIER), "scikit-learn",
          "A multi-layer perceptron (scikit-learn), early stopping on a held-out part.",
          _sk("sklearn.neural_network", "MLPRegressor", "MLPClassifier",
-             common={"hidden_layer_sizes": (64, 32), "early_stopping": True, "max_iter": 400}),
+             common={"hidden_layer_sizes": (64, 32), "early_stopping": True, "max_iter": 1500}),
          scale=True, grid={"hidden_layer_sizes": [(32,), (64, 32), (128, 64)], "alpha": [1e-5, 1e-4, 1e-3]}),
     Spec("torch_mlp", "Deep neural network", "Deep learning", (REGRESS, CLASSIFIER), "pytorch",
          "A deeper PyTorch network (3 hidden layers, dropout, batch norm).", _torch("mlp"), scale=True),

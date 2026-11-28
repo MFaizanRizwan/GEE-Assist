@@ -627,6 +627,14 @@ class PredictionService(IPredictionService):
             from sklearn.decomposition import PCA
 
             steps.append(("pca", PCA(n_components=0.95, random_state=opts.seed)))
+        elif spec.key == "elliptic_envelope":
+            # Some anomaly features are exact combinations of others (e.g. "present minus past
+            # mean"), so their covariance is singular and the robust fit (MinCovDet) turns
+            # unstable. Dropping only the degenerate directions keeps every Mahalanobis distance
+            # the same (it is invariant to invertible linear maps) but makes the fit well posed.
+            from sklearn.decomposition import PCA
+
+            steps.append(("rank", PCA(n_components=0.999999, svd_solver="full")))
         if not steps:
             return estimator
         from sklearn.pipeline import Pipeline
