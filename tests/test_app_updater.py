@@ -33,12 +33,20 @@ def _server(body: bytes = RELEASE, content_type="application/octet-stream", stat
     return httpx.Client(transport=httpx.MockTransport(handler))
 
 
+@pytest.fixture(autouse=True)
+def plenty_of_space(monkeypatch):
+    """The tests' folders get plenty of free space (the real check needs gigabytes)."""
+    real = shutil.disk_usage
+    monkeypatch.setattr(shutil, "disk_usage", lambda path: real(path)._replace(free=50_000_000_000))
+
+
 @pytest.fixture
 def runs_as(monkeypatch):
     """The downloaded program "starts" and reports this version (no real process)."""
-    reported = {"version": "1.2.0"}
+    reported = {"version": "1.2.0", "env": None}
 
-    def fake_run(args, **_kw):
+    def fake_run(args, **kw):
+        reported["env"] = kw.get("env")
         Path(args[2]).write_text(reported["version"], encoding="utf-8")
         return subprocess.CompletedProcess(args, 0)
 
@@ -206,3 +214,40 @@ def test_the_dialog_downloads_installs_and_restarts(qt_app, monkeypatch, tmp_pat
     again.update_button.click()
     assert again.state == "failed" and "current version still works" in again.status.text()
     assert again.update_button.text() == "Try again"
+
+
+
+# ------------------------------------------------------------------ safety
+def test_the_check_never_deletes_the_file_it_is_given(tmp_path, monkeypatch):
+    """A failed check used to delete the file it was given: pointed at a build, it deleted the build."""
+    release = tmp_path / "GEE-Assist.exe"
+    release.write_bytes(RELEASE)
+    monkeypatch.setattr(module.subprocess, "run", lambda args, **kw: subprocess.CompletedProcess(args, 1))
+    with pytest.raises(UpdateError, match="did not start and report its version"):
+        AppUpdater(executable=release, frozen=True).verify_runs(release, "1.2.0")
+    assert release.read_bytes() == RELEASE
+
+
+def test_the_trial_run_unpacks_beside_the_download_not_in_the_system_temp(tmp_path, runs_as):
+    exe = _installed(tmp_path)
+    updater = AppUpdater(executable=exe, frozen=True, http=_server())
+    updater.download("https://example.test/x.exe", "1.2.0")
+    assert Path(runs_as["env"]["TEMP"]).parent == exe.parent           # on the app's own drive
+    assert not any(p.name.startswith(".gee-assist-check") for p in exe.parent.iterdir())   # tidied up
+
+
+def test_a_full_drive_is_reported_before_downloading(tmp_path, monkeypatch, runs_as):
+    exe = _installed(tmp_path)
+    real = module.shutil.disk_usage if hasattr(module, "shutil") else shutil.disk_usage
+    monkeypatch.setattr(shutil, "disk_usage", lambda path: real(path)._replace(free=200_000_000))
+    with pytest.raises(UpdateError, match="Not enough free space"):
+        AppUpdater(executable=exe, frozen=True, http=_server()).download("https://example.test/x.exe", "1.2.0")
+    assert sorted(p.name for p in exe.parent.iterdir()) == [exe.name]
+
+
+def test_a_download_that_fails_its_check_is_removed(tmp_path, runs_as):
+    exe = _installed(tmp_path)
+    runs_as["version"] = "0.9.0"
+    with pytest.raises(UpdateError):
+        AppUpdater(executable=exe, frozen=True, http=_server()).download("https://example.test/x.exe", "1.2.0")
+    assert sorted(p.name for p in exe.parent.iterdir()) == [exe.name]      # its own download, nothing else

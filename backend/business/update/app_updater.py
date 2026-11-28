@@ -35,6 +35,7 @@ from typing import Callable
 from backend.exceptions import UpdateError
 
 MIN_SIZE = 1_000_000              # a real build is hundreds of MB; anything tiny is an error page
+UNPACK_FACTOR = 4                 # a one-file .exe unpacks to about this many times its size when it starts
 VERIFY_TIMEOUT_S = 240            # the one-file exe unpacks itself before it can answer
 CHUNK = 1 << 20
 
@@ -83,6 +84,7 @@ class AppUpdater:
             raise UpdateError("This release has no download link.")
         folder = self.executable.parent if self.folder_writable() else Path(tempfile.gettempdir()) / "GEE-Assist-update"
         folder.mkdir(parents=True, exist_ok=True)
+        self._check_space(folder, self.executable.stat().st_size if self.executable.is_file() else 0)
         partial = folder / f"{self.executable.stem}-{expected_version}.download"
         target = folder / f"{self.executable.stem}-{expected_version}.new.exe"
         for leftover in (partial, target):
@@ -122,8 +124,24 @@ class AppUpdater:
         except Exception:
             partial.unlink(missing_ok=True)
             raise
-        self.verify_runs(target, expected_version)
+        try:
+            self.verify_runs(target, expected_version, unpack_in=folder)
+        except Exception:
+            target.unlink(missing_ok=True)       # only ever the file this download made
+            raise
         return target
+
+    @staticmethod
+    def _check_space(folder: Path, size_hint: int) -> None:
+        """Enough room to download the new .exe and let it unpack once for the check."""
+        import shutil
+
+        need = max(size_hint, 600_000_000) * (1 + UNPACK_FACTOR)
+        free = shutil.disk_usage(folder).free
+        if free < need:
+            raise UpdateError(f"Not enough free space on the drive of {folder} to update ({free / 1e9:.1f} GB free, "
+                              f"about {need / 1e9:.1f} GB needed for a moment). Free some space and try again. "
+                              "Nothing was changed.")
 
     @staticmethod
     def _check_file(path: Path, actual_sha256: str, expected_sha256: str | None) -> None:
@@ -139,24 +157,30 @@ class AppUpdater:
             raise UpdateError("The download is damaged or not the published release (its SHA-256 does not "
                               "match). Nothing was changed.")
 
-    def verify_runs(self, path: Path, expected_version: str) -> None:
-        """Start the new .exe just long enough to report its version: it must run, and be that version."""
-        report = Path(tempfile.gettempdir()) / f"gee-assist-version-{os.getpid()}.txt"
-        report.unlink(missing_ok=True)
+    def verify_runs(self, path: Path, expected_version: str, unpack_in: Path | None = None) -> None:
+        """Start the new .exe just long enough to report its version: it must run, and be that version.
+
+        Never deletes anything (the caller removes a download that fails). The one-file .exe
+        unpacks itself into its temp folder as it starts; that folder is ``unpack_in`` (the
+        download folder) rather than the system temp folder, which may be on a full C: drive."""
+        scratch = Path(unpack_in or Path(path).parent) / f".gee-assist-check-{os.getpid()}"
+        scratch.mkdir(parents=True, exist_ok=True)
+        report = scratch / "version.txt"
+        env = dict(os.environ, TEMP=str(scratch), TMP=str(scratch))
         try:
-            subprocess.run([str(path), "--write-version", str(report)], timeout=VERIFY_TIMEOUT_S,
+            subprocess.run([str(path), "--write-version", str(report)], timeout=VERIFY_TIMEOUT_S, env=env,
                            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0), check=False)
             reported = report.read_text(encoding="utf-8").strip() if report.exists() else ""
         except (OSError, subprocess.TimeoutExpired) as exc:
-            path.unlink(missing_ok=True)
             raise UpdateError(f"The downloaded program does not start ({exc}). Nothing was changed.") from exc
         finally:
-            report.unlink(missing_ok=True)
+            import shutil
+
+            shutil.rmtree(scratch, ignore_errors=True)
         if not reported:
-            path.unlink(missing_ok=True)
-            raise UpdateError("The downloaded program did not report its version. Nothing was changed.")
+            raise UpdateError("The downloaded program did not start and report its version (it may be damaged, "
+                              "or the drive too full for it to unpack). Nothing was changed.")
         if not same_version(reported, expected_version):
-            path.unlink(missing_ok=True)
             raise UpdateError(f"The download is version {reported}, not {expected_version} as published. "
                               "Nothing was changed.")
 
