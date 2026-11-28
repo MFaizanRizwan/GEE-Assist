@@ -6,6 +6,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from unittest.mock import MagicMock  # noqa: E402
 
+from pathlib import Path  # noqa: E402
+
 import numpy as np  # noqa: E402
 import pytest  # noqa: E402
 
@@ -343,3 +345,30 @@ def test_a_dead_map_page_is_reloaded_with_everything_on_it():
     ran = world._view._page.ran
     assert [s.split("(")[0] for s in ran] == ["setBoundaries", "setSelection", "setOtherAreasVisible", "setPoints",
                                               "setVisible", "fitTo"]
+
+
+def test_an_id_column_is_not_chosen_as_the_value_to_interpolate(page, tmp_path):
+    path = tmp_path / "samples.csv"
+    path.write_text("Sample_ID,Longitude,Latitude,pH,depth_cm\n"
+                    + "".join(f"{i},{73 + i / 10},{31 + i / 20},{6 + i / 7:.2f},30\n" for i in range(1, 9)))
+    page.load(str(path))
+    assert page.field_box.currentText() == "pH"                        # not Sample_ID (1, 2, 3, …)
+    assert [page.field_box.itemText(i) for i in range(page.field_box.count())] == ["Sample_ID", "pH", "depth_cm"]
+
+
+def test_the_map_rechecks_its_size_only_once_it_is_laid_out():
+    """Re-measuring the map synchronously as it reappeared (a 0 x 0 page) hung Leaflet for good."""
+    from frontend.widgets.aoi_map_widget import AoiMapWidget
+    from frontend.widgets.layer_map_widget import SAFE_RESIZE, LayerMapWidget
+
+    assert "setTimeout" in SAFE_RESIZE and "clientWidth > 0" in SAFE_RESIZE and "clientHeight > 0" in SAFE_RESIZE
+    world = LayerMapWidget()
+    world.show()
+    world.hide()
+    world.show()
+    assert world.sent[-1] == SAFE_RESIZE and not any(s.startswith("if (typeof map") for s in world.sent)
+    html = (Path(__file__).resolve().parents[1] / "frontend" / "resources").glob("*_map.html")
+    for page_file in html:
+        text = page_file.read_text(encoding="utf-8")
+        assert "clientWidth > 0 && el.clientHeight > 0" in text, page_file.name
+    assert AoiMapWidget.showEvent.__code__.co_names.count("SAFE_RESIZE") == 1

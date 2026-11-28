@@ -18,6 +18,7 @@ lays out a printable map with a north arrow, a scale bar and the legend.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import numpy as np
@@ -524,8 +525,11 @@ class IdwView(QWidget):
             self.banner.show_error("This file has no numeric field to interpolate.")
             return
         self._layer = layer
+        self.field_box.blockSignals(True)
         self.field_box.clear()
         self.field_box.addItems(numeric)
+        self.field_box.setCurrentText(default_value_field(layer, numeric))   # a measurement, not an ID
+        self.field_box.blockSignals(False)
         self.detail_labels["points"].setText(f"{layer.feature_count:,}")
         self._set_ready(True)
         self._send_points()
@@ -1042,3 +1046,30 @@ def _cell(value) -> str:
     if isinstance(value, float):
         return str(int(value)) if value.is_integer() else repr(value)
     return str(value)
+
+
+_ID_NAME = re.compile(r"(^|[_\s-])(id|fid|oid|gid|uid|objectid|index|idx|no|num|number|sr|sno|srno|serial|code|"
+                      r"rank|row|seq|key)$|^(id|fid|objectid|sr|sno|serial)[_\s-]?", re.IGNORECASE)
+
+
+def looks_like_identifier(layer, field: str) -> bool:
+    """A column that numbers the points rather than measuring something: named like an ID
+    (Sample_ID, FID, OBJECTID, Sr_No…) or holding distinct whole numbers (1, 2, 3…)."""
+    if _ID_NAME.search(field.strip()):
+        return True
+    values = [f.attributes.get(field) for f in layer.features]
+    values = [v for v in values if isinstance(v, (int, float)) and not isinstance(v, bool)]
+    if len(values) < 3 or any(float(v) != int(v) for v in values):
+        return False
+    ordered = sorted(int(v) for v in values)
+    distinct = len(set(ordered)) == len(ordered)
+    consecutive = ordered[-1] - ordered[0] == len(ordered) - 1
+    return distinct and consecutive
+
+
+def default_value_field(layer, numeric: list[str]) -> str:
+    """The field to interpolate by default: the first that is not an ID (else the first)."""
+    for field in numeric:
+        if not looks_like_identifier(layer, field):
+            return field
+    return numeric[0] if numeric else ""

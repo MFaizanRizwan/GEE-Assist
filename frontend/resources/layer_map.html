@@ -45,8 +45,13 @@
   var showOthers = true;     // the boundaries of the areas not selected
   var boundaryColour = '#1F2A44', selectedColour = '#00A8E8';
 
+  // Follow the view's size, but never re-measure a 0 x 0 (hidden) page: Leaflet can hang on it.
+  function refreshMapSize() {
+    var el = document.getElementById('map');
+    if (el && el.clientWidth > 0 && el.clientHeight > 0) map.invalidateSize(false);
+  }
   if (typeof ResizeObserver !== 'undefined') {
-    new ResizeObserver(function () { map.invalidateSize(false); }).observe(document.getElementById('map'));
+    new ResizeObserver(refreshMapSize).observe(document.getElementById('map'));
   }
 
   var bridge = null;

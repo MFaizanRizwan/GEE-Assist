@@ -49,7 +49,10 @@
   // layout, reparents) the web view at a size that changes after the map is built, so
   // without this Leaflet keeps its first size and only tiles part of the widget,
   // leaving the rest grey. A ResizeObserver reloads tiles for the real size instead.
-  function refreshMapSize() { map.invalidateSize(false); }
+  function refreshMapSize() {   // never re-measure a 0 x 0 (hidden) page: Leaflet can hang on it
+    var el = document.getElementById('map');
+    if (el && el.clientWidth > 0 && el.clientHeight > 0) map.invalidateSize(false);
+  }
   window.addEventListener('resize', refreshMapSize);
   if (window.ResizeObserver) {
     var resizePending = null;

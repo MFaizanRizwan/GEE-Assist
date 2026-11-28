@@ -32,6 +32,13 @@ if WEB_ENGINE_AVAILABLE:
 MAP_HTML = Path(__file__).resolve().parents[1] / "resources" / "layer_map.html"
 LAYERS = ("basemap", "surface", "boundaries", "points")
 
+# Re-check Leaflet's size once the shown page has really been laid out, and only with a real size.
+# Called synchronously as the view reappears, the page was still 0 x 0: with points or boundaries
+# on the map, Leaflet then hung for good (the map froze while the rest of the app worked).
+SAFE_RESIZE = ("setTimeout(function () { var el = document.getElementById('map');"
+               " if (typeof map !== 'undefined' && el && el.clientWidth > 0 && el.clientHeight > 0)"
+               " map.invalidateSize(false); }, 50);")
+
 
 class _Bridge(QObject):
     ready = pyqtSignal()
@@ -101,7 +108,7 @@ class LayerMapWidget(QWidget):
 
     def showEvent(self, event) -> None:  # noqa: N802 (Qt API)
         super().showEvent(event)
-        self._run("if (typeof map !== 'undefined') { map.invalidateSize(false); }", remember=None)
+        self._run(SAFE_RESIZE, remember=None)
 
     # ------------------------------------------------------------- layers
     def set_basemap(self, name: str) -> None:

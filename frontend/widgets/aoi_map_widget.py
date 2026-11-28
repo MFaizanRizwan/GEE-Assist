@@ -31,6 +31,13 @@ except ImportError:  # pragma: no cover - depends on installed packages
     WEB_ENGINE_AVAILABLE = False
 
 MAP_HTML = Path(__file__).resolve().parents[1] / "resources" / "aoi_map.html"
+
+# Re-check Leaflet's size once the shown page has really been laid out, and only with a real size.
+# Called synchronously as the view reappears, the page was still 0 x 0: with points or boundaries
+# on the map, Leaflet then hung for good (the map froze while the rest of the app worked).
+SAFE_RESIZE = ("setTimeout(function () { var el = document.getElementById('map');"
+               " if (typeof map !== 'undefined' && el && el.clientWidth > 0 && el.clientHeight > 0)"
+               " map.invalidateSize(false); }, 50);")
 log = logging.getLogger(__name__)
 
 
@@ -169,7 +176,7 @@ class AoiMapWidget(QWidget):
         # When the page becomes visible (e.g. navigating to Query Input in the stacked
         # pages), make Leaflet recheck its size so tiles fill the whole widget.
         super().showEvent(event)
-        self._run("if (typeof map !== 'undefined') { map.invalidateSize(false); }")
+        self._run(SAFE_RESIZE)
 
     # ------------------------------------------------------------- public API
     @property
