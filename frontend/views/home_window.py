@@ -66,6 +66,7 @@ from frontend.views.raster_viewer_view import RasterViewerView
 from frontend.views.vector_map_view import VectorMapView
 from frontend.views.dem_view import DemView
 from frontend.views.idw_view import IdwView
+from frontend.views.prediction_view import PredictionView
 from frontend.views.data_catalog_view import DataCatalogView
 from frontend.gkonsol.form_port import WidgetForm
 from frontend.gkonsol.help import REFERENCE_FILE
@@ -81,6 +82,7 @@ from frontend.widgets.side_icons import (
     DownloadIcon,
     ExplainIcon,
     InterpolateIcon,
+    PredictIcon,
     TerminalIcon,
     TerrainIcon,
     VectorIcon,
@@ -267,6 +269,9 @@ class HomeWindow(QMainWindow):
         self.dem_button.setToolTip("Digital Elevation Model: hillshade, slope, aspect and contours from a DEM (Ctrl+9)")
         self.idw_button = self.side_bar.add_button("IDW Interpolation", "I", icon=InterpolateIcon())
         self.idw_button.setToolTip("IDW: interpolate a point shapefile's values into a surface (Ctrl+0)")
+        self.prediction_button = self.side_bar.add_button("Prediction (ML)", "P", icon=PredictIcon())
+        self.prediction_button.setToolTip("Prediction (ML): forecast values, future land cover, classify or find "
+                                          "anomalies from past and present images (Ctrl+Shift+P)")
         self.catalog_button = self.side_bar.add_button("Data Catalog", "C", icon=CatalogIcon())
         self.catalog_button.setToolTip("Data Catalog: download boundaries, basemaps and OSM data (Ctrl+Shift+D)")
         self.explain_button = self.side_bar.add_button("AI Explanation", "AI", icon=ExplainIcon())
@@ -305,6 +310,7 @@ class HomeWindow(QMainWindow):
         self.vector_maps = VectorMapView(facade)
         self.dem = DemView(facade)
         self.idw = IdwView(facade)
+        self.prediction = PredictionView(facade)
         self.data_catalog = DataCatalogView(facade)
         self.explanation = ExplanationView(facade)
         self.reports = ReportsView(facade)
@@ -340,6 +346,7 @@ class HomeWindow(QMainWindow):
         self.pages.addWidget(self.vector_maps)
         self.pages.addWidget(self.dem)
         self.pages.addWidget(self.idw)
+        self.pages.addWidget(self.prediction)
         self.pages.addWidget(self.data_catalog)
         self.pages.addWidget(self.explanation)
         self.pages.addWidget(self.reports)
@@ -353,6 +360,7 @@ class HomeWindow(QMainWindow):
             self.vector_maps: self.vector_button,
             self.dem: self.dem_button,
             self.idw: self.idw_button,
+            self.prediction: self.prediction_button,
             self.data_catalog: self.catalog_button,
             self.explanation: self.explain_button,
         }
@@ -391,6 +399,8 @@ class HomeWindow(QMainWindow):
         self.vector_button.clicked.connect(self.show_vector_maps)
         self.dem_button.clicked.connect(self.show_dem)
         self.idw_button.clicked.connect(self.show_idw)
+        self.prediction_button.clicked.connect(self.show_prediction)
+        self.prediction.show_on_map_requested.connect(self.show_on_map)
         self.catalog_button.clicked.connect(self.show_data_catalog)
         self.data_catalog.open_requested.connect(self.open_downloaded_dataset)
         self.explain_button.clicked.connect(self.explain_saved_result)
@@ -455,11 +465,12 @@ class HomeWindow(QMainWindow):
             button.setToolTip(f"{button.toolTip()}  (Alt+{key})")
         for button in (self.terminal_button, self.manage_users):
             button.set_index("")  # tools, not pages: aligned with the pages, with no index
+        self.prediction_button.set_index("P")   # Alt+1..0 are taken: its own key, Ctrl+Shift+P
         bar.arrange([
             ("division", "work", "Work"), self.dashboard_button, self.query_input_button,
             self.downloads_button, self.catalog_button,
             ("division", "analyse", "Analyse"), self.analysis_button, self.vector_button,
-            self.dem_button, self.idw_button,
+            self.dem_button, self.idw_button, self.prediction_button,
             ("division", "explain", "Explain"), self.explain_button,
             ("division", "report", "Report"), self.reports_button,
             ("division", "tools", "Tools"), self.terminal_button, self.manage_users,
@@ -500,6 +511,7 @@ class HomeWindow(QMainWindow):
         divisions = {self.dashboard: "work", self.query_input: "work", self.downloads: "work",
                      self.data_catalog: "work", self.analysis: "analyse", self.viewer: "analyse",
                      self.vector_maps: "analyse", self.dem: "analyse", self.idw: "analyse",
+                     self.prediction: "analyse",
                      self.analysis_table: "analyse", self.explanation: "explain", self.reports: "report"}
         current = divisions.get(self.pages.currentWidget())
         for key, tab in self.division_tabs.items():
@@ -617,6 +629,10 @@ class HomeWindow(QMainWindow):
     def show_dem(self) -> None:
         """The Digital Elevation Model page: derive terrain surfaces from a DEM. No project needed."""
         self._show_page(self.dem)
+
+    def show_prediction(self) -> None:
+        """The Prediction (ML) page: learn from past and present images and predict. No project needed."""
+        self._show_page(self.prediction)
 
     def show_idw(self) -> None:
         """The IDW Interpolation page: interpolate point data into a surface. No project needed."""
@@ -860,6 +876,7 @@ class HomeWindow(QMainWindow):
         bar.view_vector_maps.triggered.connect(self.show_vector_maps)
         bar.view_dem.triggered.connect(self.show_dem)
         bar.view_idw.triggered.connect(self.show_idw)
+        bar.view_prediction.triggered.connect(self.show_prediction)
         bar.view_data_catalog.triggered.connect(self.show_data_catalog)
         bar.view_reports.triggered.connect(lambda: self.show_reports())
         bar.view_analysis_table.triggered.connect(self.show_analysis_table)

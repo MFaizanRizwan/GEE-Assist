@@ -11,6 +11,11 @@ the worker thread may still emit on them (that crashed the process).
 An exception raised by a callback is logged and, from ``on_success``, handed to ``on_error``:
 PyQt ends the whole application when a slot raises, so a bug in showing one result (or a test
 leaving a window behind) must never take the app down.
+
+Quitting while a task runs: ``shutdown`` (called once the event loop has ended) stops tasks
+from reporting back and waits a moment for the running ones. A task finishing during Python's
+own shutdown used to reach for its already-deleted signals object ("wrapped C/C++ object of
+type _TaskSignals has been deleted") or crash the process.
 """
 
 from __future__ import annotations
@@ -24,6 +29,7 @@ from PyQt6.QtCore import QObject, QRunnable, QThreadPool, pyqtSignal
 logger = logging.getLogger(__name__)
 
 _pending: set = set()  # the signals of running tasks, until their result is delivered
+_shutting_down = False  # set by shutdown(): finished tasks no longer report back
 
 
 class _TaskSignals(QObject):
@@ -42,18 +48,36 @@ class _Task(QRunnable):
         try:
             result = self._fn(*self._args)
         except Exception as exc:  # delivered to on_error
-            if not _is_expected(exc):
+            if not _is_expected(exc) and not _shutting_down:
                 logger.exception("Background task failed")
-            self._emit(self._signals.failed, exc)
+            self._emit("failed", exc)
         else:
-            self._emit(self._signals.succeeded, result)
+            self._emit("succeeded", result)
 
-    @staticmethod
-    def _emit(signal, value: Any) -> None:
+    def _emit(self, name: str, value: Any) -> None:
+        """Deliver the result, unless the app is quitting or the signals object is gone.
+
+        Even reading the signal off a deleted object raises, so that is inside the guard too
+        (it used to be read before it, and the error escaped the worker thread)."""
+        if _shutting_down:
+            return
         try:
-            signal.emit(value)
+            signals = self._signals
+            if sip.isdeleted(signals):
+                return
+            getattr(signals, name).emit(value)
         except RuntimeError:
-            pass  # the owner widget (and with it the signals object) was deleted
+            pass  # deleted meanwhile (the app is closing)
+
+
+def shutdown(timeout_ms: int = 3000) -> bool:
+    """The app is quitting: finished tasks stop reporting back, queued ones never start, and
+    the running ones get ``timeout_ms`` to finish. True when none is left running."""
+    global _shutting_down
+    _shutting_down = True
+    pool = QThreadPool.globalInstance()
+    pool.clear()
+    return pool.waitForDone(timeout_ms)
 
 
 def _is_expected(exc: Exception) -> bool:

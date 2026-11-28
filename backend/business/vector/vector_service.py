@@ -77,14 +77,14 @@ class VectorService(IVectorService):
         raw: list[tuple[str, list[list[tuple[float, float]]], dict[str, Any]]] = []
         xs: list[float] = []
         ys: list[float] = []
-        for record in reader.iterShapeRecords():
-            kind = _KIND.get(record.shape.shapeType)
+        for shape, record in _shape_records(reader):
+            kind = _KIND.get(shape.shapeType)
             if kind is None:  # NULL geometry, or an unsupported type
                 continue
-            parts = _split_parts(record.shape, kind)
+            parts = _split_parts(shape, kind)
             if not parts:
                 continue
-            raw.append((kind, parts, _record_dict(record.record, field_names)))
+            raw.append((kind, parts, _record_dict(record, field_names)))
             for part in parts:
                 for x, y in part:
                     xs.append(x)
@@ -129,6 +129,31 @@ class VectorService(IVectorService):
 
 
 # ------------------------------------------------------------- helpers
+def _shape_records(reader: "shapefile.Reader"):
+    """Each (shape, record) of the file, skipping a shape that cannot be read.
+
+    pyshp refuses some shapes OpenStreetMap extracts contain (e.g. a polygon with no
+    points), and inside ``iterShapeRecords`` that one shape stopped the whole file from
+    opening. Read in order (fast); after a bad shape, carry on one shape at a time by index."""
+    index = 0
+    try:
+        for item in reader.iterShapeRecords():
+            yield item.shape, item.record
+            index += 1
+        return
+    except shapefile.ShapefileException:
+        pass
+    skipped = 1
+    for i in range(index + 1, len(reader)):
+        try:
+            shape = reader.shape(i)
+        except shapefile.ShapefileException:
+            skipped += 1
+            continue
+        yield shape, reader.record(i)
+    logger.warning("Skipped %d shape(s) that cannot be read (first: #%d)", skipped, index)
+
+
 def _split_parts(shape: Any, kind: str) -> list[list[tuple[float, float]]]:
     """The geometry's rings/paths as lists of (x, y), ignoring any Z/M values."""
     points = [(float(p[0]), float(p[1])) for p in shape.points if len(p) >= 2]

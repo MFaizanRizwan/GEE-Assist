@@ -128,6 +128,7 @@ class AppMenuBar(QMenuBar):
         self.view_vector_maps = self._action(self.view_menu, "&Vector maps", "Ctrl+8")
         self.view_dem = self._action(self.view_menu, "&Digital Elevation Model", "Ctrl+9")
         self.view_idw = self._action(self.view_menu, "&IDW interpolation", "Ctrl+0")
+        self.view_prediction = self._action(self.view_menu, "&Prediction (ML)", "Ctrl+Shift+P")
         self.view_data_catalog = self._action(self.view_menu, "Data &catalog", "Ctrl+Shift+D")
         self.view_menu.addSeparator()
         # The analysis table (formulas and use cases of every index) is opened only from here.

@@ -104,3 +104,33 @@ def test_nothing_is_delivered_to_a_deleted_page_even_if_the_owner_lives():
     run_task(owner, slow, on_success=page.show)
     sip.delete(page)
     QTest.qWait(500)  # no crash calling into the deleted page
+
+
+def test_a_task_whose_signals_were_deleted_finishes_quietly():
+    """The app was closing: the result's signals object is gone before the task reports
+    ("wrapped C/C++ object of type _TaskSignals has been deleted" escaped the worker)."""
+    from PyQt6 import sip
+
+    from frontend.workers import task_worker
+
+    signals = task_worker._TaskSignals()
+    task = task_worker._Task(lambda: 42, (), signals)
+    sip.delete(signals)
+    task.run()   # no exception
+    task = task_worker._Task(lambda: 1 / 0, (), task_worker._TaskSignals())
+    sip.delete(task._signals)
+    task.run()
+
+
+def test_after_shutdown_finished_tasks_no_longer_report(monkeypatch):
+    from frontend.workers import task_worker
+
+    got = []
+    monkeypatch.setattr(task_worker, "_shutting_down", False)
+    import time
+
+    run_task(QObject(), lambda: (time.sleep(0.05), 7)[1], on_success=got.append)
+    assert task_worker.shutdown(timeout_ms=2000) is True   # it finished within the wait
+    QTest.qWait(50)
+    assert got == []                                       # but did not reach the closing app
+    monkeypatch.setattr(task_worker, "_shutting_down", False)

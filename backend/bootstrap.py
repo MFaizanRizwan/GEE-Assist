@@ -18,6 +18,7 @@ from backend.business.catalog import (
 )
 from backend.business.facade import BusinessFacade, IBusinessFacade
 from backend.business.interpolation import InterpolationService
+from backend.business.prediction import PredictionService
 from backend.business.map import MapService
 from backend.business.report import ReportService
 from backend.business.request import RequestService
@@ -96,6 +97,7 @@ def build_business_facade() -> IBusinessFacade:
         vector_service=VectorService(),
         terrain_service=TerrainService(),
         interpolation_service=InterpolationService(),
+        prediction_service=PredictionService(),
         catalog_service=CatalogService([
             EarthEngineProvider(gee_client.fetch_feature_collection),
             NaturalEarthProvider(),

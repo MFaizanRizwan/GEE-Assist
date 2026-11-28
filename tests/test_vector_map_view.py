@@ -98,10 +98,13 @@ def test_dense_polygon_is_decimated_in_the_cache(page, tmp_path):
         'GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563]],'
         'PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433],AUTHORITY["EPSG","4326"]]')
 
+    from frontend.widgets.vector_canvas import _cache_feature
+
     page.load(str(path))
     page.canvas.resize(800, 600)
-    page.canvas._ensure_cache()
-    cached_points = sum(r.shape[0] for r in page.canvas._cache[0].rings)
+    scale, ox, oy = page.canvas._transform(page.canvas._pan)
+    cached = _cache_feature(page.canvas._geo[0], "polygon", scale, ox, oy)
+    cached_points = sum(r.shape[0] for r in cached.rings)
     assert 50 < cached_points < n / 4  # far fewer screen points than the 20,001 input vertices
 
 

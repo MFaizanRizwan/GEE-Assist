@@ -157,10 +157,11 @@ class TerrainService(ITerrainService):
         levels = []
         line = np.array([70, 70, 70], dtype=np.uint8)
         while level < high:
-            for x0, y0, x1, y1 in contour_segments(filled, level):
-                _draw_line(rgb, x0, y0, x1, y1, line)
             levels.append(level)
             level += interval
+        # every level at once: each cell meets only the levels between its corners
+        for x0, y0, x1, y1 in _ContourCells(filled).segments_for(levels):
+            _draw_segments(rgb, x0, y0, x1, y1, line)
         legend = LegendDTO("scale", f"Contours every {interval:g} m", low=low, high=high,
                            colours=TERRAIN.colours())
         rgba = self._rgba(rgb, valid)
@@ -258,27 +259,102 @@ def hillshade(z: np.ndarray, cell: tuple[float, float], z_factor: float = 1.0,
 
 def contour_segments(z: np.ndarray, level: float) -> list[tuple[float, float, float, float]]:
     """Line segments (x0, y0, x1, y1), in pixel coordinates, where ``z`` crosses ``level``
-    (marching squares with linear interpolation). Cells touching no-data are skipped."""
-    segments: list[tuple[float, float, float, float]] = []
-    h, w = z.shape
-    for r in range(h - 1):
-        for cidx in range(w - 1):
-            tl, tr = z[r, cidx], z[r, cidx + 1]
-            bl, br = z[r + 1, cidx], z[r + 1, cidx + 1]
-            if not (np.isfinite(tl) and np.isfinite(tr) and np.isfinite(bl) and np.isfinite(br)):
-                continue
-            case = (int(tl >= level) << 3) | (int(tr >= level) << 2) | (int(br >= level) << 1) | int(bl >= level)
-            if case in (0, 15):
-                continue
-            top = (cidx + _interp(tl, tr, level), r)
-            right = (cidx + 1, r + _interp(tr, br, level))
-            bottom = (cidx + _interp(bl, br, level), r + 1)
-            left = (cidx, r + _interp(tl, bl, level))
-            for p, q in _CASE_EDGES.get(case, ()):
-                edges = {"T": top, "R": right, "B": bottom, "L": left}
-                (x0, y0), (x1, y1) = edges[p], edges[q]
-                segments.append((x0, y0, x1, y1))
-    return segments
+    (marching squares with linear interpolation). Cells touching no-data are skipped.
+
+    Row by row, left to right, as a cell-by-cell scan gives them."""
+    x0, y0, x1, y1 = _ContourCells(z).segments(level)
+    return list(zip(x0.tolist(), y0.tolist(), x1.tolist(), y1.tolist()))
+
+
+class _ContourCells:
+    """Marching squares over the whole grid at once (numpy), for one level at a time.
+
+    It used to visit every cell of the grid in Python, for every level: minutes on a
+    country-sized DEM. The arithmetic is the same, value for value: the same case test
+    (corner >= level), the same interpolation ((level - a) / (b - a), clipped to 0-1, or
+    0.5 on a flat edge), added to the same whole-number cell position. So the segments,
+    and the contour picture, are exactly those of the cell-by-cell scan."""
+
+    def __init__(self, z: np.ndarray):
+        z = np.asarray(z, dtype="float64")
+        self.tl, self.tr = z[:-1, :-1], z[:-1, 1:]
+        self.bl, self.br = z[1:, :-1], z[1:, 1:]
+        # cells whose four corners all have data
+        self.complete = (np.isfinite(self.tl) & np.isfinite(self.tr)
+                         & np.isfinite(self.bl) & np.isfinite(self.br))
+
+    def segments(self, level: float) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """(x0, y0, x1, y1) arrays, in the order of a row-by-row, left-to-right scan (a
+        saddle cell's two segments in the order of ``_CASE_EDGES``)."""
+        with np.errstate(invalid="ignore"):   # NaN corners compare False; those cells are skipped
+            case = ((self.tl >= level).astype(np.int8) << 3) | ((self.tr >= level).astype(np.int8) << 2) \
+                | ((self.br >= level).astype(np.int8) << 1) | (self.bl >= level).astype(np.int8)
+        crossed = self.complete & (case != 0) & (case != 15)
+        rows, cols = np.nonzero(crossed)               # row-major: the scan's order
+        return self._segments_at(rows, cols, level)
+
+    def segments_for(self, levels: list[float], batch: int = 2_000_000):
+        """The segments of every level, as (x0, y0, x1, y1) arrays in batches (for drawing).
+
+        A level crosses a cell exactly when the cell's lowest corner is below it and its
+        highest corner is not (any other case is 0 or 15, which draws nothing). So instead
+        of scanning the whole grid once per level, each cell is paired with just the levels
+        between its corners, found by binary search in the sorted levels. Each pair is then
+        worked out with the same comparisons and arithmetic as ``segments``, at the same
+        level value. (Batches keep memory bounded; drawing order does not change pixels.)"""
+        if not levels:
+            return
+        values = np.asarray(levels, dtype="float64")       # the exact level values, ascending
+        rows, cols = np.nonzero(self.complete)
+        corners = np.stack([self.tl[rows, cols], self.tr[rows, cols], self.bl[rows, cols], self.br[rows, cols]])
+        low, high = corners.min(axis=0), corners.max(axis=0)
+        first = np.searchsorted(values, low, side="right")          # first level above the lowest corner
+        last = np.searchsorted(values, high, side="right") - 1       # last level at or below the highest
+        count = np.maximum(last - first + 1, 0)
+        keep = np.nonzero(count)[0]
+        rows, cols, first, count = rows[keep], cols[keep], first[keep], count[keep]
+        ends = np.cumsum(count)
+        start = 0
+        while start < len(count):
+            # whole cells per batch, about ``batch`` (cell, level) pairs each
+            stop = int(np.searchsorted(ends, (ends[start - 1] if start else 0) + batch, side="right"))
+            stop = max(stop, start + 1)
+            n = count[start:stop]
+            cell = np.repeat(np.arange(start, stop), n)
+            k = np.repeat(first[start:stop], n) + (np.arange(n.sum()) - np.repeat(np.cumsum(n) - n, n))
+            yield self._segments_at(rows[cell], cols[cell], values[k])
+            start = stop
+
+    def _segments_at(self, rows: np.ndarray, cols: np.ndarray, level):
+        """The segments of cells (rows, cols), each at ``level`` (one value, or one per cell)."""
+        if rows.size == 0:
+            empty = np.empty(0, dtype="float64")
+            return empty, empty, empty, empty
+        tl, tr = self.tl[rows, cols], self.tr[rows, cols]
+        bl, br = self.bl[rows, cols], self.br[rows, cols]
+        case = ((tl >= level).astype(np.int8) << 3) | ((tr >= level).astype(np.int8) << 2) \
+            | ((br >= level).astype(np.int8) << 1) | (bl >= level).astype(np.int8)
+        r, c = rows.astype("float64"), cols.astype("float64")
+        # the crossing on each edge: T, R, B, L (the indices _EDGE_INDEX uses)
+        xs = np.stack([c + _interp_array(tl, tr, level), c + 1.0, c + _interp_array(bl, br, level), c])
+        ys = np.stack([r, r + _interp_array(tr, br, level), r + 1.0, r + _interp_array(tl, bl, level)])
+        cell = np.arange(case.size)
+
+        first_p, first_q = _FIRST[0][case], _FIRST[1][case]
+        x0, y0 = xs[first_p, cell], ys[first_p, cell]
+        x1, y1 = xs[first_q, cell], ys[first_q, cell]
+        saddle = np.nonzero(_SECOND[0][case] >= 0)[0]  # cases 5 and 10 join two pairs of edges
+        if saddle.size == 0:
+            return x0, y0, x1, y1
+        second_p, second_q = _SECOND[0][case[saddle]], _SECOND[1][case[saddle]]
+        # each saddle's second segment goes right after its first
+        order = np.argsort(np.concatenate([cell * 2, saddle * 2 + 1]), kind="stable")
+
+        def merged(first: np.ndarray, second: np.ndarray) -> np.ndarray:
+            return np.concatenate([first, second])[order]
+
+        return (merged(x0, xs[second_p, saddle]), merged(y0, ys[second_p, saddle]),
+                merged(x1, xs[second_q, saddle]), merged(y1, ys[second_q, saddle]))
 
 
 # Which edges a marching-squares case joins (T top, R right, B bottom, L left).
@@ -290,10 +366,48 @@ _CASE_EDGES: dict[int, tuple[tuple[str, str], ...]] = {
 }
 
 
+_EDGE_INDEX = {"T": 0, "R": 1, "B": 2, "L": 3}
+# per case: the edge indices of its first (and, for a saddle, second) segment; -1 for none
+_FIRST = (np.full(16, 0, dtype=np.intp), np.full(16, 0, dtype=np.intp))
+_SECOND = (np.full(16, -1, dtype=np.intp), np.full(16, -1, dtype=np.intp))
+for _case, _pairs in _CASE_EDGES.items():
+    _FIRST[0][_case], _FIRST[1][_case] = (_EDGE_INDEX[e] for e in _pairs[0])
+    if len(_pairs) > 1:
+        _SECOND[0][_case], _SECOND[1][_case] = (_EDGE_INDEX[e] for e in _pairs[1])
+
+
 def _interp(a: float, b: float, level: float) -> float:
     if a == b:
         return 0.5
     return float(np.clip((level - a) / (b - a), 0.0, 1.0))
+
+
+def _interp_array(a: np.ndarray, b: np.ndarray, level: float) -> np.ndarray:
+    """``_interp`` for whole arrays, value for value."""
+    with np.errstate(divide="ignore", invalid="ignore"):   # flat edges are replaced by 0.5
+        t = np.clip((level - a) / (b - a), 0.0, 1.0)
+    return np.where(a == b, 0.5, t)
+
+
+def _draw_segments(rgb: np.ndarray, x0: np.ndarray, y0: np.ndarray, x1: np.ndarray, y1: np.ndarray,
+                   colour: np.ndarray) -> None:
+    """``_draw_line`` for every segment at once, pixel for pixel.
+
+    A marching-squares segment lies inside one grid cell, so its rounded ends are at most
+    one pixel apart in x and in y. For such a line Bresenham's algorithm sets exactly its
+    two end pixels (straight or diagonal), so setting the rounded ends is the same picture.
+    Rounding is half-to-even, as Python's ``round``. Longer segments (none, from marching
+    squares) are drawn one by one with ``_draw_line``."""
+    if x0.size == 0:
+        return
+    ix0, iy0, ix1, iy1 = (np.rint(v).astype(np.int64) for v in (x0, y0, x1, y1))
+    short = (np.abs(ix1 - ix0) <= 1) & (np.abs(iy1 - iy0) <= 1)
+    h, w = rgb.shape[:2]
+    for xs, ys in ((ix0[short], iy0[short]), (ix1[short], iy1[short])):
+        inside = (xs >= 0) & (xs < w) & (ys >= 0) & (ys < h)
+        rgb[ys[inside], xs[inside]] = colour
+    for i in np.nonzero(~short)[0]:
+        _draw_line(rgb, x0[i], y0[i], x1[i], y1[i], colour)
 
 
 def _draw_line(rgb: np.ndarray, x0: float, y0: float, x1: float, y1: float, colour: np.ndarray) -> None:

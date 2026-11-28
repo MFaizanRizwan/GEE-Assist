@@ -108,4 +108,24 @@ def run() -> int:
     app.aboutToQuit.connect(facade.shutdown_downloads)
     controller = AppController(facade)
     controller.start()
-    return app.exec()
+    code = app.exec()
+    return finish(code)
+
+
+def finish(code: int) -> int:
+    """After the window closes: let background tasks finish before Python shuts down.
+
+    A task still running when the interpreter tears itself down used to crash the process
+    (or print "wrapped C/C++ object ... has been deleted"). Running ones get a few seconds;
+    if one is stuck (a slow network call), the logs are flushed and the process ends at once,
+    instead of letting that thread run into a half-dismantled interpreter."""
+    import logging
+
+    from frontend.workers import task_worker
+
+    if not task_worker.shutdown(timeout_ms=3000):
+        logging.shutdown()
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os._exit(code)
+    return code

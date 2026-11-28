@@ -16,6 +16,13 @@ from backend.dto.result_dto import ResultDTO
 from backend.dto.vector_dto import VectorLayerDTO
 from backend.dto.terrain_dto import TerrainInfoDTO, TerrainProductDTO
 from backend.dto.interpolation_dto import IDWParamsDTO, IDWResultDTO, SamplePointDTO
+from backend.dto.prediction_dto import (
+    AlgorithmDTO,
+    PredictionProgress,
+    PredictionRequestDTO,
+    PredictionResultDTO,
+    RasterBandsDTO,
+)
 from backend.dto.catalog_dto import CatalogRequestDTO, CatalogResultDTO, CatalogSourceDTO
 from backend.dto.user_dto import (
     GoogleSignInDTO,
@@ -294,6 +301,24 @@ class IBusinessFacade(ABC):
     @abstractmethod
     def save_interpolation(self, result: IDWResultDTO, path: str) -> str:
         """Write an interpolated surface as a GeoTIFF (EPSG:4326); returns its path."""
+
+    # ------------------------------------------------------------- machine-learning prediction
+    @abstractmethod
+    def prediction_algorithms(self, task: str) -> list[AlgorithmDTO]:
+        """The algorithms offered for a prediction task, with whether each can run here."""
+
+    @abstractmethod
+    def describe_prediction_input(self, path: str) -> RasterBandsDTO:
+        """A GeoTIFF's bands and the date its name suggests, for the Prediction page."""
+
+    @abstractmethod
+    def run_prediction(self, request: PredictionRequestDTO,
+                       progress: PredictionProgress | None = None) -> PredictionResultDTO:
+        """Train, score and rank the chosen algorithms on past and present data, and predict."""
+
+    @abstractmethod
+    def save_prediction(self, result: PredictionResultDTO, path: str, key: str = "") -> str:
+        """Write a prediction (the best model's, or ``key``'s) as a GeoTIFF; returns its path."""
 
     # ------------------------------------------------------------- data catalog (downloading datasets)
     @abstractmethod

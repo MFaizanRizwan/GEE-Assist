@@ -70,6 +70,11 @@ class InterpolationError(GeeAssistError):
     """A surface cannot be interpolated: no sample points, no numeric field, or bad parameters."""
 
 
+class PredictionError(GeeAssistError):
+    """A prediction cannot be made: too few dates, files that do not cover the same place, a
+    missing band or labels, or every chosen algorithm failed."""
+
+
 class CatalogError(GeeAssistError):
     """A dataset could not be fetched from a provider: the download failed, the file was empty,
     or Earth Engine returned no features for the area."""

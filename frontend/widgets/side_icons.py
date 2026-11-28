@@ -539,3 +539,63 @@ class CatalogIcon(SideIcon):
             head.lineTo(x + s * 0.08, tip - s * 0.08)
             painter.drawPath(head)
         painter.restore()
+
+
+class PredictIcon(SideIcon):
+    """Machine-learning prediction: past values as dots on a rising line, then a dashed forecast
+    fanning out into an uncertainty cone; animated, the forecast grows out of the present and a
+    network node at its tip pulses."""
+
+    period_ms = 2000
+    PAST = ((0.12, 0.72), (0.27, 0.62), (0.42, 0.66), (0.55, 0.5))   # oldest to the present
+
+    def paint(self, painter: QPainter, rect: QRectF, t: float | None) -> None:
+        s = rect.width()
+        line_width = max(1.3, s * 0.07)
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        points = [QPointF(rect.left() + s * fx, rect.top() + s * fy) for fx, fy in self.PAST]
+
+        # the past: a solid line through the dated values
+        painter.setPen(QPen(QColor(_ink()), line_width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap,
+                            Qt.PenJoinStyle.RoundJoin))
+        path = QPainterPath(points[0])
+        for point in points[1:]:
+            path.lineTo(point)
+        painter.drawPath(path)
+
+        # the forecast: a cone of uncertainty and a dashed line, growing out of the present
+        grow = self.forecast_reach(t)
+        present = points[-1]
+        tip = QPointF(present.x() + s * 0.33 * grow, present.y() - s * 0.3 * grow)
+        cone = QPainterPath(present)
+        cone.lineTo(tip.x(), tip.y() - s * 0.14 * grow)
+        cone.lineTo(tip.x(), tip.y() + s * 0.14 * grow)
+        cone.closeSubpath()
+        shade = QColor(theme.OCEAN)
+        shade.setAlpha(70)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(shade)
+        painter.drawPath(cone)
+        dashed = QPen(QColor(theme.LEAF), line_width, Qt.PenStyle.DashLine, Qt.PenCapStyle.RoundCap)
+        dashed.setDashPattern([1.6, 1.6])
+        painter.setPen(dashed)
+        painter.drawLine(present, tip)
+
+        # dots on the past values; a pulsing node (a neuron) at the forecast's tip
+        painter.setPen(QPen(QColor(_ink()), line_width * 0.7))
+        painter.setBrush(QColor(_paper()))
+        for point in points:
+            painter.drawEllipse(point, s * 0.06, s * 0.06)
+        pulse = 1.0 if t is None else 0.8 + 0.35 * abs(math.sin(math.pi * 2 * t))
+        painter.setBrush(QColor(theme.LEAF))
+        painter.setPen(QPen(QColor(_ink()), line_width * 0.7))
+        painter.drawEllipse(tip, s * 0.08 * pulse, s * 0.08 * pulse)
+        painter.restore()
+
+    @staticmethod
+    def forecast_reach(t: float | None) -> float:
+        """How far the forecast reaches at moment ``t`` (0.3 to 1); at rest, all the way."""
+        if t is None:
+            return 1.0
+        return 0.3 + 0.7 * min(1.0, (t % 1.0) / 0.75)

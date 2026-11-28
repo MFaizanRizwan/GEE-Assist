@@ -450,15 +450,77 @@ SEAL: dict[str, str] = {   # Seal blue, navy & crimson (light)
     "BUTTON_HOVER": "#9A1D42",
 }
 
+MIDNIGHT: dict[str, str] = {   # Midnight, electric blue & cantaloupe (dark): GEE-Assist-Web's
+    # default dark theme (its "midnight", chosen when the OS is in dark mode). Colours from the web's
+    # tokens.css; the few keys the web has no token for are filled in from its own colours.
+    "WHITE": "#121218",             # --surface
+    "INK": "#F3F5FB",               # --ink
+    "TEXT": "#D2D7E3",              # --text
+    "MUTED": "#9AA0B2",             # --muted
+    "SUBTLE": "#6E7488",            # --subtle
+    "BORDER": "#23242E",            # --border
+    "BORDER_STRONG": "#363846",     # --border-strong
+    "BORDER_HOVER": "#4A4D5E",
+    "FIELD_BG": "#0C0C12",          # --field
+    "DISABLED_BG": "#15151C",
+    "LEAF": "#2F80FF",              # --leaf: electric blue (buttons, glows)
+    "LEAF_DARK": "#5A9BFF",         # --leaf-dark
+    "OCEAN": "#FF9F5A",             # --ocean: cantaloupe (the secondary)
+    "OCEAN_DARK": "#FFB77E",        # --ocean-dark
+    "MINT": "#122235",              # --mint
+    "SKY": "#10203A",               # --sky
+    "FOAM": "#14151C",              # --foam
+    "PAGE_BG": "#070709",           # --page
+    "HEADER_GREEN": "#0F1F36",      # --header-green
+    "HEADER_BLUE": "#121019",       # --header-blue
+    "HEADER_LINE": "#23242E",
+    "ERROR": "#FF8F80",             # --error
+    "ERROR_BG": "#331D1D",          # --error-bg
+    "SUCCESS": "#46D39A",           # --success
+    "SUCCESS_BG": "#0F2E26",        # --success-bg
+    "INFO_BG": "#0F1F36",           # --info-bg
+    "ERROR_BORDER": "#5C3733",      # --error-border
+    "SUCCESS_BORDER": "#225C48",    # --success-border
+    "INFO_BORDER": "#27456E",       # --info-border
+    "ERROR_FIELD_BG": "#1A0F12",
+    "PRIMARY_TEXT": "#06080F",      # --on-primary
+    "PRIMARY_DISABLED_TEXT": "#6E7488",
+    "PRIMARY_DISABLED_FROM": "#23242E",
+    "PRIMARY_DISABLED_TO": "#23242E",
+    "ACCENT_FROM": "#2F80FF",       # --fx-a
+    "ACCENT_TO": "#2F80FF",
+    "ACCENT_FROM_HOVER": "#5A9BFF", # --fx-a-hover
+    "ACCENT_TO_HOVER": "#5A9BFF",
+    "ACCENT_TEXT": "#06080F",       # --fx-on
+    "ACCENT_SOFT": "#122235",       # --fx-soft
+    "OPEN_BUTTON_TOP": "#5A9BFF",
+    "PAGE_GRADIENT_TOP": "#070709",  # --page
+    "PAGE_GRADIENT_MIDDLE": "#0D0D13",  # --page-2
+    "PAGE_GRADIENT_BOTTOM": "#121218",
+    "HERO_TOP": "#0D0D13",
+    "HERO_MIDDLE": "#101017",
+    "HERO_BOTTOM": "#14151C",
+    "TILE_DISABLED_BG": "#0D0D13",
+    "PROGRESS_TRACK": "#23242E",
+    "PROGRESS_PAUSED": "#9AA0B2",
+    "PROGRESS_FAILED": "#D9786C",
+    "TABLE_LINE": "#1C1D26",
+    "CHART_GRID": "#1F2029",
+    "SHADOW": "#000000",
+    "SPLASH_BG": "#FFFFFF",
+    "BUTTON": "#2F80FF",
+    "BUTTON_HOVER": "#5A9BFF",
+}
+
 PALETTES = {
     "light": LIGHT, "dark-green": DARK_GREEN, "dark-grey": DARK_GREY,
-    "indigo": INDIGO, "navy": NAVY, "bone": BONE, "seal": SEAL,
+    "indigo": INDIGO, "navy": NAVY, "bone": BONE, "seal": SEAL, "midnight": MIDNIGHT,
 }
 # Themes with light text on a dark ground (the rest are light grounds with dark text).
-DARK_THEMES = frozenset({"dark-green", "dark-grey", "indigo", "navy"})
+DARK_THEMES = frozenset({"dark-green", "dark-grey", "indigo", "navy", "midnight"})
 # Themes built from three colours: every layout takes its surfaces from them (no fixed console
 # colours), and their third colour is kept for buttons, animation and effects.
-THREE_COLOUR_THEMES = frozenset({"indigo", "navy", "bone", "seal"})
+THREE_COLOUR_THEMES = frozenset({"indigo", "navy", "bone", "seal", "midnight"})
 
 # The theme at start-up is the saved choice (``GEE_ASSIST_THEME`` overrides it, e.g. for the
 # tests). Changing it later goes through set_theme() below: it applies at once, with no restart.

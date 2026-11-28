@@ -32,6 +32,7 @@ from backend.dto.result_dto import ResultDTO
 from backend.dto.vector_dto import VectorLayerDTO
 from backend.dto.terrain_dto import TerrainInfoDTO, TerrainProductDTO
 from backend.dto.interpolation_dto import IDWParamsDTO, IDWResultDTO
+from backend.dto.prediction_dto import PredictionProgress, PredictionRequestDTO, PredictionResultDTO
 from backend.dto.catalog_dto import CatalogRequestDTO, CatalogResultDTO, CatalogSourceDTO
 from backend.exceptions import (
     AnalysisError,
@@ -78,6 +79,7 @@ class BusinessFacade(IBusinessFacade):
         terrain_service: ITerrainService | None = None,
         interpolation_service: IInterpolationService | None = None,
         catalog_service: ICatalogService | None = None,
+        prediction_service=None,
     ):
         self._user_service = user_service
         self._request_service = request_service
@@ -91,6 +93,7 @@ class BusinessFacade(IBusinessFacade):
         self._terrain_service = terrain_service
         self._interpolation_service = interpolation_service
         self._catalog_service = catalog_service
+        self._prediction_service = prediction_service
 
     # ------------------------------------------------------------- authentication
     def is_server_available(self) -> bool:
@@ -373,6 +376,27 @@ class BusinessFacade(IBusinessFacade):
 
     def save_interpolation(self, result: IDWResultDTO, path: str) -> str:
         return self._interpolation().save_surface(result, path)
+
+    # ------------------------------------------------------------- machine-learning prediction
+    def prediction_algorithms(self, task: str):
+        return self._prediction().algorithms(task)
+
+    def describe_prediction_input(self, path: str):
+        return self._prediction().describe(path)
+
+    def run_prediction(self, request: PredictionRequestDTO,
+                       progress: PredictionProgress | None = None) -> PredictionResultDTO:
+        return self._prediction().run(request, progress)
+
+    def save_prediction(self, result: PredictionResultDTO, path: str, key: str = "") -> str:
+        return self._prediction().save(result, path, key)
+
+    def _prediction(self):
+        if self._prediction_service is None:
+            from backend.exceptions import PredictionError
+
+            raise PredictionError("Prediction is not set up in this build.")
+        return self._prediction_service
 
     def _interpolation(self) -> IInterpolationService:
         if self._interpolation_service is None:

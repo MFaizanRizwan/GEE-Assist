@@ -24,6 +24,7 @@ THEMES = {                      # name -> label shown to the user
     "navy": "Navy, cream & coral",
     "bone": "Skeleton cream, black & green",
     "seal": "Seal blue, navy & crimson",
+    "midnight": "Midnight, electric blue & cantaloupe",   # GEE-Assist-Web's default dark theme
 }
 DEFAULT_THEME = "light"
 
