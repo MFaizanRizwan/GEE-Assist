@@ -91,3 +91,48 @@ def test_the_country_layout_shows_the_area_boxed_and_magnified(tmp_path):
     pdf = dialog.export(str(tmp_path / "country"))
     assert open(pdf, "rb").read(4) == b"%PDF"
     dialog.deleteLater()
+
+
+def test_the_mouse_resizes_and_moves_the_arrow_and_stretches_the_scale_bar():
+    """Real mouse events through the view (hover, press, drag, release): the path that crashed
+    with "'super' object has no attribute 'hoverMoveEvent'"."""
+    from PyQt6.QtCore import QPoint, Qt
+    from PyQt6.QtTest import QTest
+
+    dialog = MapLayoutDialog(_spec())
+    dialog.resize(1200, 820)
+    dialog.show()
+    QTest.qWait(50)
+    view, viewport = dialog.view, dialog.view.viewport()
+
+    def at(item, point: QPointF) -> QPoint:
+        return view.mapFromScene(item.mapToScene(point))
+
+    def drag(start: QPoint, end: QPoint) -> None:
+        QTest.mouseMove(viewport, start)
+        QTest.mousePress(viewport, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, start)
+        for step in range(1, 6):
+            QTest.mouseMove(viewport, start + (end - start) * step / 5)
+        QTest.mouseRelease(viewport, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, end)
+        QTest.qWait(20)
+
+    arrow = dialog.north_item
+    QTest.mouseMove(viewport, at(arrow, QPointF(0, 0)))                  # hovering: no error
+    QTest.mouseClick(viewport, Qt.MouseButton.LeftButton, pos=at(arrow, QPointF(0, 0)))
+    assert arrow.isSelected()
+    size = arrow.size
+    handle = arrow.handle_rect().center()
+    drag(at(arrow, handle), at(arrow, handle + QPointF(30, 30)))         # the corner handle, outwards
+    assert arrow.size > size + 20
+    position = arrow.pos()
+    drag(at(arrow, QPointF(0, 0)), at(arrow, QPointF(0, 0)) + QPoint(-120, 60))   # the body: moved
+    assert arrow.pos().x() < position.x() - 50 and arrow.size > size + 20
+
+    bar = dialog.scale_item
+    QTest.mouseClick(viewport, Qt.MouseButton.LeftButton, pos=at(bar, QPointF(bar.length / 3, 2)))
+    assert bar.isSelected()
+    metres, length = bar.distance()
+    end = bar.handle_rect().center()
+    drag(at(bar, end), at(bar, end + QPointF(60, 0)))                    # its right end, stretched
+    assert bar.length > length + 30 and bar.distance()[0] > metres * 1.3
+    dialog.deleteLater()

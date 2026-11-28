@@ -137,7 +137,10 @@ class _Movable:
 
 
 class _Resizable(_Movable):
-    """A movable item with a handle (bottom-right) that resizes it while it is selected."""
+    """A movable item with a handle (bottom-right) that resizes it while it is selected.
+
+    Mixed into QGraphicsItem subclasses: unhandled events go to ``QGraphicsItem``'s own handlers,
+    called by name (``super()`` from this mixin finds no Qt class after it, and failed)."""
 
     _resizing = False
 
@@ -161,26 +164,26 @@ class _Resizable(_Movable):
             self._resizing = True
             event.accept()
             return
-        super().mousePressEvent(event)
+        QGraphicsItem.mousePressEvent(self, event)
 
     def mouseMoveEvent(self, event) -> None:  # noqa: N802
         if self._resizing:
             self.resize_to(event.pos())
             event.accept()
             return
-        super().mouseMoveEvent(event)
+        QGraphicsItem.mouseMoveEvent(self, event)
 
     def mouseReleaseEvent(self, event) -> None:  # noqa: N802
         if self._resizing:
             self._resizing = False
             event.accept()
             return
-        super().mouseReleaseEvent(event)
+        QGraphicsItem.mouseReleaseEvent(self, event)
 
     def hoverMoveEvent(self, event) -> None:  # noqa: N802
         near = self.isSelected() and self.handle_rect().adjusted(-3, -3, 3, 3).contains(event.pos())
         self.setCursor(Qt.CursorShape.SizeFDiagCursor if near else Qt.CursorShape.OpenHandCursor)
-        super().hoverMoveEvent(event)
+        QGraphicsItem.hoverMoveEvent(self, event)
 
 
 class MapFrameItem(QGraphicsItem):
