@@ -567,7 +567,9 @@ class ScaleBarItem(QGraphicsItem, _Resizable):
         painter.setFont(page_font(7))
         painter.setPen(INK)
         painter.drawText(QRectF(-20, 6, 40, 10), Qt.AlignmentFlag.AlignCenter, "0")
-        painter.drawText(QRectF(length / 2 - 34, 6, 68, 10), Qt.AlignmentFlag.AlignCenter, distance_text(metres / 2))
+        if length >= 110:      # on a short bar the middle label would run into the end's
+            painter.drawText(QRectF(length / 2 - 34, 6, 68, 10), Qt.AlignmentFlag.AlignCenter,
+                             distance_text(metres / 2))
         painter.drawText(QRectF(length - 34, 6, 68, 10), Qt.AlignmentFlag.AlignCenter, distance_text(metres))
         self.draw_handle(painter)
 
@@ -699,7 +701,7 @@ class MapLayoutDialog(QDialog):
         self.arrow_size = QSlider(Qt.Orientation.Horizontal)
         self.arrow_size.setRange(14, 160)
         self.arrow_size.setValue(34)
-        self.round_button = QPushButton("Round the scale bar", objectName="SecondaryButton")
+        self.round_button = QPushButton("Round the scale bars", objectName="SecondaryButton")
         self.round_button.setToolTip("Snap the bar to a round distance (1, 2 or 5 × 10ⁿ)")
 
         self.boundary_button = QPushButton("Add boundary layer…", objectName="SecondaryButton")
@@ -786,7 +788,6 @@ class MapLayoutDialog(QDialog):
         top = MARGIN + 34
         bottom = page.height() - MARGIN - 18
         area = QRectF(MARGIN, top, page.width() - 2 * MARGIN, bottom - top)
-        frames: list[MapFrameItem] = []
         if self.layout_box.currentData() == WITH_LOCATOR and self.layout_box.isEnabled():
             gap = 18.0
             landscape = area.width() >= area.height()
@@ -808,11 +809,9 @@ class MapLayoutDialog(QDialog):
             self.scene.addItem(self.overview_item)
             self.scene.addItem(self.frame_item)
             self.scene.addItem(LeaderLines(self.overview_item.box, self.frame_item.map_rect))
-            frames = [self.frame_item, self.overview_item]
         else:
             self.frame_item = MapFrameItem(self.spec, area)
             self.scene.addItem(self.frame_item)
-            frames = [self.frame_item]
         frame = self.frame_item.frame
 
         self.title_item = _Title(self.title_edit.text())

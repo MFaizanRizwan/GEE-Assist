@@ -79,11 +79,20 @@ def test_the_country_layout_shows_the_area_boxed_and_magnified(tmp_path):
     assert detail.extent == (73.0, 31.3, 73.3, 31.6)
     assert locator.box.width() < locator.map_rect.width() / 10   # the city is small on the country map
     assert detail.metres_per_point < locator.metres_per_point / 10   # and magnified beside it
-    # the scale bar measures the map it is put on
-    dialog.scale_item.setPos(detail.map_rect.left() + 10, detail.map_rect.bottom() - 20)
-    near = dialog.scale_item.distance()[0]
-    dialog.scale_item.setPos(locator.map_rect.left() + 10, locator.map_rect.bottom() - 20)
-    assert dialog.scale_item.distance()[0] > near * 10
+    # one scale bar per map, each inside its own map and measuring only that map
+    near, country = dialog.scale_item, dialog.overview_scale_item
+    assert country is not None and dialog.scale_bars() == [near, country]
+    assert detail.frame.contains(near.sceneBoundingRect().center())
+    assert locator.frame.contains(country.sceneBoundingRect().center())
+    assert country.distance()[0] / country.length > near.distance()[0] / near.length * 10
+    near_reading = near.distance()[0]
+    near.setPos(locator.map_rect.left() + 10, locator.map_rect.bottom() - 20)   # dragged onto the country
+    assert near.distance()[0] == near_reading                                   # still the magnified scale
+    for bar in (near, country):                                                 # each a round distance
+        assert str(int(bar.distance()[0])).rstrip("0") in ("1", "2", "5")
+    dialog.toggles["scale"].setChecked(False)
+    assert not near.isVisible() and not country.isVisible()
+    dialog.toggles["scale"].setChecked(True)
     dialog.arrow_box.setCurrentIndex(dialog.arrow_box.findData("rose"))
     assert dialog.north_item.style == "rose"
     dialog.arrow_size.setValue(70)
@@ -175,4 +184,14 @@ def test_the_pdf_fills_the_other_areas_in_one_colour_and_keeps_the_surface_s_col
 def test_without_a_fill_the_designer_offers_no_fill_toggle():
     dialog = MapLayoutDialog(_spec())
     assert not dialog.toggles["fill"].isVisibleTo(dialog)
+    dialog.deleteLater()
+
+
+def test_the_area_only_layout_has_a_single_scale_bar():
+    dialog = MapLayoutDialog(_spec())
+    assert dialog.overview_scale_item is None and dialog.scale_bars() == [dialog.scale_item]
+    dialog.layout_box.setCurrentIndex(dialog.layout_box.findData("locator"))
+    assert len(dialog.scale_bars()) == 2
+    dialog.layout_box.setCurrentIndex(dialog.layout_box.findData("area"))
+    assert dialog.scale_bars() == [dialog.scale_item]
     dialog.deleteLater()
