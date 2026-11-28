@@ -112,6 +112,7 @@ class UserService(IUserService):
             force_update=bool(data.get("force_update", False)),
             update_available=bool(data.get("update_available", False)),
             published_at=data.get("published_at"),
+            sha256=data.get("sha256"),
         )
 
     # ------------------------------------------------------------- session

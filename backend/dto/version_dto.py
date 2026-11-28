@@ -12,3 +12,4 @@ class AppVersionDTO:
     force_update: bool = False
     update_available: bool = False
     published_at: str | None = None
+    sha256: str | None = None   # the release .exe's SHA-256, checked after downloading (optional)

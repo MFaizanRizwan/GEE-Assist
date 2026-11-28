@@ -77,6 +77,7 @@ TERMINAL_COMMANDS: tuple[tuple[tuple[str, str], ...], ...] = (
 
 class AppMenuBar(QMenuBar):
     theme_chosen = pyqtSignal(str)  # a theme other than the current one, e.g. "dark-green"
+    update_requested = pyqtSignal(object)   # AppVersionDTO: the user clicked the update badge
     layout_chosen = pyqtSignal(str)  # a layout other than the current one, e.g. "modern"
     terminal_command = pyqtSignal(str)  # a gkonsol command to run in the terminal, e.g. "gee verify"
     recent_project_chosen = pyqtSignal(str)  # the folder of a project in File > Recent projects
@@ -218,10 +219,7 @@ class AppMenuBar(QMenuBar):
 
     def _show_update_dialog(self) -> None:
         if self._update_info is not None:
-            from frontend.views.update_dialog import UpdateDialog
-
-            dialog = UpdateDialog(self._update_info, parent=self.window())
-            dialog.exec()
+            self.update_requested.emit(self._update_info)   # the window opens the dialog (it has the facade)
 
     # ------------------------------------------------------------- Theme
     def _choose_theme(self, name: str) -> None:

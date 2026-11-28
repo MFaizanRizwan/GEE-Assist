@@ -104,6 +104,7 @@ def run() -> int:
         return 0
 
     facade = build_business_facade()
+    facade.cleanup_after_update()   # the previous version's .exe, after an update
     # Pause the active download cleanly so its files are closed and it resumes next time.
     app.aboutToQuit.connect(facade.shutdown_downloads)
     controller = AppController(facade)

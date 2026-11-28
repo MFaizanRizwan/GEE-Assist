@@ -314,6 +314,23 @@ class IBusinessFacade(ABC):
     def load_points_csv(self, path: str, lon_column: str = "", lat_column: str = "") -> VectorLayerDTO:
         """A CSV's rows as a point layer (WGS84 degrees), for IDW."""
 
+    # ------------------------------------------------------------- updating the app
+    @abstractmethod
+    def can_self_update(self) -> bool:
+        """True in the packaged app (its .exe can be replaced); False when run from source."""
+
+    @abstractmethod
+    def download_update(self, info, progress=None, cancelled=None):
+        """Download and check the release in ``info`` (AppVersionDTO); returns the new .exe's path."""
+
+    @abstractmethod
+    def install_update(self, new_file) -> str:
+        """Swap the new .exe in: "swapped" (restart now) or "elevated" (quit now; a helper finishes)."""
+
+    @abstractmethod
+    def app_executable(self) -> str:
+        """The running app's .exe (where it was installed)."""
+
     # ------------------------------------------------------------- machine-learning prediction
     @abstractmethod
     def prediction_algorithms(self, task: str) -> list[AlgorithmDTO]:

@@ -42,6 +42,7 @@
   var surface = null, boundaries = null, points = L.layerGroup();
   var visible = { basemap: true, surface: true, boundaries: true, points: true };
   var selected = {};
+  var showOthers = true;     // the boundaries of the areas not selected
   var boundaryColour = '#1F2A44', selectedColour = '#00A8E8';
 
   if (typeof ResizeObserver !== 'undefined') {
@@ -85,7 +86,12 @@
 
   function styleFor(index) {
     var on = !!selected[index];
-    return { color: on ? selectedColour : boundaryColour, weight: on ? 3 : 1.2,
+    if (!on && !showOthers && Object.keys(selected).length) {
+      return { stroke: false, fill: false };          // only the selected area is drawn
+    }
+    // stroke: true is spelled out: setStyle() merges, so after hiding (stroke: false) an area
+    // would otherwise stay invisible when the other areas are shown again.
+    return { stroke: true, color: on ? selectedColour : boundaryColour, weight: on ? 3 : 1.2,
              fill: true, fillColor: on ? selectedColour : '#000', fillOpacity: on ? 0.12 : 0.0 };
   }
 
@@ -102,6 +108,7 @@
         if (feature.properties.name) layer.bindTooltip(feature.properties.name, { sticky: true, className: 'name' });
         layer.on('click', function (e) {
           if (!(e.originalEvent.ctrlKey || e.originalEvent.metaKey)) return;   // Ctrl+click selects
+          if (!showOthers && !selected[feature.properties.index] && Object.keys(selected).length) return;  // hidden
           L.DomEvent.stop(e);
           if (bridge) bridge.featureToggled(feature.properties.index);
         });
@@ -113,6 +120,12 @@
   function setSelection(indices) {
     selected = {};
     indices.forEach(function (i) { selected[i] = true; });
+    if (!boundaries) return;
+    boundaries.eachLayer(function (layer) { layer.setStyle(styleFor(layer.feature.properties.index)); });
+  }
+
+  function setOtherAreasVisible(on) {
+    showOthers = on;
     if (!boundaries) return;
     boundaries.eachLayer(function (layer) { layer.setStyle(styleFor(layer.feature.properties.index)); });
   }

@@ -80,6 +80,7 @@ class BusinessFacade(IBusinessFacade):
         interpolation_service: IInterpolationService | None = None,
         catalog_service: ICatalogService | None = None,
         prediction_service=None,
+        updater=None,
     ):
         self._user_service = user_service
         self._request_service = request_service
@@ -94,6 +95,11 @@ class BusinessFacade(IBusinessFacade):
         self._interpolation_service = interpolation_service
         self._catalog_service = catalog_service
         self._prediction_service = prediction_service
+        if updater is None:
+            from backend.business.update import AppUpdater
+
+            updater = AppUpdater()
+        self._updater = updater
 
     # ------------------------------------------------------------- authentication
     def is_server_available(self) -> bool:
@@ -385,6 +391,22 @@ class BusinessFacade(IBusinessFacade):
 
     def load_points_csv(self, path: str, lon_column: str = "", lat_column: str = ""):
         return self._interpolation().load_points_csv(path, lon_column, lat_column)
+
+    # ------------------------------------------------------------- updating the app
+    def can_self_update(self) -> bool:
+        return self._updater.can_self_update()
+
+    def download_update(self, info, progress=None, cancelled=None):
+        return self._updater.download(info.download_url, info.latest_version, info.sha256, progress, cancelled)
+
+    def install_update(self, new_file) -> str:
+        return self._updater.install(new_file)
+
+    def app_executable(self) -> str:
+        return str(self._updater.executable)
+
+    def cleanup_after_update(self) -> None:
+        self._updater.cleanup()
 
     # ------------------------------------------------------------- machine-learning prediction
     def prediction_algorithms(self, task: str):

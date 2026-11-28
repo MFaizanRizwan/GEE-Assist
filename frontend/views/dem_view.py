@@ -84,9 +84,14 @@ class DemView(QWidget):
         self.save_button = QPushButton("Save surface…", objectName="SecondaryButton")
         self.fit_button = QPushButton("Fit to window", objectName="SecondaryButton")
         self.folder_button = QPushButton("Open folder", objectName="SecondaryButton")
+        self.pdf_button = QPushButton("Export PDF…", objectName="SecondaryButton")
+        self.pdf_button.setToolTip("Lay out a printable map: title, north arrow, scale bar, legend and a "
+                                   "boundary layer of your choice")
+        self.pdf_button.setEnabled(False)
+        self.pdf_button.clicked.connect(self.export_pdf)
         toolbar = QHBoxLayout()
         toolbar.setSpacing(8)
-        for button in (self.open_button, self.save_button, self.fit_button, self.folder_button):
+        for button in (self.open_button, self.save_button, self.pdf_button, self.fit_button, self.folder_button):
             button.setCursor(Qt.CursorShape.PointingHandCursor)
             toolbar.addWidget(button)
         toolbar.addStretch(1)
@@ -251,8 +256,43 @@ class DemView(QWidget):
         self.legend.set_legend(product.legend)
         self.banner.show_info(" ".join(product.notes)) if product.notes else self.banner.clear()
         self.save_button.setEnabled(product.values is not None)
+        self.pdf_button.setEnabled(True)
         if self._pointer is not None:
             self._read_value()
+
+    # ------------------------------------------------------------- PDF
+    def layout_spec(self):
+        """The shown surface for the PDF designer, with a boundary layer the user may add there
+        (projected onto the DEM's coordinate system)."""
+        from frontend.views.map_layout_dialog import MapLayoutSpec
+
+        product, info = self.product, self.info
+        legend = product.legend
+        if legend.kind == "scale":
+            spec_legend = ("scale", tuple(legend.colours), legend.low, legend.high)
+        elif legend.kind == "classes":
+            spec_legend = ("classes", list(zip(legend.labels, legend.colours)))
+        else:
+            spec_legend = ()
+
+        def load_boundary(path: str):
+            return self._facade.vector_rings_in_crs(self._facade.load_shapefile(path), info.crs)
+
+        note = f"{info.name} · {info.crs} · {product.label}" + (f" · {' '.join(product.notes)}" if product.notes
+                                                                 else "")
+        return MapLayoutSpec(title=f"{product.label} — {info.name}", image=rgba_to_image(product.rgba),
+                             extent=info.bounds, geographic=info.is_geographic, legend_title=legend.title,
+                             legend=spec_legend, note=note, load_boundary=load_boundary)
+
+    def export_pdf(self) -> None:
+        if self.product is None or self.info is None:
+            return
+        from frontend.views.map_layout_dialog import MapLayoutDialog
+
+        dialog = MapLayoutDialog(self.layout_spec(), self)
+        dialog.exec()
+        if dialog.exported:
+            self.banner.show_info(f"Map exported to {dialog.exported}")
 
     def _params(self) -> dict:
         return {"z_factor": self.z_factor.value(), "azimuth": self.azimuth.value(),

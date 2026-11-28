@@ -70,6 +70,15 @@ class InterpolationError(GeeAssistError):
     """A surface cannot be interpolated: no sample points, no numeric field, or bad parameters."""
 
 
+class UpdateError(GeeAssistError):
+    """The app could not update itself: the download failed or was not a valid release, or the
+    new version could not be put in place. The running app is left as it was."""
+
+    def __init__(self, message: str, web_page: bool = False):
+        super().__init__(message)
+        self.web_page = web_page   # the link opens a web page: show it in the browser instead
+
+
 class PredictionError(GeeAssistError):
     """A prediction cannot be made: too few dates, files that do not cover the same place, a
     missing band or labels, or every chosen algorithm failed."""

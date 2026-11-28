@@ -92,3 +92,43 @@ def test_bad_dem_shows_an_error(page, tmp_path):
     page.load(str(bad))
     assert page.info is None
     assert not page.fit_button.isEnabled()
+
+
+def test_the_dem_exports_as_a_pdf_with_a_projected_boundary(app, monkeypatch, tmp_path):
+    """A DEM in UTM metres; a boundary in degrees is projected onto it in the PDF designer."""
+    import shapefile
+    from rasterio.warp import transform
+
+    from backend.business.vector import VectorService
+    from frontend.views.map_layout_dialog import MapLayoutDialog
+
+    monkeypatch.setattr(dem_module, "run_task", _run_now)
+    facade = BusinessFacade(MagicMock(), MagicMock(), MagicMock(), MagicMock(), terrain_service=TerrainService(),
+                            vector_service=VectorService())
+    view = DemView(facade)
+    assert not view.pdf_button.isEnabled()
+    view.load(str(write_dem(tmp_path / "dem.tif", east_ramp())))
+    assert view.pdf_button.isEnabled()
+    spec = view.layout_spec()
+    assert not spec.geographic and spec.legend[0] == "scale" and spec.load_boundary is not None
+    # a square in degrees around the DEM's centre (UTM 43N, 300 000 E + 600 m)
+    lons, lats = transform("EPSG:32643", "EPSG:4326", [300100, 300500], [3499100, 3499500])
+    shp = tmp_path / "area.shp"
+    w = shapefile.Writer(str(shp), shapeType=shapefile.POLYGON)
+    w.field("name", "C")
+    w.poly([[[lons[0], lats[0]], [lons[0], lats[1]], [lons[1], lats[1]], [lons[1], lats[0]], [lons[0], lats[0]]]])
+    w.record("site")
+    w.close()
+    shp.with_suffix(".prj").write_text(
+        'GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563]],'
+        'PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433],AUTHORITY["EPSG","4326"]]')
+    rings = spec.load_boundary(str(shp))
+    xs = [x for ring in rings for x, _y in ring]
+    assert min(xs) == pytest.approx(300100, abs=1) and max(xs) == pytest.approx(300500, abs=1)   # in metres now
+    dialog = MapLayoutDialog(spec)
+    dialog.frame_item.set_boundaries(rings)
+    assert dialog.scale_item.distance()[0] > 0          # 1.2 km wide: a scale bar in metres
+    pdf = dialog.export(str(tmp_path / "dem_map.pdf"))
+    assert (tmp_path / "dem_map.pdf").read_bytes().startswith(b"%PDF") and pdf.endswith(".pdf")
+    dialog.deleteLater()
+    view.deleteLater()

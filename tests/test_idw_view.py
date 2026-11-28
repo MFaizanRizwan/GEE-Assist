@@ -6,12 +6,18 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from unittest.mock import MagicMock  # noqa: E402
 
+import numpy as np  # noqa: E402
 import pytest  # noqa: E402
 
 PyQt6 = pytest.importorskip("PyQt6")
 shapefile = pytest.importorskip("shapefile")
 pytest.importorskip("rasterio")
+from PyQt6.QtCore import Qt  # noqa: E402
 from PyQt6.QtWidgets import QApplication  # noqa: E402
+
+# The application before the page: with Qt WebEngine set up first, the page would build a live
+# web map, which cannot run headless (the page then shows its "Picture" view instead).
+_app = QApplication.instance() or QApplication([])
 
 from backend.business.facade import BusinessFacade  # noqa: E402
 from backend.business.interpolation import InterpolationService  # noqa: E402
@@ -131,3 +137,157 @@ def test_opening_a_shapefile_after_a_csv_hides_the_coordinate_columns(page, tmp_
     page.load(str(_csv_points(tmp_path)))
     page.load(str(write_points(tmp_path / "pts.shp")))
     assert not page.lon_box.isVisibleTo(page) and page.field_box.currentText() == "rain"
+
+
+# ------------------------------------------------------------------ boundaries, clipping, colours, PDF
+def _districts(tmp_path):
+    """Two square districts side by side, each with a name (clockwise rings, as shapefiles store them)."""
+    path = tmp_path / "districts.shp"
+    w = shapefile.Writer(str(path), shapeType=shapefile.POLYGON)
+    w.field("NAME_2", "C")
+    w.poly([[[-0.2, -0.2], [-0.2, 1.2], [0.5, 1.2], [0.5, -0.2], [-0.2, -0.2]]])
+    w.record("West")
+    w.poly([[[0.5, -0.2], [0.5, 1.2], [1.2, 1.2], [1.2, -0.2], [0.5, -0.2]]])
+    w.record("East")
+    w.close()
+    path.with_suffix(".prj").write_text(
+        'GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563]],'
+        'PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433],AUTHORITY["EPSG","4326"]]')
+    return path
+
+
+def test_ctrl_click_and_the_list_select_the_same_areas(page, tmp_path):
+    page.load_boundaries(str(_districts(tmp_path)))
+    assert page.name_box.currentText() == "NAME_2"
+    assert [page.area_list.item(i).text() for i in range(page.area_list.count())] == ["West", "East"]
+    page.world.feature_toggled.emit(1)                     # Ctrl+click on "East" on the map
+    assert page.selected == {1} and page.area_list.item(1).checkState() == Qt.CheckState.Checked
+    assert "East" in page.selection_label.text() and page.world.sent[-1] == "setSelection([1])"
+    page.area_list.item(0).setCheckState(Qt.CheckState.Checked)   # ticking "West" in the list
+    assert page.selected == {0, 1}
+    page.world.feature_toggled.emit(1)                     # Ctrl+click again: deselected
+    assert page.selected == {0}
+    page.area_filter.setText("ea")
+    assert page.area_list.item(0).isHidden() and not page.area_list.item(1).isHidden()
+
+
+def test_a_selected_area_clips_the_surface_unless_the_toggle_is_off(page, tmp_path):
+    page.load(str(write_points(tmp_path / "wells.shp")))
+    page.load_boundaries(str(_districts(tmp_path)))
+    page.set_selection({0})                                  # West: longitude -0.2 to 0.5
+    page.run()
+    clipped = page.result
+    west, south, east, north = clipped.bounds
+    lons = west + (np.arange(clipped.width) + 0.5) * (east - west) / clipped.width
+    lats = north - (np.arange(clipped.height) + 0.5) * (north - south) / clipped.height
+    assert np.isnan(clipped.values[:, lons > 0.52]).all()   # nothing outside the boundary
+    assert np.isnan(clipped.values[lats > 1.22]).all()
+    inside_rows = (lats > -0.15) & (lats < 1.15)
+    assert np.isfinite(clipped.values[inside_rows][:, (lons > -0.15) & (lons < 0.45)]).all()
+    assert "clipped to the selected boundary" in " ".join(clipped.notes)
+    page.clip_toggle.setChecked(False)
+    page.run()
+    loose = page.result
+    assert np.isfinite(loose.values).all() and loose.bounds[2] > 1.0   # spreads over the points too
+
+
+def test_colours_classes_and_legends_follow_the_choices(page, tmp_path):
+    page.load(str(write_points(tmp_path / "wells.shp")))
+    page.run()
+    assert page.classic_toggle.isChecked() and page._legend[0] == "classes"
+    assert len(page._legend[1]) == 5 and page._legend[1][0][1] == "#FFFFB2"     # yellow first
+    assert len(page.legend.item_texts()) >= 5 and "–" in page.legend.item_texts()[0]
+    page.classes.setValue(3)
+    assert len(page._legend[1]) == 3
+    page.method_box.setCurrentIndex(page.method_box.findData("continuous"))
+    assert page._legend[0] == "scale" and not page.classes.isEnabled()
+    classic = page._rgba.copy()
+    page.classic_toggle.setChecked(False)                    # Viridis
+    assert not np.array_equal(classic, page._rgba)
+    page.layer_toggles["boundaries"].setChecked(False)
+    assert page.world.sent[-1] == 'setVisible("boundaries", false)'
+
+
+def test_the_map_exports_as_a_pdf_with_its_boundaries(page, tmp_path):
+    from frontend.views.map_layout_dialog import MapLayoutDialog
+
+    page.load(str(write_points(tmp_path / "wells.shp")))
+    page.load_boundaries(str(_districts(tmp_path)))
+    page.set_selection({1})
+    page.run()
+    spec = page.layout_spec()
+    assert spec.selected_rings and spec.points and spec.legend[0] == "classes"
+    dialog = MapLayoutDialog(spec)
+    pdf = dialog.export(str(tmp_path / "map"))
+    assert pdf.endswith(".pdf") and (tmp_path / "map.pdf").read_bytes().startswith(b"%PDF")
+    assert dialog.scale_item.distance()[0] > 0
+    dialog.toggles["boundaries"].setChecked(False)
+    assert not dialog.frame_item.show_boundaries
+    dialog.deleteLater()
+
+
+def test_only_the_selected_area_can_be_kept_on_the_map(page, tmp_path):
+    page.load(str(write_points(tmp_path / "wells.shp")))          # points at x = 0 and x = 1
+    page.load_boundaries(str(_districts(tmp_path)))
+    assert not page.focus_toggles["outside_points"].isEnabled()    # nothing selected yet
+    page.set_selection({0})                                        # West: x from -0.2 to 0.5
+    assert page.focus_toggles["outside_points"].isEnabled()
+    page.run()
+    assert page.result.point_count == 4                            # IDW uses every point regardless
+    assert len(page.shown_points()) == 4
+    page.focus_toggles["outside_points"].setChecked(False)
+    shown = page.shown_points()
+    assert len(shown) == 2 and all(lon < 0.5 for lon, _lat, _f in shown)   # only the points inside West
+    assert page.world.sent[-1].startswith("setPoints(") and page.world.sent[-1].count("[") == 3   # two points
+    page.focus_toggles["other_areas"].setChecked(False)
+    assert page.world.sent[-1] == "setOtherAreasVisible(false)"
+    spec = page.layout_spec()
+    assert len(spec.points) == 2 and spec.boundary_rings == spec.selected_rings   # the PDF shows the same
+    page.focus_toggles["other_areas"].setChecked(True)
+    assert len(page.layout_spec().boundary_rings) > len(spec.boundary_rings)
+
+
+# ------------------------------------------------------------------ area names and the points' details
+def _admin3(tmp_path):
+    """Districts named like GADM / DIVA-GIS files: a type column that repeats, and the real names."""
+    path = tmp_path / "adm3.shp"
+    w = shapefile.Writer(str(path), shapeType=shapefile.POLYGON)
+    for name in ("NAME_1", "NAME_3", "ENGTYPE_3"):
+        w.field(name, "C")
+    for i, (province, district) in enumerate([("Punjab", "Lahore"), ("Punjab", "Multan"), ("Sind", "Sukkur")]):
+        w.poly([[[i, 0], [i, 1], [i + 1, 1], [i + 1, 0], [i, 0]]])
+        w.record(province, district, "District")
+    w.close()
+    return path
+
+
+def test_areas_are_listed_by_their_names_with_their_region(page, tmp_path):
+    page.load_boundaries(str(_admin3(tmp_path)))
+    assert page.name_box.currentText() == "NAME_3"
+    assert [page.area_list.item(i).text() for i in range(3)] == ["Lahore — Punjab", "Multan — Punjab", "Sukkur — Sind"]
+    page.name_box.setCurrentText("ENGTYPE_3")      # a column that is "District" everywhere
+    assert page.area_list.item(0).text() == "District · Lahore — Punjab"
+    page.set_selection({2})
+    assert "Sukkur" in page.selection_label.text()
+
+
+def test_a_csv_lists_its_points_under_its_own_column_names(page, tmp_path):
+    page.load(str(_csv_points(tmp_path)))
+    table = page.points_table
+    headers = [table.horizontalHeaderItem(c).text() for c in range(table.columnCount())]
+    assert headers == ["station", "longitude", "latitude", "rain  ◆"]          # the CSV's own columns
+    assert table.rowCount() == 4 and [table.item(1, c).text() for c in range(4)] == ["B", "1", "0", "20"]
+    assert "SAMPLE POINTS (4)" == page.points_title.text()
+    table.selectRow(2)
+    assert page.world.sent[-1].startswith("fitTo(-0.01, 0.99")                  # the map goes to point C
+    assert "station: C" in page.pointer_label.text()
+    tooltip = page._point_tooltip(0.0, 1.0, page._layer.features[2])
+    assert tooltip.startswith("<b>rain: 30</b>") and "station: C" in tooltip
+
+
+def test_a_shapefile_lists_coordinates_then_its_attributes(page, tmp_path):
+    page.load(str(write_points(tmp_path / "wells.shp")))
+    table = page.points_table
+    headers = [table.horizontalHeaderItem(c).text() for c in range(table.columnCount())]
+    assert headers == ["Longitude", "Latitude", "rain  ◆", "name"]
+    assert [table.item(3, c).text() for c in range(4)] == ["1.000000", "1.000000", "40", "D"]

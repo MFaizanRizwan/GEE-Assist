@@ -526,10 +526,25 @@ class HomeWindow(QMainWindow):
         run_task(self, self._facade.check_app_version, on_success=self._on_version_checked)
 
     def _on_version_checked(self, info: AppVersionDTO | None) -> None:
-        if info is not None and info.update_available:
+        from backend.business.update import is_newer
+        from backend.config.version import APP_VERSION
+
+        # The server compares too; checking here as well means a release whose number was never
+        # raised cannot ask its own users to "update" to the version they already have.
+        if info is not None and info.update_available and is_newer(info.latest_version, APP_VERSION):
             self.menu_bar.set_update_info(info)
+            if info.force_update:
+                self.open_update_dialog(info)   # required: ask straight away
         else:
             self.menu_bar.clear_update_info()
+
+    def open_update_dialog(self, info: AppVersionDTO):
+        from frontend.views.update_dialog import UpdateDialog
+
+        dialog = UpdateDialog(info, self._facade, parent=self)
+        self.update_dialog = dialog
+        dialog.open()
+        return dialog
 
     # ------------------------------------------------------------- app settings
     def check_first_run(self) -> None:
@@ -877,6 +892,7 @@ class HomeWindow(QMainWindow):
         bar.view_dem.triggered.connect(self.show_dem)
         bar.view_idw.triggered.connect(self.show_idw)
         bar.view_prediction.triggered.connect(self.show_prediction)
+        bar.update_requested.connect(self.open_update_dialog)
         bar.view_data_catalog.triggered.connect(self.show_data_catalog)
         bar.view_reports.triggered.connect(lambda: self.show_reports())
         bar.view_analysis_table.triggered.connect(self.show_analysis_table)

@@ -123,6 +123,10 @@ class LayerMapWidget(QWidget):
     def set_selection(self, indices) -> None:
         self._run(f"setSelection({json.dumps(sorted(int(i) for i in indices))})", remember="selection")
 
+    def set_other_areas_visible(self, on: bool) -> None:
+        """Draw the boundaries of the areas not selected (off: only the selected area's outline)."""
+        self._run(f"setOtherAreasVisible({'true' if on else 'false'})", remember="others")
+
     def set_points(self, points) -> None:
         """[(lon, lat, label), ...]"""
         data = [[float(lon), float(lat), str(label)] for lon, lat, label in points]
@@ -153,7 +157,7 @@ class LayerMapWidget(QWidget):
         """The page (re)loaded: re-apply the state in drawing order, then anything queued."""
         first_load = not self._ready
         self._ready = True
-        order = ["basemap", "surface", "opacity", "boundaries", "selection", "points"] + \
+        order = ["basemap", "surface", "opacity", "boundaries", "selection", "others", "points"] + \
             [f"visible:{name}" for name in LAYERS] + ["view"]
         scripts = [self._state[key] for key in order if key in self._state]
         if first_load:
@@ -189,9 +193,8 @@ def boundaries_geojson(layer, label_field: str = "") -> str:
             geometry = {"type": "MultiLineString", "coordinates": rings}
         else:
             geometry = {"type": "MultiPoint", "coordinates": [p for ring in rings for p in ring]}
-        name = feature.attributes.get(label_field) if label_field else ""
         features.append({"type": "Feature", "geometry": geometry,
-                         "properties": {"index": index, "name": "" if name is None else str(name)}})
+                         "properties": {"index": index, "name": area_label(layer, index, label_field)}})
     return json.dumps({"type": "FeatureCollection", "features": features})
 
 
@@ -227,12 +230,66 @@ def polygons_of(layer, indices) -> tuple:
     return tuple(out)
 
 
+def _level(name: str) -> int:
+    """The admin level in a field name (NAME_3 -> 3, ADM2_NAME -> 2), else -1."""
+    import re
+
+    found = re.findall(r"(\d+)", name)
+    return int(found[-1]) if found else -1
+
+
+def _name_like(name: str) -> bool:
+    lowered = name.lower()
+    return "name" in lowered and not lowered.startswith(("nl_", "var", "alt", "name_iso", "name_fao"))         or lowered in ("city", "district", "tehsil", "village", "title")
+
+
+def _distinct_share(layer, field: str) -> float:
+    values = [layer.features[i].attributes.get(field) for i in range(len(layer.features))]
+    values = [str(v).strip() for v in values if v not in (None, "")]
+    return len(set(values)) / max(1, len(layer.features))
+
+
 def label_field_of(layer) -> str:
-    """The attribute that names features best: NAME_3 / NAME_2 / NAME… or the first text field."""
-    names = [f.name for f in layer.fields]
-    lowered = {n.lower(): n for n in names}
-    for key in ("name_3", "name_2", "name_1", "name", "name_en", "city", "district", "admin_name", "nam", "title"):
-        if key in lowered:
-            return lowered[key]
-    text = [f.name for f in layer.fields if f.type == "text"]
-    return text[0] if text else (names[0] if names else "")
+    """The attribute that names the areas best: the one that tells them apart (most distinct
+    values), preferring name fields and, among those, the most detailed level (NAME_3 over
+    NAME_1). A type column such as ENGTYPE_3 ("District" everywhere) is never chosen."""
+    text = [f.name for f in layer.fields if f.type == "text"] or [f.name for f in layer.fields]
+    if not text:
+        return ""
+
+    def score(name: str):
+        return (round(_distinct_share(layer, name), 2) + (1.0 if _name_like(name) else 0.0), _level(name))
+
+    return max(text, key=score)
+
+
+def parent_fields_of(layer, field: str) -> list[str]:
+    """Name fields of the regions containing an area, nearest first (NAME_3 -> NAME_2, NAME_1)."""
+    level = _level(field)
+    parents = [f.name for f in layer.fields if f.type == "text" and _name_like(f.name)
+               and 0 < _level(f.name) < level and not f.name.lower().startswith(("nl_", "var"))]
+    return sorted(parents, key=_level, reverse=True)
+
+
+def area_label(layer, index: int, field: str) -> str:
+    """What to call area ``index``: its ``field`` value; if that does not tell the areas apart
+    (e.g. a type such as "District"), followed by the field that does; then the regions it lies in
+    ("Lahore — Lahore, Punjab")."""
+    attributes = layer.features[index].attributes
+    value = attributes.get(field) if field else None
+    text = "" if value in (None, "") else str(value)
+    best = label_field_of(layer)
+    if field and best != field and _distinct_share(layer, field) < 0.9:
+        named = attributes.get(best)
+        if named not in (None, ""):
+            text = f"{text} · {named}" if text else str(named)
+    if not text:
+        text = f"Area {index + 1}"
+    context: list[str] = []
+    for parent in parent_fields_of(layer, best if best else field):
+        value = attributes.get(parent)
+        if value not in (None, "") and str(value) not in context:   # "Azad Kashmir, Azad Kashmir" -> once
+            context.append(str(value))
+    if context:
+        text += " — " + ", ".join(context)
+    return text
