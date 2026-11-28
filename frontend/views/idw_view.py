@@ -536,9 +536,13 @@ class IdwView(QWidget):
     def _send_points(self) -> None:
         if self._layer is None:
             return
-        points = [(lon, lat, self._point_tooltip(lon, lat, feature)) for lon, lat, feature in self.shown_points()]
-        self.world.set_points(points)
-        self._fill_points_table()
+        shown = self.shown_points()
+        points = [(lon, lat, self._point_tooltip(lon, lat, feature)) for lon, lat, feature in shown]
+        self.world.set_points(points)            # skipped by the map when nothing changed
+        key = (self.field_box.currentText(), tuple((lon, lat) for lon, lat, _f in shown))
+        if key != getattr(self, "_table_key", None):   # rebuild the table only when its rows change
+            self._table_key = key
+            self._fill_points_table()
 
     # ------------------------------------------------------------- the points' details
     def point_columns(self) -> list[str]:

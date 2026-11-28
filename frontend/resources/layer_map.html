@@ -31,13 +31,13 @@
   L.control.scale().addTo(map);
   var basemap = basemaps.streets.addTo(map);
 
-  // fixed drawing order, whatever is switched on or off
-  map.createPane('surface');    map.getPane('surface').style.zIndex = 410;
-  map.createPane('boundaries'); map.getPane('boundaries').style.zIndex = 420;
-  map.createPane('points');     map.getPane('points').style.zIndex = 430;
+  // Drawing order: basemap, surface, then the boundaries and the points on ONE canvas (points
+  // drawn after the boundaries, so on top). One canvas matters: a second canvas for the points
+  // lay over the whole map and swallowed every click, so Ctrl+click never reached the areas.
+  map.createPane('surface');  map.getPane('surface').style.zIndex = 410;
+  map.createPane('vectors');  map.getPane('vectors').style.zIndex = 420;
   map.getPane('surface').style.pointerEvents = 'none';
-  var boundaryRenderer = L.canvas({ pane: 'boundaries', padding: 0.3 });
-  var pointRenderer = L.canvas({ pane: 'points' });
+  var vectorRenderer = L.canvas({ pane: 'vectors', padding: 0.3 });
 
   var surface = null, boundaries = null, points = L.layerGroup();
   var visible = { basemap: true, surface: true, boundaries: true, points: true };
@@ -55,15 +55,77 @@
     bridge.mapReady();
   });
 
-  // ---- the pointer over the surface, for the value readout
+  // ---- the pointer over the surface, for the value readout. At most one message a frame, and
+  // "left" only once: a message on every mouse move flooded the channel and stalled the map.
+  var pointerAt = null, pointerSent = false, pointerQueued = false;
+  function flushPointer() {
+    pointerQueued = false;
+    if (!bridge) return;
+    if (pointerAt) { bridge.pointerMoved(pointerAt.lng, pointerAt.lat); pointerSent = true; }
+    else if (pointerSent) { bridge.pointerLeft(); pointerSent = false; }
+  }
+  function queuePointer(latlng) {
+    pointerAt = latlng;
+    if (!pointerQueued) {
+      pointerQueued = true;
+      if (typeof requestAnimationFrame === 'function') requestAnimationFrame(flushPointer);
+      else setTimeout(flushPointer, 16);
+    }
+  }
   map.on('mousemove', function (e) {
     var inside = surface !== null && visible.surface && surface.getBounds().contains(e.latlng);
-    if (bridge) {
-      if (inside) bridge.pointerMoved(e.latlng.lng, e.latlng.lat);
-      else bridge.pointerLeft();
-    }
+    queuePointer(inside ? e.latlng : null);
   });
-  map.on('mouseout', function () { if (bridge) bridge.pointerLeft(); });
+  map.on('mouseout', function () { queuePointer(null); });
+
+  // ---- Ctrl+click: select the area there (also when the click lands on a sample point)
+  function areaHidden(index) {
+    return !showOthers && !selected[index] && Object.keys(selected).length > 0;
+  }
+
+  function insideRing(ring, x, y) {
+    var inside = false;
+    for (var i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      var xi = ring[i][0], yi = ring[i][1], xj = ring[j][0], yj = ring[j][1];
+      if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) inside = !inside;
+    }
+    return inside;
+  }
+
+  function areaAt(latlng) {
+    var found = -1;
+    if (!boundaries || !map.hasLayer(boundaries)) return found;
+    boundaries.eachLayer(function (layer) {
+      if (found >= 0) return;
+      var index = layer.feature.properties.index;
+      if (areaHidden(index) || !layer.getBounds().contains(latlng)) return;
+      var geometry = layer.feature.geometry;
+      var polygons = geometry.type === 'MultiPolygon' ? geometry.coordinates
+                   : geometry.type === 'Polygon' ? [geometry.coordinates] : [];
+      polygons.forEach(function (polygon) {
+        if (found >= 0 || !polygon.length) return;
+        if (!insideRing(polygon[0], latlng.lng, latlng.lat)) return;
+        for (var h = 1; h < polygon.length; h++) { if (insideRing(polygon[h], latlng.lng, latlng.lat)) return; }
+        found = index;
+      });
+    });
+    return found;
+  }
+
+  function isCtrl(e) { return !!(e.originalEvent && (e.originalEvent.ctrlKey || e.originalEvent.metaKey)); }
+
+  function selectAt(latlng) {
+    var index = areaAt(latlng);
+    if (index >= 0 && bridge) bridge.featureToggled(index);
+  }
+
+  // A Ctrl+click on the map itself (between shapes, or over the surface) selects too.
+  map.on('click', function (e) { if (isCtrl(e)) selectAt(e.latlng); });
+
+  // Points stay drawn above the boundaries (one canvas draws in the order shapes were added).
+  function pointsOnTop() {
+    if (map.hasLayer(points)) points.eachLayer(function (marker) { marker.bringToFront(); });
+  }
 
   // ---- called from Python
   function setBasemap(name) {
@@ -102,19 +164,18 @@
     if (!text) return;
     var data = JSON.parse(text);
     boundaries = L.geoJSON(data, {
-      pane: 'boundaries', renderer: boundaryRenderer,
+      pane: 'vectors', renderer: vectorRenderer,
       style: function (feature) { return styleFor(feature.properties.index); },
       onEachFeature: function (feature, layer) {
         if (feature.properties.name) layer.bindTooltip(feature.properties.name, { sticky: true, className: 'name' });
         layer.on('click', function (e) {
-          if (!(e.originalEvent.ctrlKey || e.originalEvent.metaKey)) return;   // Ctrl+click selects
-          if (!showOthers && !selected[feature.properties.index] && Object.keys(selected).length) return;  // hidden
+          if (!isCtrl(e)) return;                                       // Ctrl+click selects
           L.DomEvent.stop(e);
-          if (bridge) bridge.featureToggled(feature.properties.index);
+          if (!areaHidden(feature.properties.index) && bridge) bridge.featureToggled(feature.properties.index);
         });
       }
     });
-    if (visible.boundaries) boundaries.addTo(map);
+    if (visible.boundaries) { boundaries.addTo(map); pointsOnTop(); }
   }
 
   function setSelection(indices) {
@@ -133,9 +194,11 @@
   function setPoints(list) {      // [[lon, lat, value-text], ...]
     points.clearLayers();
     list.forEach(function (p) {
-      L.circleMarker([p[1], p[0]], { pane: 'points', renderer: pointRenderer, radius: 4, weight: 1.2,
+      L.circleMarker([p[1], p[0]], { pane: 'vectors', renderer: vectorRenderer, radius: 4, weight: 1.2,
                                      color: '#FFFFFF', fillColor: '#111111', fillOpacity: 0.9 })
-        .bindTooltip(p[2], { className: 'name' }).addTo(points);
+        .bindTooltip(p[2], { className: 'name' })
+        .on('click', function (e) { if (isCtrl(e)) { L.DomEvent.stop(e); selectAt(e.latlng); } })
+        .addTo(points);
     });
     if (visible.points && !map.hasLayer(points)) points.addTo(map);
   }
@@ -145,7 +208,11 @@
     var layer = name === 'basemap' ? basemap : name === 'surface' ? surface
               : name === 'boundaries' ? boundaries : points;
     if (!layer) return;
-    if (on && !map.hasLayer(layer)) { layer.addTo(map); if (name === 'basemap') layer.bringToBack(); }
+    if (on && !map.hasLayer(layer)) {
+      layer.addTo(map);
+      if (name === 'basemap') layer.bringToBack();
+      if (name === 'boundaries') pointsOnTop();   // re-added boundaries would cover the points
+    }
     if (!on && map.hasLayer(layer)) map.removeLayer(layer);
   }
 

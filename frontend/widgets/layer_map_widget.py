@@ -67,6 +67,7 @@ class LayerMapWidget(QWidget):
         self._pending: list[str] = []
         self._state: dict[str, str] = {}      # the last script of each kind, re-run if the page reloads
         self.sent: list[str] = []             # every script sent (for tests)
+        self.reloads = 0                      # times the page was reloaded after its process died
         self._view = None
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -85,6 +86,9 @@ class LayerMapWidget(QWidget):
         self._view.settings().setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
         self._inject_webchannel()
         self._view.page().setWebChannel(self._channel)
+        # If Chromium's page process crashes or is killed (it can, under memory pressure), the map
+        # froze while the rest of the app went on: load it again; ``_on_ready`` restores its state.
+        self._view.page().renderProcessTerminated.connect(self._on_page_died)
         self._view.load(QUrl.fromLocalFile(str(MAP_HTML)))
         layout.addWidget(self._view)
 
@@ -128,9 +132,13 @@ class LayerMapWidget(QWidget):
         self._run(f"setOtherAreasVisible({'true' if on else 'false'})", remember="others")
 
     def set_points(self, points) -> None:
-        """[(lon, lat, label), ...]"""
+        """[(lon, lat, label), ...]. The same points again are not re-sent: rebuilding thousands of
+        markers on every selection change blocked the map for seconds."""
         data = [[float(lon), float(lat), str(label)] for lon, lat, label in points]
-        self._run(f"setPoints({json.dumps(data)})", remember="points")
+        script = f"setPoints({json.dumps(data)})"
+        if self._state.get("points") == script:
+            return
+        self._run(script, remember="points")
 
     def set_layer_visible(self, name: str, on: bool) -> None:
         if name not in LAYERS:
@@ -154,17 +162,21 @@ class LayerMapWidget(QWidget):
             self._pending.append(script)
 
     def _on_ready(self) -> None:
-        """The page (re)loaded: re-apply the state in drawing order, then anything queued."""
-        first_load = not self._ready
+        """The page (re)loaded: re-apply the state in drawing order, then anything still queued."""
         self._ready = True
         order = ["basemap", "surface", "opacity", "boundaries", "selection", "others", "points"] + \
             [f"visible:{name}" for name in LAYERS] + ["view"]
         scripts = [self._state[key] for key in order if key in self._state]
-        if first_load:
-            scripts += [s for s in self._pending if s not in scripts]
+        scripts += [s for s in self._pending if s not in scripts]
         for script in scripts:
             self._view.page().runJavaScript(script)
         self._pending.clear()
+
+    def _on_page_died(self, *_args) -> None:
+        """The page process ended or hung: reload the map (its state comes back on ``ready``)."""
+        self._ready = False
+        self.reloads += 1
+        self._view.load(QUrl.fromLocalFile(str(MAP_HTML)))
 
     def _inject_webchannel(self) -> None:
         source = QFile(":/qtwebchannel/qwebchannel.js")

@@ -291,3 +291,55 @@ def test_a_shapefile_lists_coordinates_then_its_attributes(page, tmp_path):
     headers = [table.horizontalHeaderItem(c).text() for c in range(table.columnCount())]
     assert headers == ["Longitude", "Latitude", "rain  ◆", "name"]
     assert [table.item(3, c).text() for c in range(4)] == ["1.000000", "1.000000", "40", "D"]
+
+
+# ------------------------------------------------------------------ the world map stays responsive
+def test_the_same_points_are_not_sent_to_the_map_again(page, tmp_path):
+    page.load(str(write_points(tmp_path / "wells.shp")))
+    page.load_boundaries(str(_districts(tmp_path)))
+    sends = sum(s.startswith("setPoints(") for s in page.world.sent)
+    page.set_selection({0})                           # selecting areas does not change the points...
+    page.set_selection({0, 1})
+    page.set_selection(set())
+    assert sum(s.startswith("setPoints(") for s in page.world.sent) == sends   # ...so none is resent
+    page.set_selection({0})
+    page.focus_toggles["outside_points"].setChecked(False)                     # this does
+    assert sum(s.startswith("setPoints(") for s in page.world.sent) == sends + 1
+
+
+def test_a_dead_map_page_is_reloaded_with_everything_on_it():
+    from frontend.widgets.layer_map_widget import LayerMapWidget
+
+    class FakePage:
+        def __init__(self):
+            self.ran = []
+
+        def runJavaScript(self, script):  # noqa: N802 (Qt API)
+            self.ran.append(script)
+
+    class FakeView:
+        def __init__(self):
+            self._page, self.loads = FakePage(), 0
+
+        def page(self):
+            return self._page
+
+        def load(self, _url):
+            self.loads += 1
+
+    world = LayerMapWidget()
+    world._view = FakeView()
+    world._ready = True
+    world.set_boundaries('{"type": "FeatureCollection", "features": []}')
+    world.set_selection({2})
+    world.set_points([(73.0, 31.0, "pH: 6")])
+    world.set_layer_visible("basemap", False)
+    world.fit((73, 31, 74, 32))
+    world._on_page_died()                            # Chromium's page process crashed or was killed
+    assert world.reloads == 1 and world._view.loads == 1 and not world._ready
+    world.set_other_areas_visible(False)             # asked while it reloads: kept for later
+    world._view._page.ran.clear()
+    world._on_ready()                                # the reloaded page says it is ready
+    ran = world._view._page.ran
+    assert [s.split("(")[0] for s in ran] == ["setBoundaries", "setSelection", "setOtherAreasVisible", "setPoints",
+                                              "setVisible", "fitTo"]
