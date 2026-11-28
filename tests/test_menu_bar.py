@@ -38,7 +38,7 @@ def test_menus_hold_the_expected_items(bar):
                                      "Sign &out", "E&xit"]
     assert _items(bar.edit_menu) == ["&Undo", "&Redo", "Cu&t", "&Copy", "&Paste", "Select &all"]
     assert _items(bar.view_menu) == ["&Dashboard", "&Query Input", "Do&wnloads", "&Account", "A&nalysis",
-                                     "&Reports", "&Vector maps", "&Digital Elevation Model", "&IDW interpolation",
+                                     "&Reports", "&Vector maps", "&Digital Elevation Model", "&IDW interpolation", "&Prediction (ML)",
                                      "Data &catalog", "Show analysis ta&ble", "&Side bar", "&Terminal",
                                      "&Full screen", "&Layout", "&Theme"]
     assert _items(bar.terminal_menu)[:4] == ["&Show terminal	Ctrl+`", "&Maximise terminal", "&Clear terminal",
@@ -122,8 +122,9 @@ def test_edit_items_are_greyed_out_when_they_cannot_apply(bar, form):
 def test_view_menu_has_a_theme_switcher_set_to_light(bar):
     assert _items(bar.theme_menu) == ["Light", "Dark – blue-green", "Dark – grey", "Indigo, celadon & gold",
                                       "Navy, cream & coral", "Skeleton cream, black & green",
-                                      "Seal blue, navy & crimson"]
-    assert [a.isChecked() for a in bar.theme_menu.actions()] == [True] + [False] * 6  # light by default
+                                      "Seal blue, navy & crimson",
+                                      "Midnight, electric blue & cantaloupe"]
+    assert [a.isChecked() for a in bar.theme_menu.actions()] == [True] + [False] * 7  # light by default
 
 
 def test_choosing_another_theme_asks_for_it(bar):

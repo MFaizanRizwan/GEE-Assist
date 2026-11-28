@@ -11,6 +11,12 @@ python-dotenv>=1.0
 rasterio>=1.3
 spacy>=3.8
 en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl
+# Prediction (ML) page: classical machine learning, gradient boosting and deep learning
+scikit-learn>=1.5          # linear models, SVM, kNN, trees, forests, boosting, MLP, outlier detectors, CV
+xgboost>=2.0
+lightgbm>=4.0
+torch>=2.2                 # LSTM, temporal CNN, deep network, autoencoder. CPU build (smaller):
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
 pytest>=8.0
 # Optional: analyses run on a dedicated NVIDIA GPU when CuPy is installed (CUDA 12 drivers):
 #   pip install cupy-cuda12x

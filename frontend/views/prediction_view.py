@@ -257,7 +257,7 @@ class PredictionView(QWidget):
             tile.setToolTip(TASK_HELP[task])
             tile.clicked.connect(lambda _=False, t=task: self.choose_task(t))
             self.task_group.addButton(tile)
-            tiles.addWidget(tile, i // 2, i % 2)
+            tiles.addWidget(tile, i, 0)
             self.task_tiles[task] = tile
         column.addLayout(tiles)
         self.task_help = _help("")
@@ -279,7 +279,7 @@ class PredictionView(QWidget):
         self.input_table.itemChanged.connect(self._on_date_edited)
         column.addWidget(self.input_table)
         data_buttons = FlowLayout(spacing=6)
-        self.project_button = QPushButton("Add from project ▾", objectName="SecondaryButton")
+        self.project_button = QPushButton("Add from project…", objectName="SecondaryButton")
         self.files_button = QPushButton("Add files…", objectName="SecondaryButton")
         self.remove_button = QPushButton("Remove", objectName="SecondaryButton")
         for button in (self.project_button, self.files_button, self.remove_button):
@@ -297,6 +297,7 @@ class PredictionView(QWidget):
         self.target_date = QDateEdit()
         self.target_date.setCalendarPopup(True)
         self.target_date.setDisplayFormat("yyyy-MM-dd")
+        self.target_date.setDate(QDate.currentDate().addYears(1))   # until the files' dates suggest one
         self.target_label = QLabel("Predict for", objectName="Muted")
         self.labels_button = QPushButton("Choose labels…", objectName="SecondaryButton")
         self.labels_button.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -338,7 +339,9 @@ class PredictionView(QWidget):
         column.addWidget(_step(4, "Techniques"))
         self.ensemble_box = QCheckBox("Ensemble of the best three")
         self.ensemble_box.setChecked(True)
-        self.tune_box = QCheckBox("Tune hyperparameters (randomised search, slower)")
+        self.tune_box = QCheckBox("Tune hyperparameters (slower)")
+        self.tune_box.setToolTip("A randomised search over each algorithm's main settings, scored by 3-fold "
+                                 "cross-validation; the best settings are then used")
         self.importance_box = QCheckBox("Feature importance (permutation)")
         self.importance_box.setChecked(True)
         self.pca_box = QCheckBox("Reduce features with PCA (95% variance)")
@@ -472,7 +475,9 @@ class PredictionView(QWidget):
         left.addWidget(self.leaderboard, 1)
         left.addWidget(self.validation_note)
         right = QVBoxLayout()
-        right.addWidget(_section("What the best model relies on"))
+        self.importance_title = _section("Feature importance")
+        self.importance_title.setWordWrap(True)
+        right.addWidget(self.importance_title)
         right.addWidget(self.importance)
         right.addStretch(1)
         right_box = QWidget()
@@ -841,8 +846,10 @@ class PredictionView(QWidget):
         self.banner.show_info(message)
         self._fill_leaderboard()
         self.validation_note.setText(result.validation + "  " + " ".join(result.notes))
-        self.importance.set_rows(best.importance if best.importance else next(
-            (s.importance for s in result.scores if s.importance), []))
+        explained = next((s for s in result.scores if s.importance), None)   # the best model with features
+        self.importance.set_rows(explained.importance if explained else [])
+        self.importance_title.setText(f"FEATURE IMPORTANCE · {explained.label.upper()}" if explained
+                                      else "FEATURE IMPORTANCE")
         self._fill_layers()
         self.show_model(best.key)
         self._show_result_actions(True)
