@@ -1,0 +1,238 @@
+"""A Leaflet map with layers stacked in a fixed order, for the IDW page.
+
+Bottom to top: the world basemap, the interpolated surface, the boundaries (a polygon
+shapefile) and the sample points; each can be shown or hidden. Ctrl+click on a boundary
+asks for it to be selected or deselected (``feature_toggled``); the page keeps the
+selection and sends it back (``set_selection``). The pointer over the surface is reported
+(``pointer_moved``) so the page can show the value there.
+
+Requires PyQt6-WebEngine; without it ``available`` is False and the page shows its own
+picture instead. Calls made before the page has loaded are queued, and the map's state is
+re-applied if the page reloads.
+"""
+
+from __future__ import annotations
+
+import base64
+import json
+from pathlib import Path
+
+from PyQt6.QtCore import QFile, QIODevice, QObject, QUrl, pyqtSignal, pyqtSlot
+from PyQt6.QtWidgets import QLabel, QVBoxLayout, QWidget
+
+from frontend.widgets.aoi_map_widget import WEB_ENGINE_AVAILABLE
+
+if WEB_ENGINE_AVAILABLE:
+    from PyQt6.QtWebChannel import QWebChannel
+    from PyQt6.QtWebEngineCore import QWebEngineScript, QWebEngineSettings
+    from PyQt6.QtWebEngineWidgets import QWebEngineView
+
+    from frontend.widgets.aoi_map_widget import _MapPage
+
+MAP_HTML = Path(__file__).resolve().parents[1] / "resources" / "layer_map.html"
+LAYERS = ("basemap", "surface", "boundaries", "points")
+
+
+class _Bridge(QObject):
+    ready = pyqtSignal()
+    feature_toggled = pyqtSignal(int)
+    pointer_moved = pyqtSignal(float, float)
+    pointer_left = pyqtSignal()
+
+    @pyqtSlot()
+    def mapReady(self) -> None:  # noqa: N802 (called from JS)
+        self.ready.emit()
+
+    @pyqtSlot(int)
+    def featureToggled(self, index: int) -> None:  # noqa: N802
+        self.feature_toggled.emit(index)
+
+    @pyqtSlot(float, float)
+    def pointerMoved(self, lon: float, lat: float) -> None:  # noqa: N802
+        self.pointer_moved.emit(lon, lat)
+
+    @pyqtSlot()
+    def pointerLeft(self) -> None:  # noqa: N802
+        self.pointer_left.emit()
+
+
+class LayerMapWidget(QWidget):
+    feature_toggled = pyqtSignal(int)          # Ctrl+click on boundary feature ``index``
+    pointer_moved = pyqtSignal(float, float)   # lon, lat over the surface
+    pointer_left = pyqtSignal()
+
+    def __init__(self, parent: QWidget | None = None):
+        super().__init__(parent)
+        self._ready = False
+        self._pending: list[str] = []
+        self._state: dict[str, str] = {}      # the last script of each kind, re-run if the page reloads
+        self.sent: list[str] = []             # every script sent (for tests)
+        self._view = None
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        if not WEB_ENGINE_AVAILABLE:
+            layout.addWidget(QLabel("The world map needs PyQt6-WebEngine."))
+            return
+        self._bridge = _Bridge(self)
+        self._bridge.ready.connect(self._on_ready)
+        self._bridge.feature_toggled.connect(self.feature_toggled)
+        self._bridge.pointer_moved.connect(self.pointer_moved)
+        self._bridge.pointer_left.connect(self.pointer_left)
+        self._channel = QWebChannel(self)
+        self._channel.registerObject("bridge", self._bridge)
+        self._view = QWebEngineView(self)
+        self._view.setPage(_MapPage(self._view))
+        self._view.settings().setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
+        self._inject_webchannel()
+        self._view.page().setWebChannel(self._channel)
+        self._view.load(QUrl.fromLocalFile(str(MAP_HTML)))
+        layout.addWidget(self._view)
+
+    @property
+    def available(self) -> bool:
+        return self._view is not None
+
+    def wheelEvent(self, event) -> None:  # noqa: N802 (Qt API) - the wheel zooms the map, never the page
+        event.accept()
+
+    def showEvent(self, event) -> None:  # noqa: N802 (Qt API)
+        super().showEvent(event)
+        self._run("if (typeof map !== 'undefined') { map.invalidateSize(false); }", remember=None)
+
+    # ------------------------------------------------------------- layers
+    def set_basemap(self, name: str) -> None:
+        """"streets" or "satellite"."""
+        self._run(f"setBasemap({json.dumps(name)})", remember="basemap")
+
+    def set_surface(self, png: bytes, bounds: tuple[float, float, float, float], opacity: float = 0.85) -> None:
+        url = "data:image/png;base64," + base64.b64encode(png).decode("ascii")
+        west, south, east, north = bounds
+        self._run(f"setSurface({json.dumps(url)}, {west}, {south}, {east}, {north}, {opacity})", remember="surface")
+
+    def clear_surface(self) -> None:
+        self._run("clearSurface()", remember="surface")
+
+    def set_surface_opacity(self, opacity: float) -> None:
+        self._run(f"setSurfaceOpacity({max(0.0, min(1.0, opacity))})", remember="opacity")
+
+    def set_boundaries(self, geojson: str) -> None:
+        """A FeatureCollection whose features carry ``properties.index`` (and ``name``); "" removes them."""
+        self._run(f"setBoundaries({json.dumps(geojson)})", remember="boundaries")
+        self._state.pop("selection", None)
+
+    def set_selection(self, indices) -> None:
+        self._run(f"setSelection({json.dumps(sorted(int(i) for i in indices))})", remember="selection")
+
+    def set_points(self, points) -> None:
+        """[(lon, lat, label), ...]"""
+        data = [[float(lon), float(lat), str(label)] for lon, lat, label in points]
+        self._run(f"setPoints({json.dumps(data)})", remember="points")
+
+    def set_layer_visible(self, name: str, on: bool) -> None:
+        if name not in LAYERS:
+            raise ValueError(f"Unknown layer {name!r}")
+        self._run(f"setVisible({json.dumps(name)}, {'true' if on else 'false'})", remember=f"visible:{name}")
+
+    def fit(self, bounds: tuple[float, float, float, float]) -> None:
+        west, south, east, north = bounds
+        self._run(f"fitTo({west}, {south}, {east}, {north})", remember="view")
+
+    # ------------------------------------------------------------- internals
+    def _run(self, script: str, remember: str | None) -> None:
+        self.sent.append(script)
+        if remember:
+            self._state[remember] = script
+        if self._view is None:
+            return
+        if self._ready:
+            self._view.page().runJavaScript(script)
+        else:
+            self._pending.append(script)
+
+    def _on_ready(self) -> None:
+        """The page (re)loaded: re-apply the state in drawing order, then anything queued."""
+        first_load = not self._ready
+        self._ready = True
+        order = ["basemap", "surface", "opacity", "boundaries", "selection", "points"] + \
+            [f"visible:{name}" for name in LAYERS] + ["view"]
+        scripts = [self._state[key] for key in order if key in self._state]
+        if first_load:
+            scripts += [s for s in self._pending if s not in scripts]
+        for script in scripts:
+            self._view.page().runJavaScript(script)
+        self._pending.clear()
+
+    def _inject_webchannel(self) -> None:
+        source = QFile(":/qtwebchannel/qwebchannel.js")
+        if not source.open(QIODevice.OpenModeFlag.ReadOnly):
+            return
+        script = QWebEngineScript()
+        script.setName("qwebchannel")
+        script.setSourceCode(bytes(source.readAll()).decode("utf-8"))
+        script.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentCreation)
+        script.setWorldId(QWebEngineScript.ScriptWorldId.MainWorld)
+        self._view.page().scripts().insert(script)
+        source.close()
+
+
+def boundaries_geojson(layer, label_field: str = "") -> str:
+    """A polygon layer (VectorLayerDTO) as GeoJSON for ``set_boundaries``: each feature's index
+    in the layer and its name (from ``label_field``) in its properties."""
+    features = []
+    for index, feature in enumerate(layer.features):
+        rings = [[list(map(float, point)) for point in ring] for ring in feature.parts if ring]
+        if not rings:
+            continue
+        if feature.kind == "polygon":
+            geometry = {"type": "MultiPolygon", "coordinates": _polygons(rings)}
+        elif feature.kind == "polyline":
+            geometry = {"type": "MultiLineString", "coordinates": rings}
+        else:
+            geometry = {"type": "MultiPoint", "coordinates": [p for ring in rings for p in ring]}
+        name = feature.attributes.get(label_field) if label_field else ""
+        features.append({"type": "Feature", "geometry": geometry,
+                         "properties": {"index": index, "name": "" if name is None else str(name)}})
+    return json.dumps({"type": "FeatureCollection", "features": features})
+
+
+def _clockwise(ring) -> bool:
+    area = 0.0
+    for (x0, y0), (x1, y1) in zip(ring, ring[1:] + ring[:1]):
+        area += x0 * y1 - x1 * y0
+    return area < 0
+
+
+def _polygons(rings) -> list:
+    """Shapefile rings as GeoJSON polygons: each clockwise ring starts a polygon (an island),
+    the anticlockwise rings after it are its holes."""
+    polygons: list = []
+    for ring in rings:
+        if not polygons or _clockwise(ring):
+            polygons.append([ring])
+        else:
+            polygons[-1].append(ring)
+    return polygons
+
+
+def polygons_of(layer, indices) -> tuple:
+    """The chosen features' polygons as nested tuples (for IDWParamsDTO.boundary)."""
+    out = []
+    for index in sorted(indices):
+        feature = layer.features[index]
+        if feature.kind != "polygon":
+            continue
+        rings = [[tuple(map(float, p)) for p in ring] for ring in feature.parts if len(ring) >= 3]
+        for polygon in _polygons(rings):
+            out.append(tuple(tuple(ring) for ring in polygon))
+    return tuple(out)
+
+
+def label_field_of(layer) -> str:
+    """The attribute that names features best: NAME_3 / NAME_2 / NAME… or the first text field."""
+    names = [f.name for f in layer.fields]
+    lowered = {n.lower(): n for n in names}
+    for key in ("name_3", "name_2", "name_1", "name", "name_en", "city", "district", "admin_name", "nam", "title"):
+        if key in lowered:
+            return lowered[key]
+    text = [f.name for f in layer.fields if f.type == "text"]
+    return text[0] if text else (names[0] if names else "")
