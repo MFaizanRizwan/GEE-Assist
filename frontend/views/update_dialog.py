@@ -1,20 +1,20 @@
 """The update dialog: shows the new version and updates the app in place.
 
-"Update now" downloads the new GEE-Assist.exe (with progress; it can be cancelled), checks it
-(a Windows program, the published SHA-256 if any, and that it starts and is the version
-announced), puts it in place of the running .exe wherever that was installed, and restarts.
-If the folder needs administrator rights, Windows asks once, and a helper finishes after the
-app closes. When the server says the update is required (``force_update``), the dialog offers
-no "Later": update now, or quit.
+"Update now" downloads the new version's Setup (with progress; it can be cancelled), checks it
+(a Windows program, the published SHA-256 if any, and the version it carries), then starts it
+silently over the installed app and closes GEE-Assist; the Setup reopens the new version.
+For an install shared by all users, Windows asks for administrator rights once. When the
+server says the update is required (``force_update``), the dialog offers no "Later": update
+now, or quit.
 
-Run from source (not the packaged .exe), there is no .exe to replace: the download page opens.
+Run from source (not the installed app), there is nothing to install over: the download page opens.
 """
 
 from __future__ import annotations
 
 import threading
 
-from PyQt6.QtCore import QProcess, Qt, QTimer, QUrl
+from PyQt6.QtCore import Qt, QTimer, QUrl
 from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtWidgets import (
     QApplication,
@@ -125,8 +125,8 @@ class UpdateDialog(QDialog):
             return "No download is published for this version yet."
         if self._facade is None or not self._facade.can_self_update():
             return "GEE-Assist is running from its source code here: “Update now” opens the download page."
-        return ("“Update now” downloads the new version, checks it, replaces this copy of GEE-Assist where it is "
-                "installed and restarts it. Your settings and projects are kept.")
+        return ("“Update now” downloads the new version, checks it and installs it over this copy of "
+                "GEE-Assist, which then reopens. Your settings and projects are kept.")
 
     # ------------------------------------------------------------- updating
     def start(self) -> None:
@@ -156,25 +156,23 @@ class UpdateDialog(QDialog):
             self.bar.setRange(0, 0)   # size unknown: a busy bar
             self.status.setText(f"Downloading the new version… {done / 1e6:,.0f} MB")
         if total and done >= total:
-            self.status.setText("Checking the new version (it is started once to confirm it works)…")
+            self.status.setText("Checking the download…")
 
     def _downloaded(self, new_file) -> None:
         self.state = "installing"
         self._timer.stop()
         self.bar.setRange(0, 0)
-        self.status.setText("Putting the new version in place…")
+        self.status.setText("Starting the installation…")
         try:
             how = self._facade.install_update(new_file)
         except GeeAssistError as exc:
             self._failed(exc)
             return
         self.state = "done"
-        if how == "swapped":
-            self.status.setText("Updated. Restarting GEE-Assist…")
-            QProcess.startDetached(self._facade.app_executable(), [])
-        else:
-            self.status.setText("Updated with administrator rights. GEE-Assist restarts in a moment…")
-        QTimer.singleShot(400, QApplication.quit)
+        # the Setup waits for GEE-Assist to close, installs, and opens the new version
+        self.status.setText(f"Installing version {self.info.latest_version}. GEE-Assist closes now and reopens "
+                            "when the installation is done (about a minute).")
+        QTimer.singleShot(1500, QApplication.quit)
 
     def _failed(self, exc: Exception) -> None:
         self._timer.stop()
