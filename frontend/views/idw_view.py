@@ -923,10 +923,14 @@ class IdwView(QWidget):
             layer = self._facade.load_shapefile(path)
             return [list(ring) for feature in layer.features for ring in feature.parts if len(ring) >= 2]
 
+        # the whole boundary layer (e.g. every district of the country), for the locator layout
+        context = [list(ring) for feature in (self._boundary.features if self._boundary else ())
+                   for ring in feature.parts if len(ring) >= 2]
         return MapLayoutSpec(
             title=f"{result.field} (IDW){where}", image=rgba_to_image(self._rgba), extent=result.bounds,
             geographic=True, legend_title=f"{result.field}", legend=self._legend, boundary_rings=rings + selected,
-            selected_rings=selected, points=points, note=note, load_boundary=load_boundary)
+            selected_rings=selected, points=points, note=note, load_boundary=load_boundary,
+            context_rings=context, context_extent=self._boundary.bounds if self._boundary is not None else None)
 
     def export_pdf(self) -> None:
         if self.result is None:
